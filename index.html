@@ -1,0 +1,1598 @@
+<title>Avana Learning Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F6F8F7; --panel:#FFFFFF; --panel2:#EDF2F0; --ink:#16211F; --ink2:#5C6E68;
+  --line:#DCE4E0; --accent:#0E7C6B; --accent-ink:#0A5F52; --accent-soft:#DFEFEA;
+  --good:#1B8A50; --good-soft:#E1F2E7; --warn:#A8720E; --warn-soft:#F7EDD8;
+  --crit:#B23A2E; --crit-soft:#F7E3E0; --focus:#0E7C6B;
+  --shadow:0 1px 2px rgba(22,33,31,.06),0 4px 14px rgba(22,33,31,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101716; --panel:#18211F; --panel2:#1F2A27; --ink:#E7EEEB; --ink2:#94A59F;
+    --line:#2A3733; --accent:#3DBFA6; --accent-ink:#5FD2BB; --accent-soft:#173731;
+    --good:#4CC27F; --good-soft:#173626; --warn:#D9A441; --warn-soft:#3A2E13;
+    --crit:#E06B5D; --crit-soft:#3D1E1A; --focus:#3DBFA6;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101716; --panel:#18211F; --panel2:#1F2A27; --ink:#E7EEEB; --ink2:#94A59F;
+  --line:#2A3733; --accent:#3DBFA6; --accent-ink:#5FD2BB; --accent-soft:#173731;
+  --good:#4CC27F; --good-soft:#173626; --warn:#D9A441; --warn-soft:#3A2E13;
+  --crit:#E06B5D; --crit-soft:#3D1E1A; --focus:#3DBFA6;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 "Archivo",system-ui,-apple-system,"Segoe UI",sans-serif}
+button{font:inherit;color:inherit}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace}
+a{color:var(--accent-ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+
+.topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px}
+.brand small{display:block;font-weight:500;color:var(--ink2);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.topbar .spacer{flex:1}
+.select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--ink);font:13px "Archivo",sans-serif}
+.select-label{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);margin-right:4px}
+.userchip{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px;font-size:13px}
+.userchip .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-weight:600;font-size:12px}
+.proto-tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:3px 10px;font-weight:600;white-space:nowrap}
+
+.layout{display:flex;min-height:calc(100vh - 52px)}
+nav.rail{width:230px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:14px 10px 30px}
+.rail .grouplbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink2);padding:14px 10px 5px;font-weight:600}
+.rail button.nav{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;background:none;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:var(--ink)}
+.rail button.nav:hover{background:var(--panel2)}
+.rail button.nav[aria-current="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.rail button.nav:disabled{color:var(--ink2);cursor:not-allowed;opacity:.65}
+.rail .mnum{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink2);width:18px;flex:none}
+.rail button.nav[aria-current="true"] .mnum{color:var(--accent-ink)}
+
+main{flex:1;min-width:0;padding:26px 30px 60px;max-width:1180px}
+section.page{display:none}
+section.page.on{display:block}
+h1{font-size:21px;margin:0 0 4px;font-weight:700;text-wrap:balance}
+.sub{color:var(--ink2);margin:0 0 20px;max-width:66ch}
+h2{font-size:15px;font-weight:600;margin:26px 0 10px}
+.hstack{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.toolbar .grow{flex:1}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.pad{padding:16px 18px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+.tile .lbl{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);font-weight:600}
+.tile .val{font-size:26px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+.tile .delta{font-size:12px;margin-top:2px}
+.delta.up{color:var(--good)} .delta.warnc{color:var(--warn)} .delta.critc{color:var(--crit)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
+table.tight{min-width:0}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);text-align:left;font-weight:600;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel2)}
+td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td .mono{font-size:12px}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:var(--panel2)}
+
+.chip{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.crit{background:var(--crit-soft);color:var(--crit)}
+.chip.neutral{background:var(--panel2);color:var(--ink2)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}
+
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 13px;cursor:pointer;font-size:13px;font-weight:500}
+.btn:hover{background:var(--panel2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:4px 10px;font-size:12px;border-radius:7px}
+.searchbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:13px "Archivo",sans-serif;color:var(--ink);min-width:200px}
+
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);padding:10px 14px;border-radius:0 10px 10px 0;font-size:13px;margin:14px 0;max-width:72ch}
+.note.warnn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:940px){.cols2{grid-template-columns:1fr}.layout{flex-direction:column}nav.rail{width:100%;display:flex;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line)}.rail .grouplbl{width:100%}main{padding:20px 16px 50px}}
+
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:0;max-width:660px;width:min(94vw,660px);box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(10,20,18,.45)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.dlg-head strong{font-size:15px}
+.dlg-body{padding:16px 18px;max-height:72vh;overflow:auto}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.formgrid label,.flabel{display:block;font-size:11.5px;font-weight:600;color:var(--ink2);letter-spacing:.03em}
+.formgrid input,.formgrid select,.formgrid textarea{width:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px "Archivo",sans-serif;color:var(--ink)}
+.formgrid .full{grid-column:1/-1}
+@media(max-width:560px){.formgrid{grid-template-columns:1fr}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px;margin:0}
+.kv dt{color:var(--ink2)} .kv dd{margin:0}
+
+.datechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent-ink);border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600}
+.datechip button{border:0;background:none;cursor:pointer;color:inherit;font-size:12px;padding:0 3px}
+.payrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:6px;align-items:center}
+.payrow input{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px "Archivo",sans-serif;color:var(--ink);width:100%}
+
+.attcell{width:34px;height:28px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);font-weight:600;font-size:12px;cursor:pointer;color:var(--ink2)}
+.attcell.P{background:var(--good-soft);color:var(--good);border-color:transparent}
+.attcell.A{background:var(--crit-soft);color:var(--crit);border-color:transparent}
+.attcell.H{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.loglist{list-style:none;margin:8px 0 0;padding:0;font-size:12px;color:var(--ink2)}
+.loglist li{padding:5px 0;border-bottom:1px dashed var(--line)}
+.loglist li:last-child{border-bottom:0}
+
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .dow{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);text-align:center;font-weight:600;padding:4px 0}
+.cal .day{min-height:64px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:12px;background:var(--panel)}
+.cal .day.blank{background:none;border-color:transparent}
+.cal .day .dnum{color:var(--ink2);font-size:11px}
+.cal .evt{display:block;margin-top:3px;font-size:10.5px;font-weight:600;border-radius:5px;padding:1px 5px;background:var(--accent-soft);color:var(--accent-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal .evt.ext{background:var(--warn-soft);color:var(--warn)}
+
+.q{padding:12px 0;border-bottom:1px solid var(--line)}
+.q:last-child{border-bottom:0}
+.scale{display:flex;gap:6px;margin-top:6px}
+.scale label{display:grid;place-items:center;width:34px;height:30px;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:13px}
+.scale input{position:absolute;opacity:0;width:0}
+.scale label:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+textarea{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px 10px;font:13px "Archivo",sans-serif;resize:vertical}
+.qopt{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13px}
+.qopt input[type="checkbox"]{accent-color:var(--accent)}
+.qopt input[type="number"]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:13px "Archivo",sans-serif;color:var(--ink)}
+
+.bar{height:8px;border-radius:999px;background:var(--panel2);overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.bar.warnb i{background:var(--warn)}
+
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:13px;font-weight:500;transition:transform .25s;z-index:99;box-shadow:var(--shadow);max-width:88vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion: reduce){#toast{transition:none}}
+
+body[data-role="manager"] .admin-only, body[data-role="employee"] .admin-only,
+body[data-role="employee"] .mgr-up{display:none!important}
+
+.reportgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:12px}
+.report{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px}
+.report .rname{font-weight:600;font-size:13.5px}
+.report .rdesc{font-size:12px;color:var(--ink2);flex:1}
+#csvText{font-family:"IBM Plex Mono",monospace;font-size:12px;min-height:180px;white-space:pre}
+.qrbox{background:#fff;padding:14px;border-radius:10px;display:inline-block;border:1px solid var(--line)}
+.partrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.partrow:last-child{border-bottom:0}
+.partrow .grow{flex:1}
+</style>
+
+<div class="topbar">
+  <div class="brand"><span class="mark">A</span><span>Avana Learning Hub<small>Learning &amp; Development · Internal</small></span></div>
+  <span class="proto-tag">Prototype · sample data</span>
+  <div class="spacer"></div>
+  <label><span class="select-label">Entity</span>
+    <select class="select" id="entitySel">
+      <option value="all">All entities</option>
+      <option value="AMD">Avana Medical Devices</option>
+      <option value="ASS">Avana Surgical Systems</option>
+      <option value="ATS">Avana Technology Services</option>
+    </select></label>
+  <label><span class="select-label">View as</span>
+    <select class="select" id="roleSel">
+      <option value="admin">HR / L&amp;D Admin</option>
+      <option value="manager">Reporting Manager</option>
+      <option value="employee">Employee</option>
+    </select></label>
+  <div class="userchip"><span class="avatar">L</span><span id="userName">Lokshni · Admin</span></div>
+</div>
+
+<div class="layout">
+<nav class="rail" aria-label="Modules">
+  <button class="nav" data-page="dash" aria-current="true"><span class="mnum">◈</span>Dashboard</button>
+  <div class="grouplbl">Phase 1</div>
+  <button class="nav" data-page="emp"><span class="mnum">01</span>Employees</button>
+  <button class="nav" data-page="trn"><span class="mnum">02</span>Trainings</button>
+  <button class="nav" data-page="att"><span class="mnum">04</span>Attendance</button>
+  <button class="nav" data-page="fbk"><span class="mnum">05</span>Feedback</button>
+  <button class="nav admin-only" data-page="exp"><span class="mnum">08</span>Expenses</button>
+  <button class="nav mgr-up" data-page="rpt"><span class="mnum">09</span>Reports</button>
+  <div class="grouplbl">Administration</div>
+  <button class="nav admin-only" data-page="usr"><span class="mnum">⚙</span>Users &amp; Access</button>
+  <div class="grouplbl">Phase 2 · planned</div>
+  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">03</span>Nominations</button>
+  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">06</span>Effectiveness</button>
+  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">07</span>Assessments</button>
+  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">10</span>Certificates</button>
+</nav>
+
+<main>
+
+<!-- ================= DASHBOARD ================= -->
+<section class="page on" id="page-dash">
+  <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div>
+    <button class="btn" onclick="exportTab('dash')">⬇ Export</button></div>
+  <p class="sub">Quarter 2, FY 2026–27 (Jul–Sep) · figures are illustrative sample data across the three Avana entities.</p>
+  <div class="tiles">
+    <div class="tile"><div class="lbl">Training coverage</div><div class="val">78%</div><div class="delta up">234 of 300 employees trained this FY</div></div>
+    <div class="tile"><div class="lbl">Mandatory compliance</div><div class="val">91%</div><div class="delta warnc">27 employees overdue</div></div>
+    <div class="tile"><div class="lbl">Avg hours / employee</div><div class="val">14.6</div><div class="delta up">Target 16 h per year</div></div>
+    <div class="tile admin-only"><div class="lbl">Budget used (FY)</div><div class="val">₹8.4 L</div><div class="delta up">of ₹14.0 L annual budget</div></div>
+    <div class="tile"><div class="lbl">Trainings this quarter</div><div class="val" id="dashTrnCount">–</div><div class="delta" id="dashTrnSplit"></div></div>
+  </div>
+  <div class="cols2">
+    <div class="card pad">
+      <h2 style="margin-top:0">Needs your attention</h2>
+      <table class="tight">
+        <tr><td><span class="chip warn">Expiring</span></td><td>Mandatory re-trainings due within 30 days</td><td class="num">11</td></tr>
+        <tr><td><span class="chip warn">Feedback</span></td><td>Feedback forms pending from participants</td><td class="num">7</td></tr>
+        <tr><td><span class="chip neutral">Evidence</span></td><td>Signed attendance sheets not yet uploaded</td><td class="num">2</td></tr>
+        <tr class="admin-only"><td><span class="chip crit">Expense</span></td><td>Cost sheets awaiting approval</td><td class="num">1</td></tr>
+      </table>
+    </div>
+    <div class="card pad">
+      <h2 style="margin-top:0">Upcoming trainings</h2>
+      <table class="tight" id="dashUpcoming"></table>
+    </div>
+  </div>
+  <div class="note">This system is the audit evidence trail for <strong>ISO 13485</strong> training records under SOP series <span class="mono">AMD/QSP04</span>. Every create, edit and correction is logged with user, timestamp and reason.</div>
+</section>
+
+<!-- ================= 01 EMPLOYEES ================= -->
+<section class="page" id="page-emp">
+  <h1>Module 01 · Employee list</h1>
+  <p class="sub">Master record for every employee. IDs come from Zoho; data arrives by HR bulk upload. Click a row to open the full record with training history.</p>
+  <div class="toolbar">
+    <input class="searchbox" id="empSearch" placeholder="Search name, code, department…" aria-label="Search employees">
+    <div class="grow"></div>
+    <button class="btn admin-only" onclick="importFor('Employees')">⬆ Import (Excel)</button>
+    <button class="btn" onclick="exportTab('emp')">⬇ Export</button>
+    <button class="btn primary admin-only" onclick="empDlg.showModal()">+ Add employee</button>
+  </div>
+  <div class="tablewrap"><table id="empTable">
+    <thead><tr><th>Code</th><th>Name</th><th>Entity</th><th>Division</th><th>Department</th><th>Designation</th><th>Manager</th><th>Status</th><th class="num">Hours FY</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="note">Exited employees stay visible to the administrator only and are purged after <strong>2 years</strong>. Records are deactivated, never deleted — the audit trail stays intact.</div>
+</section>
+
+<!-- ================= 02 TRAININGS ================= -->
+<section class="page" id="page-trn">
+  <h1>Module 02 · Trainings</h1>
+  <p class="sub">Plan the training, then click its row to open it — add participants, generate the attendance QR, and manage the session from there.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="trnView('list')">List</button>
+    <button class="btn" onclick="trnView('cal')">Calendar · Sep 2026</button>
+    <div class="grow"></div>
+    <button class="btn admin-only" onclick="importFor('Trainings')">⬆ Import (Excel)</button>
+    <button class="btn" onclick="exportTab('trn')">⬇ Export</button>
+    <button class="btn primary admin-only" onclick="trnDlg.showModal()">+ Plan training</button>
+  </div>
+  <div id="trnList" class="tablewrap"><table id="trnTable">
+    <thead><tr><th>Code</th><th>Title</th><th>Category</th><th>Mode</th><th>Trainer</th><th>Dates</th><th class="num">Hours</th><th class="num">Participants</th><th>Status</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div id="trnCal" class="card pad" hidden>
+    <div class="cal" id="calGrid"></div>
+    <p style="color:var(--ink2);font-size:12px;margin:10px 0 0">Teal — internal · amber — external. Postponed trainings keep their original planned date visible for plan-vs-actual reporting.</p>
+  </div>
+  <div class="note">Each training carries a material library (agenda, decks, trainer profile, signed attendance scan) available to participants before and after the session. Mandatory trainings carry a validity period that drives re-training alerts.</div>
+</section>
+
+<!-- ================= 04 ATTENDANCE ================= -->
+<section class="page" id="page-att">
+  <h1>Module 04 · Attendance</h1>
+  <p class="sub">Attendance runs separately per training, per participant, per day. Participants can self-mark by scanning the training's QR — the scan tags them to the right training automatically — and the organizer or trainer can mark or correct anything, with every change logged.</p>
+  <div class="toolbar">
+    <label><span class="select-label">Training</span><select class="select" id="attTrnSel"></select></label>
+    <label><span class="select-label">Marking as</span>
+      <select class="select" id="attWho">
+        <option>Organizer — Lokshni (L&amp;D Admin)</option>
+        <option>Trainer</option>
+      </select></label>
+    <div class="grow"></div>
+    <button class="btn admin-only" onclick="importFor('Attendance')">⬆ Import</button>
+    <button class="btn" onclick="exportTab('att')">⬇ Export</button>
+  </div>
+  <div class="card pad">
+    <div class="hstack" style="margin-bottom:10px">
+      <button class="btn small primary" onclick="markAllPresent()">✓ Mark all present</button>
+      <button class="btn small" onclick="qrForAttendance()">▦ QR check-in</button>
+      <span style="flex:1"></span>
+      <button class="btn small admin-only" onclick="toast('Upload the scanned signed sheet — required before this training can be closed.')">⬆ Signed sheet</button>
+    </div>
+    <div class="tablewrap" style="box-shadow:none"><table style="min-width:560px" id="attTable">
+      <thead id="attHead"></thead>
+      <tbody id="attBody"></tbody>
+    </table></div>
+    <p style="font-size:12px;color:var(--ink2);margin:10px 0 0">– not marked · P present · A absent · H half-day. Click a cell to cycle, or use <strong>Edit</strong> on a row to correct a participant with a recorded reason. Eligibility assumes minimum <strong>75%</strong> attendance (open checklist item F3).</p>
+  </div>
+  <h2>Correction audit log</h2>
+  <div class="card pad">
+    <ul class="loglist" id="attLog">
+      <li><span class="mono">09 Sep 2026 · 17:45 IST</span> — QR self check-in: Priya Nair scanned in to Orthotics Product Deep-Dive, Day 1</li>
+      <li><span class="mono">09 Sep 2026 · 17:42 IST</span> — Organizer — Lokshni changed Suresh Kumar, Day 1: A → P · reason: "late biometric sync"</li>
+    </ul>
+  </div>
+  <div class="note">Repeated no-shows are flagged to the reporting manager automatically, and attendance hours feed the training man-hours report.</div>
+</section>
+
+<!-- ================= 05 FEEDBACK ================= -->
+<section class="page" id="page-fbk">
+  <h1>Module 05 · Feedback</h1>
+  <p class="sub">Each training carries its own feedback form — built here or uploaded. Share it by QR or link; responses tag to that training's form automatically. When completion triggers the auto-e-mail, anyone who already submitted via the QR or link is excluded.</p>
+  <div class="toolbar">
+    <div class="grow"></div>
+    <button class="btn admin-only" onclick="importFor('Feedback')">⬆ Import</button>
+    <button class="btn" onclick="exportTab('fbk')">⬇ Export results</button>
+  </div>
+
+  <h2 style="margin-top:0">Feedback forms by training</h2>
+  <div class="tablewrap"><table id="fbkFormsTable">
+    <thead><tr><th>Training</th><th>Dates</th><th>Form</th><th>Responses</th><th>Actions</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+
+  <div class="cols2" style="margin-top:18px">
+    <div class="card pad">
+      <h2 style="margin-top:0">Participant view — Orthotics Product Deep-Dive</h2>
+      <form id="fbkForm">
+        <div class="q">Relevance of content to my job<div class="scale" data-q></div></div>
+        <div class="q">Trainer's subject knowledge<div class="scale" data-q></div></div>
+        <div class="q">Trainer's delivery and clarity<div class="scale" data-q></div></div>
+        <div class="q">Confidence to apply this at work<div class="scale" data-q></div></div>
+        <div class="q">Overall rating<div class="scale" data-q></div></div>
+        <div class="q"><label for="fbOpen">What should be improved?</label><br><textarea id="fbOpen" rows="2" placeholder="Open text…"></textarea></div>
+        <button class="btn primary" type="submit" style="margin-top:12px">Submit feedback</button>
+      </form>
+    </div>
+    <div>
+      <div class="card pad">
+        <h2 style="margin-top:0">Response status — Orthotics Deep-Dive</h2>
+        <table class="tight">
+          <tr><td>Priya Nair</td><td><span class="chip good">Submitted via QR</span></td><td><span class="chip neutral">auto-e-mail skipped</span></td></tr>
+          <tr><td>Arjun Reddy</td><td><span class="chip good">Submitted via link</span></td><td><span class="chip neutral">auto-e-mail skipped</span></td></tr>
+          <tr><td>Meena Joseph</td><td><span class="chip warn">Pending</span></td><td><span class="chip acc">e-mailed · 1 reminder</span></td></tr>
+          <tr><td>Suresh Kumar</td><td><span class="chip warn">Pending</span></td><td><span class="chip acc">e-mailed · 2 reminders</span></td></tr>
+        </table>
+      </div>
+      <div class="card pad" style="margin-top:14px">
+        <h2 style="margin-top:0">Trainer scores — this quarter</h2>
+        <table class="tight">
+          <tr><td>R. Krishnan</td><td style="width:40%"><div class="bar"><i style="width:88%"></i></div></td><td class="num mono">4.4 / 5</td><td class="mono" style="color:var(--ink2)">31 resp.</td></tr>
+          <tr><td>S. Mehta</td><td><div class="bar"><i style="width:82%"></i></div></td><td class="num mono">4.1 / 5</td><td class="mono" style="color:var(--ink2)">18 resp.</td></tr>
+          <tr><td>Dale &amp; Grey (ext.)</td><td><div class="bar warnb"><i style="width:64%"></i></div></td><td class="num mono">3.2 / 5</td><td class="mono" style="color:var(--ink2)">12 resp.</td></tr>
+        </table>
+        <p style="font-size:12px;color:var(--ink2);margin:8px 0 0">Averages show only after a minimum number of responses, so one form never defines a trainer's rating.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 08 EXPENSES ================= -->
+<section class="page" id="page-exp">
+  <h1>Module 08 · Expenses</h1>
+  <p class="sub">One expense record per training. Tick the entities whose people attended and give each entity's participant count — the cost splits across entities by headcount automatically. Approvers: Vivek sir &amp; Sundar sir.</p>
+  <div class="toolbar">
+    <div class="grow"></div>
+    <button class="btn" onclick="importFor('Expenses')">⬆ Import (Excel)</button>
+    <button class="btn" onclick="exportTab('exp')">⬇ Export</button>
+    <button class="btn primary" onclick="expDlg.showModal()">+ New expense record</button>
+  </div>
+  <div class="tablewrap"><table id="expTable">
+    <thead><tr><th>Training</th><th>Dates</th><th>Category</th><th>Type</th><th>Entities</th><th>Vendor</th><th class="num">Budget ₹</th><th class="num">Actual ₹</th><th class="num">Paid ₹</th><th class="num">Pending ₹</th><th class="num">Variance ₹</th><th>Approval</th><th>Payment</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <h2>Budget vs actual — FY 2026–27</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Entity</th><th class="num">Budget ₹</th><th class="num">Actual ₹</th><th style="width:30%">Used</th></tr></thead>
+    <tbody>
+      <tr><td>Avana Medical Devices</td><td class="num mono">7,00,000</td><td class="num mono">4,55,000</td><td><div class="bar"><i style="width:65%"></i></div></td></tr>
+      <tr><td>Avana Surgical Systems</td><td class="num mono">4,50,000</td><td class="num mono">2,90,000</td><td><div class="bar"><i style="width:64%"></i></div></td></tr>
+      <tr><td>Avana Technology Services</td><td class="num mono">2,50,000</td><td class="num mono">95,000</td><td><div class="bar"><i style="width:38%"></i></div></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">Variance = Approved budget − Actual expense. Amount pending = Actual − Amount paid; payment status is derived from the payment rows. Entity shares are computed pro-rata on participant headcount — open a record to see the split.</div>
+</section>
+
+<!-- ================= 09 REPORTS ================= -->
+<section class="page" id="page-rpt">
+  <h1>Module 09 · Reports</h1>
+  <p class="sub">Standard filters on every report — date range, entity, division, department, location, training type, trainer, employee — with Excel and PDF export. Reports marked <em>live</em> actually generate from this prototype's sample data.</p>
+  <div class="toolbar">
+    <div class="grow"></div>
+    <button class="btn admin-only" onclick="importFor('Reports')">⬆ Import</button>
+    <button class="btn" onclick="exportTab('rpt')">⬇ Export</button>
+  </div>
+  <div class="reportgrid" id="reportGrid"></div>
+  <div class="note warnn" style="margin-top:16px">Open decisions (Section K): which reports are e-mailed on a schedule and to whom, and the exact formulas for coverage % and compliance % you'll be held to in audits.</div>
+</section>
+
+<!-- ================= USERS & ACCESS ================= -->
+<section class="page" id="page-usr">
+  <h1>Users &amp; Access</h1>
+  <p class="sub">System users sign in with their <strong>Zoho credentials</strong> (Zoho single sign-on) — no separate passwords to manage, and access ends automatically when the Zoho account is disabled. Access is role-based per the matrix below.</p>
+  <div class="toolbar">
+    <div class="grow"></div>
+    <button class="btn" onclick="importFor('Users')">⬆ Import</button>
+    <button class="btn" onclick="exportTab('usr')">⬇ Export</button>
+    <button class="btn primary" onclick="usrDlg.showModal()">+ Add user</button>
+  </div>
+  <div class="tablewrap"><table id="usrTable">
+    <thead><tr><th>User name</th><th>Zoho e-mail ID</th><th>User type</th><th>Access type</th><th>Status</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="note">Access levels — <strong>Full access</strong>: view, add, edit and deactivate anything (Super admin only). <strong>View, Add, Edit</strong>: work with records but never remove them. <strong>View</strong>: read-only, including their team's reports. Every access change is logged with user and timestamp.</div>
+  <div class="note warnn">This updates checklist item B3: login moves from plain e-mail + password to <strong>Zoho SSO</strong>. Confirm every user (including field staff doing QR check-ins) has a Zoho account, and decide the fallback for anyone without one.</div>
+</section>
+
+</main>
+</div>
+
+<!-- ============ dialogs ============ -->
+<dialog id="empDlg">
+  <div class="dlg-head"><strong>Add employee</strong><button class="btn small" onclick="empDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="empForm">
+    <div class="formgrid">
+      <div><label for="efCode">Employee code (Zoho)</label><input id="efCode" required placeholder="ZH-1234"></div>
+      <div><label for="efName">Full name</label><input id="efName" required placeholder="Full name"></div>
+      <div><label for="efEntity">Entity</label><select id="efEntity"><option value="AMD">Avana Medical Devices</option><option value="ASS">Avana Surgical Systems</option><option value="ATS">Avana Technology Services</option></select></div>
+      <div><label for="efDiv">Division</label><select id="efDiv">
+        <option>Accounts</option><option>Administration</option><option>Commercial</option><option>Dex &amp; Bio</option>
+        <option>Endoscopy</option><option>Graphic Design</option><option>Human Resource</option><option>IT</option>
+        <option>Marketing</option><option>Medical Education</option><option>Orthotics</option><option>SCM</option>
+        <option>Service</option><option>Sports Medicine</option>
+      </select></div>
+      <div><label for="efDept">Department</label><input id="efDept" required placeholder="e.g. Sales"></div>
+      <div><label for="efDesig">Designation</label><input id="efDesig" required placeholder="e.g. Sales Executive"></div>
+      <div><label for="efMgr">Reporting manager</label><input id="efMgr" placeholder="Manager name"></div>
+      <div><label for="efType">Employment type</label><select id="efType"><option>Permanent</option><option>Trainee</option><option>Intern</option><option>Contract</option><option>Consultant</option></select></div>
+      <div><label for="efMail">Official e-mail</label><input id="efMail" type="email" placeholder="name@avanasurgical.com"></div>
+      <div><label for="efMob">Mobile</label><input id="efMob" placeholder="+91 …"></div>
+      <div><label for="efDoj">Date of joining</label><input id="efDoj" type="date"></div>
+      <div><label for="efLoc">Location / territory</label><input id="efLoc" placeholder="e.g. Chennai"></div>
+    </div>
+    <div class="hstack" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="empDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Save employee</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="empView">
+  <div class="dlg-head"><strong id="evName">Employee</strong><button class="btn small" onclick="empView.close()">✕ Close</button></div>
+  <div class="dlg-body" id="evBody"></div>
+</dialog>
+
+<dialog id="trnDlg">
+  <div class="dlg-head"><strong>Plan a training</strong><button class="btn small" onclick="trnDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="trnForm">
+    <div class="formgrid">
+      <div class="full"><label for="tfTitle">Training title</label><input id="tfTitle" required placeholder="Title"></div>
+      <div><label for="tfCat">Category</label><select id="tfCat"><option>Induction</option><option>Product</option><option>Soft skill</option><option>Technical</option><option>Compliance</option><option>Safety</option><option>On-the-job</option></select></div>
+      <div><label for="tfMode">Mode</label><select id="tfMode"><option>Classroom</option><option>Online</option><option>On-the-job</option><option>Field</option><option>External seminar</option></select></div>
+      <div><label for="tfTrainer">Trainer</label><input id="tfTrainer" required placeholder="Name / agency"></div>
+      <div><label for="tfTT">Trainer type</label><select id="tfTT"><option>Internal</option><option>External agency</option></select></div>
+      <div class="full"><label for="tfDate">Training dates — add each day (2–3 day trainings supported)</label>
+        <div class="hstack" style="margin-top:4px"><input type="date" id="tfDate" style="max-width:180px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Archivo',sans-serif;color:var(--ink)"><button type="button" class="btn small" onclick="addTrnDate()">+ Add date</button></div>
+        <div class="hstack" id="tfDateChips" style="margin-top:8px"></div>
+      </div>
+      <div><label for="tfHours">Training hours (total)</label><input id="tfHours" type="number" min="1" value="8"></div>
+      <div><label for="tfHoursDay">Hours per day</label><input id="tfHoursDay" type="number" min="1" value="8"></div>
+      <div><label for="tfSeats">Maximum seats</label><input id="tfSeats" type="number" min="1" value="20"></div>
+      <div><label for="tfMand">Mandatory?</label><select id="tfMand"><option>Optional</option><option>Mandatory</option></select></div>
+    </div>
+    <p style="font-size:12px;color:var(--ink2);margin:12px 0 0">After saving, click the training's row in the list to add its participants.</p>
+    <div class="hstack" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="trnDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Save training</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="trnViewDlg">
+  <div class="dlg-head"><strong id="tvTitle">Training</strong><button class="btn small" onclick="trnViewDlg.close()">✕ Close</button></div>
+  <div class="dlg-body" id="tvBody"></div>
+</dialog>
+
+<dialog id="attEditDlg">
+  <div class="dlg-head"><strong id="aeTitle">Edit attendance</strong><button class="btn small" onclick="attEditDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="attEditForm">
+    <div id="aeDays" class="formgrid"></div>
+    <div style="margin-top:12px"><label class="flabel" for="aeReason">Reason for correction (mandatory — goes to the audit log)</label>
+      <input id="aeReason" required placeholder="e.g. was present, forgot to scan" style="width:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Archivo',sans-serif;color:var(--ink)"></div>
+    <div class="hstack" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="attEditDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Save correction</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="fbBuildDlg">
+  <div class="dlg-head"><strong>Create feedback form</strong><button class="btn small" onclick="fbBuildDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="fbBuildForm">
+    <div class="formgrid">
+      <div class="full"><label for="fbTrn">Training session</label><select id="fbTrn"></select></div>
+      <div><label for="fbScale">Rating scale</label><select id="fbScale"><option>1–5</option><option>1–10</option><option>Agree / Disagree</option></select></div>
+      <div><label for="fbAnon">Responses</label><select id="fbAnon"><option>Named</option><option>Anonymous</option><option>Anonymous to trainer, visible to HR</option></select></div>
+    </div>
+    <p class="flabel" style="margin:14px 0 4px">Standard questions — untick what you don't need</p>
+    <div id="fbStdQs"></div>
+    <p class="flabel" style="margin:14px 0 4px">Custom questions for this training</p>
+    <div id="fbCustomList"></div>
+    <div class="hstack" style="margin-top:6px">
+      <input class="searchbox" id="fbCustomQ" placeholder="Type a question…" style="flex:1">
+      <button type="button" class="btn small" onclick="addCustomQ()">+ Add</button>
+    </div>
+    <div class="hstack" style="margin-top:16px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="fbBuildDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Save form</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="expDlg">
+  <div class="dlg-head"><strong>New expense record</strong><button class="btn small" onclick="expDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="expForm">
+    <div class="formgrid">
+      <div class="full"><label for="xfTrn">Training name</label><select id="xfTrn"></select></div>
+      <div><label for="xfDates">Training dates</label><input id="xfDates" placeholder="e.g. 06 Oct, 07 Oct"></div>
+      <div><label for="xfLoc">Training location</label><input id="xfLoc" placeholder="e.g. Hotel Grand, Chennai"></div>
+      <div class="full">
+        <label>Entities covered — tick each entity and enter its participant count; cost splits pro-rata by headcount</label>
+        <div id="xfEnts">
+          <div class="qopt"><input type="checkbox" id="entAMD" data-ent="AMD"><label for="entAMD" style="min-width:210px;font-size:13px;font-weight:500;color:var(--ink)">Avana Medical Devices (AMD)</label><input type="number" min="0" placeholder="participants" disabled class="entn" data-ent="AMD" style="width:120px" aria-label="AMD participants"></div>
+          <div class="qopt"><input type="checkbox" id="entASS" data-ent="ASS"><label for="entASS" style="min-width:210px;font-size:13px;font-weight:500;color:var(--ink)">Avana Surgical Systems (ASS)</label><input type="number" min="0" placeholder="participants" disabled class="entn" data-ent="ASS" style="width:120px" aria-label="ASS participants"></div>
+          <div class="qopt"><input type="checkbox" id="entATS" data-ent="ATS"><label for="entATS" style="min-width:210px;font-size:13px;font-weight:500;color:var(--ink)">Avana Technology Services (ATS)</label><input type="number" min="0" placeholder="participants" disabled class="entn" data-ent="ATS" style="width:120px" aria-label="ATS participants"></div>
+        </div>
+      </div>
+      <div><label for="xfNpart">Total participants</label><input id="xfNpart" type="number" min="1" value="10"></div>
+      <div><label for="xfCat">Expense category</label><select id="xfCat">
+        <option>Food / Catering</option><option>Flight</option><option>Venue / Conference room</option>
+        <option>Accommodation</option><option>Local Transportation</option><option>Train</option>
+        <option>Training materials</option><option>Printing</option><option>Others</option>
+      </select></div>
+      <div><label for="xfType">Training type</label><select id="xfType"><option>Internal</option><option>External</option></select></div>
+      <div><label for="xfVendor">Vendor name (external only)</label><input id="xfVendor" placeholder="Vendor / agency" disabled></div>
+      <div class="full"><label for="xfDesc">Description</label><input id="xfDesc" placeholder="What this expense covers"></div>
+      <div><label for="xfBudget">Approved budget ₹</label><input id="xfBudget" type="number" min="0" required placeholder="0"></div>
+      <div><label for="xfActual">Actual expense ₹</label><input id="xfActual" type="number" min="0" required placeholder="0"></div>
+      <div><label for="xfAppr">Approval status</label><select id="xfAppr"><option>Pending</option><option>Approved</option><option>Rejected</option></select></div>
+      <div class="full">
+        <label>Payment dates &amp; amounts — add a row per part-payment</label>
+        <div id="xfPays"></div>
+        <button type="button" class="btn small" style="margin-top:6px" onclick="addPayRow()">+ Add payment row</button>
+        <p style="font-size:12px;color:var(--ink2);margin:6px 0 0">Amount pending and payment status (paid / partially paid / not paid) are computed automatically.</p>
+      </div>
+      <div class="full"><label>Invoice copies — attach one or more files (PDF / image)</label>
+        <div class="hstack" style="margin-top:4px">
+          <button type="button" class="btn small" onclick="pickInvoices()">⬆ Add invoice files</button>
+          <span style="font-size:12px;color:var(--ink2)">multiple files allowed — quotation, PO, invoice, payment proof</span>
+        </div>
+        <div class="hstack" id="xfInvList" style="margin-top:8px"></div>
+      </div>
+      <div class="full"><label for="xfRemark">Remark</label><input id="xfRemark" placeholder="Optional remark"></div>
+    </div>
+    <div class="hstack" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="expDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Save expense record</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="expView">
+  <div class="dlg-head"><strong id="xvTitle">Expense record</strong><button class="btn small" onclick="expView.close()">✕ Close</button></div>
+  <div class="dlg-body" id="xvBody"></div>
+</dialog>
+
+<dialog id="rptDlg">
+  <div class="dlg-head"><strong id="rptTitle">Report</strong><button class="btn small" onclick="rptDlg.close()">✕ Close</button></div>
+  <div class="dlg-body" id="rptBody"></div>
+</dialog>
+
+<dialog id="csvDlg">
+  <div class="dlg-head"><strong id="csvTitle">Export</strong><button class="btn small" onclick="csvDlg.close()">✕ Close</button></div>
+  <div class="dlg-body">
+    <p style="margin:0 0 8px;font-size:12.5px;color:var(--ink2)">The Excel download could not start in this viewer — copy the data below instead (it pastes cleanly into Excel).</p>
+    <textarea id="csvText" readonly rows="10"></textarea>
+    <div class="hstack" style="margin-top:10px;justify-content:flex-end"><button class="btn primary" onclick="copyCsv()">Copy to clipboard</button></div>
+  </div>
+</dialog>
+
+<dialog id="qrDlg">
+  <div class="dlg-head"><strong id="qrTitle">QR code</strong><button class="btn small" onclick="qrDlg.close()">✕ Close</button></div>
+  <div class="dlg-body" style="text-align:center">
+    <p id="qrDesc" style="margin:0 0 12px;font-size:13px;color:var(--ink2);text-align:left"></p>
+    <div class="qrbox"><div id="qrBox"></div></div>
+    <p class="mono" id="qrUrl" style="font-size:12px;word-break:break-all;margin:12px 0 0"></p>
+    <div class="hstack" style="margin-top:12px;justify-content:center">
+      <button class="btn primary" id="qrSimBtn" onclick="simulateScan()">▶ Test now — simulate scan</button>
+      <button class="btn" onclick="copyQrLink()">Copy link</button>
+      <button class="btn" onclick="toast('Print / poster export is mocked in the prototype — the real build gives an A4 printable with the training name and QR.')">Print poster</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="scanDlg" style="max-width:400px;width:min(94vw,400px)">
+  <div class="dlg-head"><strong id="scanTitle">Participant phone view</strong><button class="btn small" onclick="scanDlg.close()">✕ Close</button></div>
+  <div class="dlg-body" id="scanBody"></div>
+</dialog>
+
+<dialog id="usrDlg">
+  <div class="dlg-head"><strong>Add user</strong><button class="btn small" onclick="usrDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="usrForm">
+    <div class="formgrid">
+      <div><label for="ufName">User name</label><input id="ufName" required placeholder="Full name"></div>
+      <div><label for="ufMail">Zoho e-mail ID</label><input id="ufMail" type="email" required placeholder="name@avanasurgical.com"></div>
+      <div><label for="ufType">User type</label><select id="ufType"><option>Manager</option><option>Admin</option><option>Super admin</option><option>Trainer</option><option>Finance</option><option>Auditor (read-only)</option></select></div>
+      <div><label for="ufAcc">Access type</label><select id="ufAcc"><option>View</option><option>View, Add</option><option>View, Add, Edit</option><option>Full access</option></select></div>
+    </div>
+    <p style="font-size:12px;color:var(--ink2);margin:12px 0 0">The user receives a Zoho SSO invite at this address — they sign in with their existing Zoho credentials, no new password.</p>
+    <div class="hstack" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="usrDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Add user &amp; send Zoho invite</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="mapDlg" style="max-width:740px;width:min(96vw,740px)">
+  <div class="dlg-head"><strong>Import — map your columns</strong><button class="btn small" onclick="mapDlg.close()">✕ Close</button></div>
+  <form class="dlg-body" id="mapForm">
+    <p class="mono" id="mapFile" style="font-size:12px;color:var(--ink2);margin:0 0 10px"></p>
+    <p style="font-size:12.5px;color:var(--ink2);margin:0 0 10px">Match each system field to a column from your file. Fields marked * are required; anything set to "— skip —" is ignored. Columns with similar names are matched automatically.</p>
+    <div class="formgrid" id="mapGrid"></div>
+    <h2 style="margin:16px 0 6px">Preview — first 3 rows as they will import</h2>
+    <div class="tablewrap" style="box-shadow:none"><table class="tight" id="mapPrev" style="width:100%"></table></div>
+    <div class="hstack" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="mapDlg.close()">Cancel</button>
+      <button class="btn primary" type="submit">Import records</button>
+    </div>
+  </form>
+</dialog>
+
+<input type="file" id="impFile" hidden accept=".xlsx,.xls,.csv">
+<input type="file" id="invFile" hidden multiple>
+
+<div id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ---------- helpers ---------- */
+let toastT;
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3600);}
+const inr=n=>Math.round(n).toLocaleString('en-IN');
+const $=id=>document.getElementById(id);
+function nowIST(){return new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Kolkata'})+' IST';}
+const ENTNAME={AMD:"Medical Devices",ASS:"Surgical Systems",ATS:"Technology Svcs"};
+const ENTFULL={AMD:"Avana Medical Devices Pvt Ltd",ASS:"Avana Surgical Systems Pvt Ltd",ATS:"Avana Technology Services Pvt Ltd"};
+const fmtDay=v=>{const d=new Date(v+'T00:00:00');return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'});};
+const BASEURL='https://learn.avana.in'; // placeholder — the real domain is checklist item B4
+
+/* ---------- data ---------- */
+const EMPLOYEES=[
+ {code:"ZH-1042",name:"Priya Nair",entity:"AMD",div:"Orthotics",dept:"Sales",desig:"Territory Manager",mgr:"K. Iyer",type:"Permanent",mail:"priya.n@avanasurgical.com",mob:"+91 98400 11221",doj:"12 Mar 2022",loc:"Chennai",status:"Active",hours:22},
+ {code:"ZH-1077",name:"Arjun Reddy",entity:"AMD",div:"Sports Medicine",dept:"Sales",desig:"Sales Executive",mgr:"K. Iyer",type:"Permanent",mail:"arjun.r@avanasurgical.com",mob:"+91 98400 33445",doj:"05 Jul 2023",loc:"Hyderabad",status:"Active",hours:16},
+ {code:"ZH-0918",name:"Meena Joseph",entity:"ASS",div:"Endoscopy",dept:"Clinical Support",desig:"Clinical Specialist",mgr:"D. Rao",type:"Permanent",mail:"meena.j@avanasurgical.com",mob:"+91 98847 55667",doj:"19 Jan 2021",loc:"Kochi",status:"Active",hours:19},
+ {code:"ZH-0844",name:"Suresh Kumar",entity:"ASS",div:"Service",dept:"Service",desig:"Service Engineer",mgr:"D. Rao",type:"Permanent",mail:"suresh.k@avanasurgical.com",mob:"+91 98847 77889",doj:"02 Nov 2020",loc:"Bengaluru",status:"Active",hours:11},
+ {code:"ZH-1101",name:"Ananya Iyer",entity:"ATS",div:"Commercial",dept:"Operations",desig:"Ops Analyst",mgr:"F. Thomas",type:"Permanent",mail:"ananya.i@avanasurgical.com",mob:"+91 90030 12321",doj:"22 Apr 2024",loc:"Chennai",status:"Active",hours:8},
+ {code:"ZH-1115",name:"Rahul Menon",entity:"ATS",div:"IT",dept:"Technology",desig:"Software Engineer",mgr:"F. Thomas",type:"Permanent",mail:"rahul.m@avanasurgical.com",mob:"+91 90030 45654",doj:"09 Sep 2024",loc:"Chennai",status:"Active",hours:6},
+ {code:"ZH-0721",name:"Kavitha Raman",entity:"AMD",div:"Orthotics",dept:"Quality",desig:"QA Executive",mgr:"G. Pillai",type:"Permanent",mail:"kavitha.r@avanasurgical.com",mob:"+91 98410 88990",doj:"14 Jun 2019",loc:"Chennai",status:"Active",hours:24},
+ {code:"ZH-1130",name:"Vignesh S",entity:"AMD",div:"Orthotics",dept:"Sales",desig:"Trainee — MedTech Maverick B-3",mgr:"Mentor: R. Krishnan",type:"Trainee",mail:"vignesh.s@avanasurgical.com",mob:"+91 97910 11213",doj:"01 Jul 2026",loc:"Chennai",status:"Active",hours:31},
+ {code:"ZH-1131",name:"Divya Prakash",entity:"ASS",div:"Endoscopy",dept:"Sales",desig:"Trainee — MedTech Maverick B-3",mgr:"Mentor: S. Mehta",type:"Trainee",mail:"divya.p@avanasurgical.com",mob:"+91 97910 14151",doj:"01 Jul 2026",loc:"Coimbatore",status:"Active",hours:29},
+ {code:"ZH-0655",name:"Mohan Das",entity:"AMD",div:"SCM",dept:"Warehouse",desig:"Store Executive",mgr:"G. Pillai",type:"Permanent",mail:"mohan.d@avanasurgical.com",mob:"+91 98410 66778",doj:"03 Feb 2018",loc:"Chennai",status:"On notice",hours:4},
+ {code:"ZH-0410",name:"Rekha V",entity:"ASS",div:"Endoscopy",dept:"Sales",desig:"Area Manager",mgr:"D. Rao",type:"Permanent",mail:"—",mob:"—",doj:"11 Aug 2016",loc:"Chennai",status:"Exited",hours:0},
+];
+
+const TRAININGS=[
+ {code:"TRG-104",title:"New Joiner Induction — Sep batch",cat:"Induction",mode:"Classroom",trainer:"Lokshni",tt:"Internal",dates:"01–03 Sep",days:["01 Sep","02 Sep","03 Sep"],hours:18,seats:15,mand:"Mandatory",status:"Completed",part:["ZH-1130","ZH-1131","ZH-1115"]},
+ {code:"TRG-105",title:"Orthotics Product Deep-Dive",cat:"Product",mode:"Classroom",trainer:"R. Krishnan",tt:"Internal",dates:"08–09 Sep",days:["08 Sep","09 Sep"],hours:12,seats:20,mand:"Optional",status:"Completed",part:["ZH-1042","ZH-1077","ZH-0918","ZH-0844","ZH-1131"]},
+ {code:"TRG-106",title:"Endoscopy Product Refresher — Batch 2",cat:"Product",mode:"Classroom",trainer:"S. Mehta",tt:"Internal",dates:"15–16 Sep",days:["15 Sep","16 Sep"],hours:12,seats:20,mand:"Optional",status:"Confirmed",part:["ZH-0918","ZH-0844","ZH-1042","ZH-1077","ZH-1131"]},
+ {code:"TRG-107",title:"ISO 13485 Awareness",cat:"Compliance",mode:"Online",trainer:"QA team",tt:"Internal",dates:"22 Sep",days:["22 Sep"],hours:4,seats:60,mand:"Mandatory",status:"Confirmed",part:["ZH-1042","ZH-1077","ZH-0918","ZH-0844","ZH-0721","ZH-1101","ZH-1115"]},
+ {code:"TRG-108",title:"Advanced Negotiation Skills",cat:"Soft skill",mode:"External seminar",trainer:"Dale & Grey Consulting",tt:"External agency",dates:"29 Sep",days:["29 Sep"],hours:8,seats:12,mand:"Optional",status:"Awaiting cost approval",part:["ZH-1042","ZH-0918"]},
+ {code:"TRG-101",title:"Field OJT — MedTech Maverick month 3",cat:"On-the-job",mode:"Field",trainer:"Assigned mentors",tt:"Internal",dates:"All month",days:[],hours:0,seats:6,mand:"Mandatory",status:"In progress",part:["ZH-1130","ZH-1131"]},
+ {code:"TRG-099",title:"Fire Safety Drill",cat:"Safety",mode:"Classroom",trainer:"SafeWorks",tt:"External agency",dates:"Was 05 Sep → 10 Oct",days:[],hours:2,seats:100,mand:"Mandatory",status:"Postponed",part:[]},
+];
+
+const ATT={
+ "TRG-105":{"ZH-1042":["P","P"],"ZH-1077":["P","H"],"ZH-0918":["P","P"],"ZH-0844":["A","P"],"ZH-1131":["P","P"]},
+ "TRG-104":{"ZH-1130":["P","P","P"],"ZH-1131":["P","P","H"],"ZH-1115":["P","A","P"]},
+ "TRG-106":{"ZH-0918":["–","–"],"ZH-0844":["–","–"],"ZH-1042":["–","–"],"ZH-1077":["–","–"],"ZH-1131":["–","–"]},
+};
+
+const FBFORMS={
+ "TRG-105":{name:"Standard form v1",src:"Built in system",q:6,resp:2,total:4},
+ "TRG-104":{name:"Induction feedback",src:"Built in system",q:8,resp:3,total:3},
+};
+const FB_RESP=[
+ ["Priya Nair",5,5,4,4,5,"More live demos please"],
+ ["Arjun Reddy",4,5,4,3,4,"Second day felt rushed"],
+];
+
+let EXPREC=[
+ {trn:"Advanced Negotiation Skills",dates:"29 Sep 2026",loc:"Hotel Grand, Chennai",npart:12,ents:[{ent:"AMD",n:8},{ent:"ASS",n:4}],cat:"Venue / Conference room",type:"External",vendor:"Dale & Grey Consulting",desc:"Trainer fee, hall and catering for one-day external workshop",budget:120000,actual:104952,payments:[{date:"02 Sep 2026",amt:50000}],invoices:["DaleGrey-Invoice-4471.pdf","HotelGrand-GST-2211.pdf"],appr:"Approved",remark:"Balance due on invoice submission"},
+ {trn:"Orthotics Product Deep-Dive",dates:"08 Sep 2026, 09 Sep 2026",loc:"Avana HQ, Chennai",npart:5,ents:[{ent:"AMD",n:3},{ent:"ASS",n:2}],cat:"Food / Catering",type:"Internal",vendor:"—",desc:"Lunch and refreshments, 2 days",budget:12000,actual:10080,payments:[{date:"10 Sep 2026",amt:10080}],invoices:["Canteen-Bill-0912.jpg"],appr:"Approved",remark:"—"},
+ {trn:"ISO 13485 Awareness",dates:"22 Sep 2026",loc:"Online",npart:44,ents:[{ent:"AMD",n:20},{ent:"ASS",n:15},{ent:"ATS",n:9}],cat:"Training materials",type:"Internal",vendor:"—",desc:"Printed QMS handbooks for participants",budget:8000,actual:6500,payments:[],invoices:[],appr:"Pending",remark:"PO raised, invoice awaited"},
+];
+
+const USERS=[
+ {name:"D Lokshni",mail:"lokshni@avanasurgical.com",type:"Super admin",acc:"Full access",status:"Active"},
+ {name:"M Vivekananda",mail:"vivek@avanasurgical.com",type:"Admin",acc:"View, Add, Edit",status:"Active"},
+ {name:"P Sundararajan",mail:"sundar@avanamedical.com",type:"Manager",acc:"View",status:"Active"},
+ {name:"Manish Gautam",mail:"manish@avanamedical.com",type:"Manager",acc:"View",status:"Active"},
+ {name:"Ruchir Gupta",mail:"ruchir@avanamedical.com",type:"Manager",acc:"View",status:"Active"},
+ {name:"Praveen Raghavendra",mail:"praveen@avanamedical.com",type:"Manager",acc:"View",status:"Active"},
+ {name:"Y Azgar Hussain",mail:"azgarhussain@avanasurgical.com",type:"Manager",acc:"View",status:"Active"},
+ {name:"Ashok Krishna Raj",mail:"ashokkrishnaraj@avanasurgical.com",type:"Manager",acc:"View",status:"Active"},
+];
+const ACC_OPTS=["View","View, Add","View, Add, Edit","Full access"];
+
+/* ---------- navigation ---------- */
+const navBtns=[...document.querySelectorAll('.rail .nav:not(:disabled)')];
+navBtns.forEach(b=>b.addEventListener('click',()=>{
+  navBtns.forEach(x=>x.setAttribute('aria-current','false'));
+  b.setAttribute('aria-current','true');
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  $('page-'+b.dataset.page).classList.add('on');
+  window.scrollTo({top:0});
+}));
+
+/* ---------- role switch ---------- */
+$('roleSel').addEventListener('change',e=>{
+  document.body.dataset.role=e.target.value;
+  const names={admin:'Lokshni · Admin',manager:'K. Iyer · Manager',employee:'Priya Nair · Employee'};
+  $('userName').textContent=names[e.target.value];
+  const cur=document.querySelector('.rail .nav[aria-current="true"]');
+  if(cur&&getComputedStyle(cur).display==='none')navBtns[0].click();
+  toast('Viewing as '+names[e.target.value]+' — menus and cost data adjust to the role.');
+});
+
+/* ---------- QR + participant scan views ---------- */
+let qrObj=null,qrLink='',qrCtx=null;
+const scanUrl=(m,c)=>location.href.split('#')[0]+'#'+m+'/'+c;
+function showQr(title,url,desc,ctx){
+  $('qrTitle').textContent=title;
+  $('qrDesc').textContent=desc;
+  $('qrUrl').textContent=url;
+  qrLink=url;qrCtx=ctx||null;
+  $('qrSimBtn').hidden=!qrCtx;
+  $('qrBox').innerHTML='';
+  if(window.QRCode){qrObj=new QRCode($('qrBox'),{text:url,width:190,height:190,correctLevel:QRCode.CorrectLevel.M});}
+  else{$('qrBox').textContent='QR library unavailable — the link below still works.';}
+  qrDlg.showModal();
+}
+function copyQrLink(){navigator.clipboard.writeText(qrLink).then(()=>toast('Link copied — share it on e-mail or WhatsApp.')).catch(()=>toast('Copy the link text manually.'));}
+function simulateScan(){
+  if(!qrCtx)return;
+  qrDlg.close();
+  $('scanTitle').textContent=qrCtx.mode==='att'?'Phone view — QR check-in':'Phone view — feedback form';
+  renderScanInto($('scanBody'),qrCtx.mode,qrCtx.code,{live:true});
+  scanDlg.showModal();
+}
+function qrForAttendance(){
+  const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);
+  showQr('Attendance QR — '+t.title,scanUrl('att',code),
+   'Display this at the venue. Scanning opens the check-in page for '+code+' — the participant confirms and attendance tags to this training automatically. Use "Test now" below to run the participant flow on this screen and watch the grid update.',{mode:'att',code});
+}
+function qrForFeedback(code){
+  const t=TRAININGS.find(x=>x.code===code);
+  showQr('Feedback QR — '+t.title,scanUrl('fb',code),
+   'Scanning opens this training\'s feedback form — responses tag to it automatically, and anyone who submits early is excluded from the automatic reminder e-mail. Use "Test now" below to run the participant flow and watch the response count update.',{mode:'fb',code});
+}
+function succHTML(h,sub,note){
+  return `<div style="text-align:center;padding:18px 4px"><div style="font-size:52px;color:var(--good);line-height:1">✓</div>
+  <h2 style="margin:10px 0 2px">${h}</h2><p class="mono" style="margin:0;font-size:12.5px">${sub}</p>
+  <p style="font-size:12.5px;color:var(--ink2);margin:12px 0 0">${note}</p></div>`;
+}
+function renderScanInto(box,mode,code,opts){
+  const t=TRAININGS.find(x=>x.code===code);if(!t){box.innerHTML='<p>Unknown training.</p>';return;}
+  const live=!!(opts&&opts.live);
+  if(mode==='att'){
+    const days=t.days.length?t.days:['Today'];
+    box.innerHTML=`
+      <div style="text-align:center;margin-bottom:6px"><span class="chip acc">${t.code}</span></div>
+      <h2 style="margin:0 0 2px;text-align:center">${t.title}</h2>
+      <p style="text-align:center;color:var(--ink2);font-size:12.5px;margin:0 0 14px">QR check-in · ${t.dates}</p>
+      <label class="flabel">Session day</label>
+      <select class="select" data-sc="day" style="width:100%;margin:3px 0 12px">${days.map((d,i)=>`<option value="${i}">${d}</option>`).join('')}</select>
+      <label class="flabel">I am</label>
+      <select class="select" data-sc="who" style="width:100%;margin:3px 0 16px">${t.part.map(c=>`<option value="${c}">${empName(c)}</option>`).join('')}</select>
+      ${t.part.length?'':'<p style="color:var(--crit);font-size:13px;margin:0 0 10px">No participants assigned to this training yet — add them from its row in Module 02 first.</p>'}
+      <button class="btn primary" data-sc="go" style="width:100%" ${t.part.length?'':'disabled'}>✓ Check in</button>
+      <p style="font-size:11.5px;color:var(--ink2);margin:10px 0 0">Only employees assigned to ${t.code} can check in. In the real build the phone is already signed in via Zoho, so there is no name selection — the scan alone identifies the person.</p>`;
+    box.querySelector('[data-sc="go"]').addEventListener('click',()=>{
+      const emp=box.querySelector('[data-sc="who"]').value;
+      const di=+box.querySelector('[data-sc="day"]').value;
+      if(t.days.length){
+        if(!ATT[code])ATT[code]={};
+        if(!ATT[code][emp])ATT[code][emp]=Array(t.days.length).fill('–');
+        ATT[code][emp][di]='P';
+        refreshAttSel();renderAtt();
+      }
+      logAtt(`QR self check-in: ${empName(emp)} scanned in to ${t.title}, ${t.days[di]||'today'}`);
+      box.innerHTML=succHTML('Checked in!',`${empName(emp)} · ${t.code} · ${t.days[di]||'today'}`,
+        live?'Marked P and written to the audit log — open Module 04 to see this in the grid.':'This phone confirms the check-in; live sync to the organizer\'s screen comes with the real server.');
+    });
+  }else{
+    const qs=["Relevance of content to my job","Trainer's subject knowledge","Trainer's delivery and clarity","Confidence to apply this at work","Overall rating"];
+    box.innerHTML=`
+      <div style="text-align:center;margin-bottom:6px"><span class="chip acc">${t.code}</span></div>
+      <h2 style="margin:0 0 2px;text-align:center">${t.title}</h2>
+      <p style="text-align:center;color:var(--ink2);font-size:12.5px;margin:0 0 10px">Feedback form · responses tag to this training</p>
+      <label class="flabel">I am</label>
+      <select class="select" data-sc="who" style="width:100%;margin:3px 0 4px">${t.part.map(c=>`<option>${empName(c)}</option>`).join('')}</select>
+      ${qs.map((q,i)=>`<div class="q" style="padding:9px 0">${q}<div class="scale">${[1,2,3,4,5].map(v=>`<label><input type="radio" name="scq${i}" value="${v}">${v}</label>`).join('')}</div></div>`).join('')}
+      <textarea data-sc="cmt" rows="2" placeholder="What should be improved? (optional)" style="margin-top:8px"></textarea>
+      <button class="btn primary" data-sc="go" style="width:100%;margin-top:12px">Submit feedback</button>`;
+    box.querySelector('[data-sc="go"]').addEventListener('click',()=>{
+      const who=box.querySelector('[data-sc="who"]').value||'Anonymous';
+      const scores=qs.map((q,i)=>{const r=box.querySelector(`input[name="scq${i}"]:checked`);return r?+r.value:null;});
+      if(scores.some(s=>s===null)){toast('Answer all five rating questions before submitting.');return;}
+      const cmt=box.querySelector('[data-sc="cmt"]').value||'—';
+      if(!FBFORMS[code])FBFORMS[code]={name:'Standard form v1',src:'Built in system',q:6,resp:0,total:t.part.length};
+      FBFORMS[code].resp++;
+      if(code==='TRG-105')FB_RESP.push([who,...scores,cmt]);
+      renderFbkForms();
+      box.innerHTML=succHTML('Feedback submitted!',`${who} · ${t.code}`,
+        'Tagged to this training\'s form — this participant is now excluded from the automatic reminder e-mail. The response count has updated in Module 05'+(code==='TRG-105'?' and the response is in the Excel results export.':'.'));
+    });
+  }
+}
+
+/* ---------- import / export ---------- */
+let impContext='';
+function importFor(tab){impContext=tab;$('impFile').click();}
+
+/* ---- real Excel import with column mapping (Employees, Trainings, Users) ---- */
+function normEnt(v){
+  v=String(v||'').toLowerCase();
+  if(v.includes('surgical')||v.trim()==='ass')return'ASS';
+  if(v.includes('tech')||v.trim()==='ats')return'ATS';
+  return'AMD';
+}
+const IMPORT_SPECS={
+ 'Employees':{fields:[
+   {key:'code',label:'Employee code',req:true,syn:['code','employee code','emp code','employee id','emp id','zoho id','id']},
+   {key:'name',label:'Full name',req:true,syn:['name','full name','employee name','user name']},
+   {key:'entity',label:'Entity',syn:['entity','company','organisation','organization']},
+   {key:'div',label:'Division',syn:['division','div']},
+   {key:'dept',label:'Department',syn:['department','dept']},
+   {key:'desig',label:'Designation',syn:['designation','title','job title','role']},
+   {key:'mgr',label:'Reporting manager',syn:['manager','reporting manager','supervisor']},
+   {key:'type',label:'Employment type',syn:['employment type','type']},
+   {key:'mail',label:'Official e-mail',syn:['email','e-mail','mail','email id','official email']},
+   {key:'mob',label:'Mobile',syn:['mobile','phone','contact','mobile number']},
+   {key:'doj',label:'Date of joining',syn:['doj','date of joining','joining date','joined']},
+   {key:'loc',label:'Location / territory',syn:['location','territory','city','place','state']}],
+  apply(rows){rows.reverse().forEach(r=>{EMPLOYEES.unshift({code:r.code,name:r.name,entity:normEnt(r.entity),div:r.div||'—',dept:r.dept||'—',desig:r.desig||'—',mgr:r.mgr||'—',type:r.type||'Permanent',mail:r.mail||'—',mob:r.mob||'—',doj:r.doj||'—',loc:r.loc||'—',status:'Active',hours:0});});renderEmp();}},
+ 'Trainings':{fields:[
+   {key:'title',label:'Training title',req:true,syn:['title','training title','training name','name','training']},
+   {key:'code',label:'Training code',syn:['code','training code','id']},
+   {key:'cat',label:'Category',syn:['category','type of training']},
+   {key:'mode',label:'Mode',syn:['mode','delivery']},
+   {key:'trainer',label:'Trainer',syn:['trainer','faculty','agency']},
+   {key:'tt',label:'Trainer type (internal/external)',syn:['trainer type','internal/external','internal or external']},
+   {key:'dates',label:'Dates (comma-separated)',syn:['dates','date','training dates','schedule']},
+   {key:'hours',label:'Hours',syn:['hours','duration','training hours']},
+   {key:'seats',label:'Seats',syn:['seats','max seats','capacity']},
+   {key:'mand',label:'Mandatory (yes/no)',syn:['mandatory','compulsory']}],
+  apply(rows){rows.forEach(r=>{
+    const code=r.code||('TRG-'+(200+TRAININGS.length));
+    const days=(r.dates||'').split(/[,;|]/).map(s=>s.trim()).filter(Boolean);
+    TRAININGS.push({code,title:r.title,cat:r.cat||'Product',mode:r.mode||'Classroom',trainer:r.trainer||'—',tt:/ext/i.test(r.tt||'')?'External agency':'Internal',dates:days.join(', ')||'—',days,hours:+r.hours||0,seats:+r.seats||20,mand:/yes|mand|true|1/i.test(r.mand||'')?'Mandatory':'Optional',status:'Planned',part:[]});
+    ATT[code]={};
+  });renderTrn();refreshAttSel();renderFbkForms();}},
+ 'Users':{fields:[
+   {key:'name',label:'User name',req:true,syn:['user name','name','full name']},
+   {key:'mail',label:'Zoho e-mail ID',req:true,syn:['email','email id','e-mail','mail','zoho']},
+   {key:'type',label:'User type',syn:['user type','type','role']},
+   {key:'acc',label:'Access type',syn:['access type','access','permission']}],
+  apply(rows){rows.forEach(r=>{USERS.push({name:r.name,mail:r.mail,type:r.type||'Manager',acc:/full/i.test(r.acc||'')?'Full access':(r.acc||'View'),status:'Active'});});renderUsers();}},
+};
+let mapCtx=null;
+function autoMatch(field,headers){
+  const H=headers.map(h=>h.toLowerCase().trim());
+  for(const s of field.syn){const i=H.findIndex(h=>h===s);if(i>=0)return i;}
+  for(const s of field.syn){const i=H.findIndex(h=>h.includes(s));if(i>=0)return i;}
+  return -1;
+}
+function openMapDlg(fname,spec,headers,rows){
+  mapCtx={spec,headers,rows};
+  $('mapFile').textContent=fname+' · '+rows.length+' data row(s) · first sheet';
+  $('mapGrid').innerHTML=spec.fields.map((fld,i)=>{
+    const m=autoMatch(fld,headers);
+    return `<div><label for="mapF${i}">${fld.label}${fld.req?' *':''}</label>
+      <select id="mapF${i}"><option value="-1">— skip —</option>${headers.map((h,j)=>`<option value="${j}"${j===m?' selected':''}>${h||('Column '+(j+1))}</option>`).join('')}</select></div>`;
+  }).join('');
+  renderMapPreview();
+  $('mapGrid').querySelectorAll('select').forEach(s=>s.addEventListener('change',renderMapPreview));
+  mapDlg.showModal();
+}
+function mapAssign(){
+  const sel=[...$('mapGrid').querySelectorAll('select')];
+  return mapCtx.spec.fields.map((fld,i)=>({key:fld.key,label:fld.label,req:fld.req,col:+sel[i].value}));
+}
+function renderMapPreview(){
+  const cols=mapAssign().filter(a=>a.col>=0);
+  $('mapPrev').innerHTML='<tr>'+cols.map(a=>`<th>${a.label}</th>`).join('')+'</tr>'
+    +mapCtx.rows.slice(0,3).map(r=>'<tr>'+cols.map(a=>`<td>${r[a.col]==null?'':r[a.col]}</td>`).join('')+'</tr>').join('');
+}
+$('mapForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const asg=mapAssign();
+  const missing=asg.filter(a=>a.req&&a.col<0);
+  if(missing.length){toast('Map the required column(s) first: '+missing.map(a=>a.label).join(', '));return;}
+  const objs=mapCtx.rows.map(r=>{const o={};asg.forEach(a=>{if(a.col>=0)o[a.key]=String(r[a.col]==null?'':r[a.col]).trim();});return o;})
+    .filter(o=>asg.every(a=>!a.req||o[a.key]));
+  const skipped=mapCtx.rows.length-objs.length;
+  mapCtx.spec.apply(objs);
+  mapDlg.close();
+  toast(objs.length+' record(s) imported into '+impContext+(skipped?' · '+skipped+' row(s) skipped (missing required values)':'')+'.');
+});
+$('impFile').addEventListener('change',e=>{
+  if($('impFile').onchange && impContext.startsWith('Feedback form'))return; // handled by uploadFbForm
+  const f=e.target.files[0];if(!f)return;
+  const spec=IMPORT_SPECS[impContext];
+  if(spec&&window.XLSX){
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+        const headers=(aoa[0]||[]).map(h=>String(h).trim());
+        const rows=aoa.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
+        if(!headers.length||!rows.length){toast('"'+f.name+'" has no data — the first sheet needs a header row plus at least one record.');return;}
+        openMapDlg(f.name,spec,headers,rows);
+      }catch(err){toast('Could not read "'+f.name+'" — save it as .xlsx or .csv and try again.');}
+    };
+    reader.readAsArrayBuffer(f);
+  }else if(spec){
+    toast('The Excel reader has not loaded (it needs internet once). Reconnect and try again.');
+  }else{
+    toast('"'+f.name+'" received — in this prototype, import with column mapping works on Employees, Trainings and Users & Access; this tab\'s import comes with the real build.');
+  }
+  e.target.value='';
+});
+function showCsv(title,csv){$('csvTitle').textContent=title;$('csvText').value=csv;csvDlg.showModal();}
+function copyCsv(){navigator.clipboard.writeText($('csvText').value).then(()=>toast('Copied to clipboard.')).catch(()=>toast('Select the text and copy manually.'));}
+function csvCell(v){v=String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+/* real .xlsx download via SheetJS; falls back to the copyable view if the library is unavailable */
+function downloadXlsx(name,header,rows,sheet){
+  if(window.XLSX){
+    try{
+      const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+      ws['!cols']=header.map((h,i)=>({wch:Math.min(40,Math.max(String(h).length,...rows.map(r=>String(r[i]==null?'':r[i]).length),8)+2)}));
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,(sheet||'Data').slice(0,31));
+      XLSX.writeFile(wb,name);
+      toast('"'+name+'" downloaded as Excel. If no download started (shared-link viewers block downloads), open the local file and export from there.');
+      return;
+    }catch(err){}
+  }
+  showCsv(name,[header.map(csvCell).join(','),...rows.map(r=>r.map(csvCell).join(','))].join('\n'));
+}
+function exportTab(tab){
+  if(tab==='emp'){
+    downloadXlsx('Employees.xlsx',['Code','Name','Entity','Division','Department','Designation','Manager','Type','Email','Mobile','DOJ','Location','Status','Hours FY'],
+      EMPLOYEES.map(e=>[e.code,e.name,ENTNAME[e.entity],e.div,e.dept,e.desig,e.mgr,e.type,e.mail,e.mob,e.doj,e.loc,e.status,e.hours]),'Employees');
+  }else if(tab==='trn'){
+    downloadXlsx('Trainings.xlsx',['Code','Title','Category','Mode','Trainer','Trainer type','Dates','Hours','Seats','Participants','Mandatory','Status'],
+      TRAININGS.map(t=>[t.code,t.title,t.cat,t.mode,t.trainer,t.tt,t.dates,t.hours,t.seats,t.part.length,t.mand,t.status]),'Trainings');
+  }else if(tab==='att'){
+    const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);const data=ATT[code];
+    downloadXlsx('Attendance-'+code+'.xlsx',['Participant',...t.days,'Percent'],
+      Object.entries(data).map(([c,m])=>[empName(c),...m,attPct(m)+'%']),'Attendance');
+  }else if(tab==='fbk'){
+    downloadXlsx('Feedback-Results.xlsx',['Respondent','Relevance','Knowledge','Delivery','Confidence','Overall','Comment'],FB_RESP,'Feedback');
+  }else if(tab==='exp'){
+    downloadXlsx('Expense-Records.xlsx',['Training','Dates','Location','Participants','Entities','Entity split','Category','Type','Vendor','Description','Approved budget','Actual expense','Amount paid','Amount pending','Variance','Approval status','Payment status','Payment dates','Invoices','Remark'],
+      EXPREC.map(r=>{const paid=paidAmt(r);
+        return [r.trn,r.dates,r.loc,r.npart,r.ents.map(e=>e.ent+' '+e.n).join(' | '),entSplit(r).map(s=>s.ent+' ₹'+s.share).join(' | '),r.cat,r.type,r.vendor,r.desc,r.budget,r.actual,paid,r.actual-paid,r.budget-r.actual,r.appr,payStatus(r)[0],r.payments.map(p=>p.date+' ₹'+p.amt).join(' | '),(r.invoices||[]).join(' | '),r.remark];}),'Expenses');
+  }else if(tab==='usr'){
+    downloadXlsx('Users-Access.xlsx',['User name','Email ID','User type','Access type','Status'],
+      USERS.map(u=>[u.name,u.mail,u.type,u.acc,u.status]),'Users');
+  }else if(tab==='rpt'){
+    downloadXlsx('Man-Hours.xlsx',['Employee','Entity','Hours FY'],
+      EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>[e.name,ENTNAME[e.entity],e.hours]),'Man-hours');
+  }else if(tab==='dash'){
+    downloadXlsx('Dashboard-Summary.xlsx',['Metric','Value'],[
+      ['Training coverage','78%'],['Mandatory compliance','91%'],['Avg hours per employee',14.6],
+      ['Budget used FY','₹8,40,000 of ₹14,00,000'],['Trainings this quarter',TRAININGS.length]],'Dashboard');
+  }
+}
+
+/* ---------- dashboard ---------- */
+(function(){
+  const up=TRAININGS.filter(t=>['Confirmed','In progress','Awaiting cost approval'].includes(t.status));
+  const done=TRAININGS.filter(t=>t.status==='Completed').length;
+  $('dashTrnCount').textContent=TRAININGS.length;
+  $('dashTrnSplit').textContent=done+' done · '+up.length+' upcoming / running';
+  $('dashUpcoming').innerHTML=up.slice(0,4).map(t=>`<tr><td class="mono">${t.dates}</td><td>${t.title}</td><td><span class="chip ${t.tt==='External agency'?'warn':'acc'}">${t.mode}</span></td></tr>`).join('');
+})();
+
+/* ---------- employees ---------- */
+function renderEmp(){
+  const q=($('empSearch').value||'').toLowerCase();
+  const ent=$('entitySel').value;
+  const tb=document.querySelector('#empTable tbody');tb.innerHTML='';
+  EMPLOYEES.filter(e=>(ent==='all'||e.entity===ent)&&Object.values(e).join(' ').toLowerCase().includes(q)).forEach(e=>{
+    const st=e.status==='Active'?'good':e.status==='On notice'?'warn':'crit';
+    const tr=document.createElement('tr');tr.className='clickable';
+    tr.innerHTML=`<td class="mono">${e.code}</td><td>${e.name}</td><td>${ENTNAME[e.entity]}</td><td>${e.div}</td><td>${e.dept}</td><td>${e.desig}</td><td>${e.mgr}</td><td><span class="chip ${st}">${e.status}</span></td><td class="num mono">${e.hours}</td>`;
+    tr.addEventListener('click',()=>openEmp(e));
+    tb.appendChild(tr);
+  });
+  if(!tb.children.length)tb.innerHTML='<tr><td colspan="9" style="color:var(--ink2)">No employees match.</td></tr>';
+}
+$('empSearch').addEventListener('input',renderEmp);
+$('entitySel').addEventListener('change',renderEmp);
+
+function empHistory(code){return TRAININGS.filter(t=>t.part.includes(code));}
+const empName=c=>{const e=EMPLOYEES.find(x=>x.code===c);return e?e.name:c;};
+function openEmp(e){
+  $('evName').textContent=e.name+' · '+e.code;
+  const hist=empHistory(e.code);
+  $('evBody').innerHTML=`
+    <dl class="kv">
+      <dt>Entity</dt><dd>${ENTFULL[e.entity]}</dd>
+      <dt>Division / Dept</dt><dd>${e.div} · ${e.dept}</dd>
+      <dt>Designation</dt><dd>${e.desig}</dd>
+      <dt>Reporting manager</dt><dd>${e.mgr}</dd>
+      <dt>Employment type</dt><dd>${e.type}</dd>
+      <dt>Official e-mail</dt><dd>${e.mail}</dd>
+      <dt>Mobile</dt><dd>${e.mob}</dd>
+      <dt>Date of joining</dt><dd>${e.doj}</dd>
+      <dt>Location</dt><dd>${e.loc}</dd>
+      <dt>Status</dt><dd>${e.status}</dd>
+      <dt>Training hours FY</dt><dd class="mono">${e.hours} h</dd>
+    </dl>
+    <h2 style="margin:16px 0 8px">Training history (follows the person across entities)</h2>
+    ${hist.length?`<table class="tight" style="width:100%">${hist.map(t=>`<tr><td class="mono">${t.code}</td><td>${t.title}</td><td class="mono">${t.dates}</td><td><span class="chip ${t.status==='Completed'?'good':'acc'}">${t.status}</span></td></tr>`).join('')}</table>`:'<p style="color:var(--ink2);font-size:13px">No trainings on record yet.</p>'}
+    <div class="hstack" style="margin-top:12px">
+      <button class="btn small admin-only" onclick="toast('Mocked — opens the edit form; every change is logged to the audit trail.')">Edit</button>
+      <button class="btn small admin-only" onclick="toast('Deactivation, not deletion — record stays for the audit trail and is purged after 2 years if exited.')">Deactivate…</button>
+    </div>`;
+  empView.showModal();
+}
+
+$('empForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  EMPLOYEES.unshift({code:$('efCode').value,name:$('efName').value,entity:$('efEntity').value,div:$('efDiv').value,dept:$('efDept').value,desig:$('efDesig').value,mgr:$('efMgr').value||'—',type:$('efType').value,mail:$('efMail').value||'—',mob:$('efMob').value||'—',doj:$('efDoj').value||'—',loc:$('efLoc').value||'—',status:'Active',hours:0});
+  renderEmp();empDlg.close();ev.target.reset();
+  toast('Employee saved (prototype: in-memory only — data resets on reload).');
+});
+
+/* ---------- trainings ---------- */
+function trnView(v){$('trnList').hidden=v!=='list';$('trnCal').hidden=v!=='cal';}
+function renderTrn(){
+  const tb=document.querySelector('#trnTable tbody');tb.innerHTML='';
+  TRAININGS.forEach(t=>{
+    const stc=t.status==='Completed'?'good':t.status==='Postponed'?'crit':t.status.includes('Awaiting')?'warn':'acc';
+    const tr=document.createElement('tr');tr.className='clickable';
+    tr.innerHTML=`<td class="mono">${t.code}</td><td>${t.title}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.cat}</td><td>${t.mode}</td><td>${t.trainer}</td><td class="mono">${t.dates}</td><td class="num">${t.hours||'—'}</td><td class="num mono">${t.part.length}/${t.seats}</td><td><span class="chip ${stc}">${t.status}</span></td>`;
+    tr.addEventListener('click',()=>openTrn(t.code));
+    tb.appendChild(tr);
+  });
+}
+
+/* training detail + participants */
+function openTrn(code){
+  const t=TRAININGS.find(x=>x.code===code);if(!t)return;
+  $('tvTitle').textContent=t.code+' · '+t.title;
+  const avail=EMPLOYEES.filter(e=>e.status==='Active'&&!t.part.includes(e.code));
+  $('tvBody').innerHTML=`
+    <dl class="kv">
+      <dt>Category / Mode</dt><dd>${t.cat} · ${t.mode}</dd>
+      <dt>Trainer</dt><dd>${t.trainer} (${t.tt})</dd>
+      <dt>Dates</dt><dd class="mono">${t.dates}</dd>
+      <dt>Hours / Seats</dt><dd class="mono">${t.hours||'—'} h · ${t.part.length}/${t.seats} filled</dd>
+      <dt>Status</dt><dd>${t.status}</dd>
+    </dl>
+    <div class="hstack" style="margin-top:12px">
+      <button class="btn small" onclick="trnViewDlg.close();qrTrnFromDetail('${t.code}')">▦ Attendance QR</button>
+      <button class="btn small" onclick="trnViewDlg.close();qrForFeedback('${t.code}')">▦ Feedback QR</button>
+    </div>
+    <h2 style="margin:16px 0 6px">Participants (${t.part.length})</h2>
+    <div id="tvPartList">${t.part.map(c=>partRow(t,c)).join('')||'<p style="color:var(--ink2);font-size:13px">No participants yet — add them below.</p>'}</div>
+    <div class="hstack admin-only" style="margin-top:10px">
+      <select class="select" id="tvAddSel" style="flex:1;min-width:180px">
+        ${avail.map(e=>`<option value="${e.code}">${e.name} — ${e.div}, ${ENTNAME[e.entity]}</option>`).join('')}
+      </select>
+      <button class="btn small primary" onclick="addParticipant('${t.code}')">+ Add participant</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink2);margin:8px 0 0">Added participants appear in this training's attendance grid immediately (unmarked), get its feedback form, and count into the expense split.</p>`;
+  trnViewDlg.showModal();
+}
+function partRow(t,c){
+  const e=EMPLOYEES.find(x=>x.code===c);
+  return `<div class="partrow"><span class="mono" style="color:var(--ink2)">${c}</span><span class="grow">${e?e.name:c}${e?' · '+ENTNAME[e.entity]:''}</span><button class="btn small admin-only" onclick="removeParticipant('${t.code}','${c}')">✕ Remove</button></div>`;
+}
+function addParticipant(code){
+  const t=TRAININGS.find(x=>x.code===code);const sel=$('tvAddSel');
+  if(!sel.value){toast('Everyone active is already in this training.');return;}
+  if(t.part.length>=t.seats){toast('This batch is full ('+t.seats+' seats). Waitlist behaviour is an open checklist decision (E5).');return;}
+  t.part.push(sel.value);
+  if(!ATT[code])ATT[code]={};
+  if(t.days.length)ATT[code][sel.value]=Array(t.days.length).fill('–');
+  renderTrn();refreshAttSel();renderAtt();renderFbkForms();
+  toast(empName(sel.value)+' added to '+t.code+' — now in its attendance grid and feedback list.');
+  openTrn(code); // refresh dialog
+}
+function removeParticipant(code,c){
+  const t=TRAININGS.find(x=>x.code===code);
+  t.part=t.part.filter(x=>x!==c);
+  if(ATT[code])delete ATT[code][c];
+  renderTrn();refreshAttSel();renderAtt();renderFbkForms();
+  toast(empName(c)+' removed from '+t.code+'.');
+  openTrn(code);
+}
+function qrTrnFromDetail(code){
+  const t=TRAININGS.find(x=>x.code===code);
+  showQr('Attendance QR — '+t.title,scanUrl('att',code),
+   'Display this at the venue. Scanning opens the check-in page for '+code+' — only employees assigned to this training can check in. Use "Test now" below to run the participant flow on this screen.',{mode:'att',code});
+}
+
+/* multi-date picker for plan-training */
+let tfDates=[];
+function addTrnDate(){
+  const v=$('tfDate').value;if(!v){toast('Pick a date first, then press + Add date.');return;}
+  const f=fmtDay(v);
+  if(tfDates.includes(f)){toast(f+' is already added.');return;}
+  tfDates.push(f);renderTfDates();$('tfDate').value='';
+}
+function renderTfDates(){
+  $('tfDateChips').innerHTML=tfDates.map((d,i)=>`<span class="datechip">${d}<button type="button" aria-label="Remove ${d}" onclick="tfDates.splice(${i},1);renderTfDates()">✕</button></span>`).join('')||'<span style="font-size:12px;color:var(--ink2)">No dates added yet — a 2-day training gets two chips.</span>';
+}
+renderTfDates();
+
+$('trnForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  if(!tfDates.length){toast('Add at least one training date.');return;}
+  const code='TRG-'+(109+TRAININGS.filter(t=>t.code.startsWith('TRG-1')).length);
+  const days=[...tfDates];
+  TRAININGS.push({code,title:$('tfTitle').value,cat:$('tfCat').value,mode:$('tfMode').value,trainer:$('tfTrainer').value,tt:$('tfTT').value,dates:days.join(', '),days,hours:+$('tfHours').value,seats:+$('tfSeats').value,mand:$('tfMand').value,status:'Planned',part:[]});
+  ATT[code]={};
+  renderTrn();refreshAttSel();renderFbkForms();trnDlg.close();ev.target.reset();tfDates=[];renderTfDates();
+  toast(code+' saved — now click its row in the list to add participants.');
+});
+
+/* calendar Sept 2026 (starts Tuesday) */
+(function(){
+  const g=$('calGrid');
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>g.insertAdjacentHTML('beforeend',`<div class="dow">${d}</div>`));
+  const evts={1:['Induction'],2:['Induction'],3:['Induction'],5:['Fire Safety ✕'],8:['Orthotics DD'],9:['Orthotics DD'],15:['Endoscopy B2'],16:['Endoscopy B2'],22:['ISO 13485'],29:['Negotiation*']};
+  g.insertAdjacentHTML('beforeend','<div class="day blank"></div>');
+  for(let d=1;d<=30;d++){
+    let inner=`<span class="dnum">${d}</span>`;
+    (evts[d]||[]).forEach(e=>{inner+=`<span class="evt${e.includes('*')?' ext':''}">${e.replace('*','')}</span>`;});
+    g.insertAdjacentHTML('beforeend',`<div class="day">${inner}</div>`);
+  }
+})();
+
+/* ---------- attendance ---------- */
+const attPct=m=>Math.round(m.reduce((s,v)=>s+(v==='P'?1:v==='H'?0.5:0),0)/m.length*100);
+function refreshAttSel(){
+  const sel=$('attTrnSel');const cur=sel.value;sel.innerHTML='';
+  Object.keys(ATT).forEach(c=>{const t=TRAININGS.find(x=>x.code===c);
+    if(t&&t.days.length&&Object.keys(ATT[c]).length)sel.insertAdjacentHTML('beforeend',`<option value="${c}">${t.title} (${t.dates})</option>`);});
+  if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+}
+function renderAtt(){
+  const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);const data=ATT[code];
+  if(!t||!data){$('attHead').innerHTML='';$('attBody').innerHTML='<tr><td style="color:var(--ink2)">No training selected.</td></tr>';return;}
+  $('attHead').innerHTML='<tr><th>Participant</th>'+t.days.map(d=>`<th>${d}</th>`).join('')+'<th class="num">%</th><th>Eligible</th><th class="admin-only">Correct</th></tr>';
+  const tb=$('attBody');tb.innerHTML='';
+  Object.entries(data).forEach(([code2,marks])=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${empName(code2)}</td>`+marks.map((m,i)=>`<td><button class="attcell ${m==='–'?'':m}" data-i="${i}" aria-label="${t.days[i]} attendance for ${empName(code2)}">${m}</button></td>`).join('')
+      +`<td class="num mono"></td><td></td><td class="admin-only"><button class="btn small" onclick="openAttEdit('${code}','${code2}')">Edit</button></td>`;
+    tb.appendChild(tr);
+    tr.querySelectorAll('.attcell').forEach(c=>c.addEventListener('click',()=>{
+      const prev=c.textContent;const next={'–':'P',P:'A',A:'H',H:'–'}[prev];
+      c.textContent=next;c.className='attcell '+(next==='–'?'':next);marks[c.dataset.i]=next;recalcAtt(tr,marks);
+      logAtt(`${$('attWho').value} changed ${empName(code2)}, ${t.days[c.dataset.i]}: ${prev} → ${next}`);
+    }));
+    recalcAtt(tr,marks);
+  });
+}
+function recalcAtt(tr,marks){
+  const score=attPct(marks);
+  const cells=tr.children;
+  const unmarked=marks.every(v=>v==='–');
+  cells[cells.length-3].textContent=unmarked?'—':score+'%';
+  cells[cells.length-2].innerHTML=unmarked?'<span class="chip neutral">Not marked</span>':(score>=75?'<span class="chip good">Eligible</span>':'<span class="chip crit">Below 75%</span>');
+}
+function logAtt(msg){$('attLog').insertAdjacentHTML('afterbegin',`<li><span class="mono">${nowIST()}</span> — ${msg}</li>`);}
+function markAllPresent(){
+  const code=$('attTrnSel').value;const data=ATT[code];const t=TRAININGS.find(x=>x.code===code);
+  Object.values(data).forEach(m=>m.forEach((v,i)=>m[i]='P'));
+  renderAtt();
+  logAtt(`${$('attWho').value} marked ALL participants present for ${t.title}`);
+  toast('All participants marked present — logged to the audit trail.');
+}
+/* admin per-participant edit with reason */
+let aeCtx=null;
+function openAttEdit(code,emp){
+  const t=TRAININGS.find(x=>x.code===code);const marks=ATT[code][emp];
+  aeCtx={code,emp};
+  $('aeTitle').textContent='Edit attendance — '+empName(emp);
+  $('aeDays').innerHTML=t.days.map((d,i)=>`<div><label for="aeD${i}">${d}</label>
+    <select id="aeD${i}"><option${marks[i]==='–'?' selected':''}>–</option><option${marks[i]==='P'?' selected':''}>P</option><option${marks[i]==='A'?' selected':''}>A</option><option${marks[i]==='H'?' selected':''}>H</option></select></div>`).join('');
+  $('aeReason').value='';
+  attEditDlg.showModal();
+}
+$('attEditForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const {code,emp}=aeCtx;const t=TRAININGS.find(x=>x.code===code);const marks=ATT[code][emp];
+  const changes=[];
+  t.days.forEach((d,i)=>{
+    const v=$('aeD'+i).value;
+    if(v!==marks[i]){changes.push(`${d}: ${marks[i]} → ${v}`);marks[i]=v;}
+  });
+  if(changes.length)logAtt(`${$('attWho').value} corrected ${empName(emp)} (${changes.join(', ')}) · reason: "${$('aeReason').value}"`);
+  renderAtt();attEditDlg.close();
+  toast(changes.length?'Correction saved and logged with your reason.':'No changes made.');
+});
+refreshAttSel();
+$('attTrnSel').addEventListener('change',renderAtt);
+renderAtt();
+
+/* ---------- feedback ---------- */
+const STD_QS=["Relevance of content to my job","Trainer's subject knowledge","Trainer's delivery and clarity","Quality of material handed out","Duration was adequate","Confidence to apply this at work","Overall rating","Would you recommend this training (NPS)"];
+function renderFbkForms(){
+  const tb=document.querySelector('#fbkFormsTable tbody');tb.innerHTML='';
+  TRAININGS.filter(t=>t.status!=='Postponed').forEach(t=>{
+    const f=FBFORMS[t.code];
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${t.title}</td><td class="mono">${t.dates}</td>
+      <td>${f?`<span class="chip acc">${f.name}</span> <span style="font-size:11px;color:var(--ink2)">${f.src} · ${f.q} questions</span>`:'<span class="chip neutral">No form yet</span>'}</td>
+      <td class="mono">${f?f.resp+' / '+f.total:'—'}</td>
+      <td class="hstack">
+        <button class="btn small admin-only" onclick="openFbBuilder('${t.code}')">${f?'Edit form':'Create form'}</button>
+        <button class="btn small admin-only" onclick="uploadFbForm('${t.code}')">⬆ Upload</button>
+        <button class="btn small" onclick="qrForFeedback('${t.code}')">▦ QR / Link</button>
+        <button class="btn small ${f?'':'admin-only'}" onclick="exportFbResults('${t.code}')">⬇ Results</button>
+      </td></tr>`);
+  });
+}
+function openFbBuilder(code){
+  const sel=$('fbTrn');sel.innerHTML='';
+  TRAININGS.filter(t=>t.status!=='Postponed').forEach(t=>sel.insertAdjacentHTML('beforeend',`<option value="${t.code}"${t.code===code?' selected':''}>${t.title} (${t.dates})</option>`));
+  $('fbStdQs').innerHTML=STD_QS.map((q,i)=>`<label class="qopt"><input type="checkbox" ${i<6?'checked':''} data-std> ${q}</label>`).join('');
+  $('fbCustomList').innerHTML='';
+  fbBuildDlg.showModal();
+}
+function addCustomQ(){
+  const v=$('fbCustomQ').value.trim();if(!v){toast('Type the question first.');return;}
+  $('fbCustomList').insertAdjacentHTML('beforeend',`<label class="qopt"><input type="checkbox" checked data-custom> ${v}</label>`);
+  $('fbCustomQ').value='';
+}
+$('fbBuildForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const code=$('fbTrn').value;
+  const n=[...document.querySelectorAll('#fbStdQs input:checked,#fbCustomList input:checked')].length;
+  const prev=FBFORMS[code];
+  FBFORMS[code]={name:prev?prev.name:'Custom form v1',src:'Built in system',q:n,resp:prev?prev.resp:0,total:prev?prev.total:(TRAININGS.find(t=>t.code===code)||{part:[]}).part.length};
+  renderFbkForms();fbBuildDlg.close();
+  toast('Feedback form saved — '+n+' questions, '+$('fbScale').value+' scale, '+$('fbAnon').value.toLowerCase()+' responses. Share it via the QR / Link button.');
+});
+function uploadFbForm(code){
+  impContext='Feedback form — upload';
+  const inp=$('impFile');
+  inp.onchange=e=>{
+    const f=e.target.files[0];
+    inp.onchange=null;
+    if(!f)return;
+    FBFORMS[code]={name:f.name,src:'Uploaded file',q:'—',resp:0,total:(TRAININGS.find(t=>t.code===code)||{part:[]}).part.length};
+    renderFbkForms();
+    toast('"'+f.name+'" attached as the feedback form for this training.');
+    e.target.value='';
+  };
+  inp.click();
+}
+function exportFbResults(code){
+  const t=TRAININGS.find(x=>x.code===code);
+  if(code==='TRG-105'){
+    downloadXlsx('Feedback-'+code+'.xlsx',['Respondent','Relevance','Knowledge','Delivery','Confidence','Overall','Comment'],FB_RESP,'Feedback');
+  }else{
+    downloadXlsx('Feedback-'+code+'.xlsx',['Respondent','Score','Comment'],[['(no responses recorded yet in the prototype)','','']],'Feedback');
+  }
+}
+document.querySelectorAll('.scale[data-q]').forEach((s,i)=>{
+  for(let v=1;v<=5;v++)s.insertAdjacentHTML('beforeend',`<label><input type="radio" name="fq${i}" value="${v}">${v}</label>`);
+});
+$('fbkForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  toast('Feedback submitted — tagged to this training\'s form; you\'re now excluded from the automatic feedback e-mail.');
+});
+renderFbkForms();
+
+/* ---------- expenses ---------- */
+const paidAmt=r=>r.payments.reduce((s,p)=>s+p.amt,0);
+function payStatus(r){
+  const paid=paidAmt(r);
+  if(r.actual>0&&paid>=r.actual)return['Paid','good'];
+  if(paid>0)return['Partially paid','warn'];
+  return['Not paid','crit'];
+}
+function entSplit(r){
+  const tot=r.ents.reduce((s,e)=>s+e.n,0);
+  if(!tot)return[];
+  let acc=0;
+  return r.ents.map((e,i)=>{
+    let share=i===r.ents.length-1?r.actual-acc:Math.round(r.actual*e.n/tot);
+    acc+=share;
+    return {ent:e.ent,n:e.n,share};
+  });
+}
+function renderExp(){
+  const tb=document.querySelector('#expTable tbody');tb.innerHTML='';
+  EXPREC.forEach((r,i)=>{
+    const paid=paidAmt(r),pend=r.actual-paid,varr=r.budget-r.actual;
+    const [ps,pc]=payStatus(r);
+    const ac=r.appr==='Approved'?'good':r.appr==='Rejected'?'crit':'warn';
+    const tr=document.createElement('tr');tr.className='clickable';
+    tr.innerHTML=`<td>${r.trn}</td><td class="mono">${r.dates}</td><td>${r.cat}</td><td>${r.type}</td>
+      <td>${r.ents.map(e=>`<span class="chip acc">${e.ent} ${e.n}</span>`).join(' ')||'—'}</td><td>${r.vendor}</td>
+      <td class="num mono">${inr(r.budget)}</td><td class="num mono">${inr(r.actual)}</td><td class="num mono">${inr(paid)}</td>
+      <td class="num mono">${inr(pend)}</td><td class="num mono" style="color:${varr>=0?'var(--good)':'var(--crit)'}">${varr>=0?'+':''}${inr(varr)}</td>
+      <td><span class="chip ${ac}">${r.appr}</span></td><td><span class="chip ${pc}">${ps}</span></td>`;
+    tr.addEventListener('click',()=>openExp(i));
+    tb.appendChild(tr);
+  });
+}
+function openExp(i){
+  const r=EXPREC[i];const paid=paidAmt(r),pend=r.actual-paid,varr=r.budget-r.actual;const [ps,pc]=payStatus(r);
+  const split=entSplit(r);
+  $('xvTitle').textContent=r.trn+' — '+r.cat;
+  $('xvBody').innerHTML=`
+    <dl class="kv">
+      <dt>Training name</dt><dd>${r.trn}</dd>
+      <dt>Training dates</dt><dd>${r.dates}</dd>
+      <dt>Training location</dt><dd>${r.loc}</dd>
+      <dt>No. of participants</dt><dd class="mono">${r.npart}</dd>
+      <dt>Expense category</dt><dd>${r.cat}</dd>
+      <dt>Training type</dt><dd>${r.type}</dd>
+      <dt>Vendor name</dt><dd>${r.vendor}</dd>
+      <dt>Description</dt><dd>${r.desc}</dd>
+      <dt>Approved budget</dt><dd class="mono">₹${inr(r.budget)}</dd>
+      <dt>Actual expense</dt><dd class="mono">₹${inr(r.actual)}</dd>
+      <dt>Amount paid</dt><dd class="mono">₹${inr(paid)}</dd>
+      <dt>Amount pending</dt><dd class="mono">₹${inr(pend)} <span style="color:var(--ink2)">(actual − paid)</span></dd>
+      <dt>Variance</dt><dd class="mono" style="color:${varr>=0?'var(--good)':'var(--crit)'}">${varr>=0?'+':''}₹${inr(varr)} <span style="color:var(--ink2)">(budget − actual)</span></dd>
+      <dt>Approval status</dt><dd>${r.appr}</dd>
+      <dt>Payment status</dt><dd><span class="chip ${pc}">${ps}</span></dd>
+      <dt>Cost / participant</dt><dd class="mono">₹${inr(r.actual/Math.max(1,r.npart))}</dd>
+      <dt>Remark</dt><dd>${r.remark}</dd>
+    </dl>
+    <h2 style="margin:16px 0 8px">Entity split — pro-rata by participant headcount</h2>
+    ${split.length?`<table class="tight" style="width:100%"><tr><th>Entity</th><th class="num">Participants</th><th class="num">Share of actual ₹</th></tr>
+      ${split.map(s=>`<tr><td>${ENTFULL[s.ent]}</td><td class="num mono">${s.n}</td><td class="num mono">${inr(s.share)}</td></tr>`).join('')}
+      <tr style="font-weight:700"><td>Total</td><td class="num mono">${r.ents.reduce((s,e)=>s+e.n,0)}</td><td class="num mono">${inr(r.actual)}</td></tr></table>`
+     :'<p style="color:var(--ink2);font-size:13px">No entities recorded on this expense.</p>'}
+    <h2 style="margin:16px 0 8px">Payment history</h2>
+    ${r.payments.length?`<table class="tight" style="width:100%"><tr><th>Date</th><th class="num">Amount ₹</th></tr>${r.payments.map(p=>`<tr><td class="mono">${p.date}</td><td class="num mono">${inr(p.amt)}</td></tr>`).join('')}<tr style="font-weight:700"><td>Total paid</td><td class="num mono">${inr(paid)}</td></tr></table>`:'<p style="color:var(--ink2);font-size:13px">No payments recorded yet.</p>'}
+    <h2 style="margin:16px 0 8px">Invoice copies (${(r.invoices||[]).length})</h2>
+    ${(r.invoices||[]).length?`<div class="hstack">${r.invoices.map(f=>`<span class="datechip">📄 ${f}</span>`).join('')}</div>`:'<p style="color:var(--ink2);font-size:13px">No invoice copies uploaded yet.</p>'}
+    <div class="hstack" style="margin-top:12px">
+      <button class="btn small primary" onclick="uploadInvoice(${i})">⬆ Upload invoice copies</button>
+      <button class="btn small" onclick="toast('Mocked — adds another part-payment row with date and amount; status recomputes.')">+ Record payment</button>
+    </div>`;
+  expView.showModal();
+}
+
+/* expense form wiring */
+$('xfType').addEventListener('change',e=>{
+  const ext=e.target.value==='External';
+  $('xfVendor').disabled=!ext;
+  if(!ext)$('xfVendor').value='';
+});
+document.querySelectorAll('#xfEnts input[type="checkbox"]').forEach(cb=>{
+  cb.addEventListener('change',()=>{
+    const n=document.querySelector(`#xfEnts input.entn[data-ent="${cb.dataset.ent}"]`);
+    n.disabled=!cb.checked;
+    if(!cb.checked)n.value='';
+    sumEntParts();
+  });
+});
+document.querySelectorAll('#xfEnts input.entn').forEach(n=>n.addEventListener('input',sumEntParts));
+function sumEntParts(){
+  const vals=[...document.querySelectorAll('#xfEnts input.entn')].map(n=>+n.value||0);
+  const sum=vals.reduce((a,b)=>a+b,0);
+  if(sum>0)$('xfNpart').value=sum;
+}
+function addPayRow(){
+  $('xfPays').insertAdjacentHTML('beforeend',`<div class="payrow"><input type="date" aria-label="Payment date"><input type="number" min="0" placeholder="Amount ₹" aria-label="Payment amount"><button type="button" class="btn small" onclick="this.parentElement.remove()">✕</button></div>`);
+}
+addPayRow();
+
+/* invoice copies — multiple uploads */
+let xfInvFiles=[],invMode='form',invRecIdx=null;
+function pickInvoices(){invMode='form';$('invFile').click();}
+function uploadInvoice(i){invMode='rec';invRecIdx=i;$('invFile').click();}
+$('invFile').addEventListener('change',e=>{
+  const files=[...e.target.files].map(f=>f.name);
+  if(!files.length)return;
+  if(invMode==='form'){xfInvFiles.push(...files);renderInvChips();toast(files.length+' invoice file(s) attached to this expense.');}
+  else{const r=EXPREC[invRecIdx];r.invoices=r.invoices||[];r.invoices.push(...files);openExp(invRecIdx);toast(files.length+' invoice file(s) added to the record.');}
+  e.target.value='';
+});
+function renderInvChips(){
+  $('xfInvList').innerHTML=xfInvFiles.map((f,i)=>`<span class="datechip">${f}<button type="button" aria-label="Remove ${f}" onclick="xfInvFiles.splice(${i},1);renderInvChips()">✕</button></span>`).join('')||'<span style="font-size:12px;color:var(--ink2)">No invoices attached yet.</span>';
+}
+renderInvChips();
+(function(){
+  const sel=$('xfTrn');
+  TRAININGS.forEach(t=>sel.insertAdjacentHTML('beforeend',`<option>${t.title}</option>`));
+  sel.addEventListener('change',()=>{
+    const t=TRAININGS.find(x=>x.title===sel.value);
+    if(!t)return;
+    $('xfDates').value=t.days.length?t.days.map(d=>d+' 2026').join(', '):t.dates;
+    $('xfType').value=t.tt==='External agency'?'External':'Internal';
+    $('xfType').dispatchEvent(new Event('change'));
+    if(t.tt==='External agency')$('xfVendor').value=t.trainer;
+    /* pre-fill entity counts from the training's actual participants */
+    const counts={AMD:0,ASS:0,ATS:0};
+    t.part.forEach(c=>{const e=EMPLOYEES.find(x=>x.code===c);if(e)counts[e.entity]++;});
+    document.querySelectorAll('#xfEnts input[type="checkbox"]').forEach(cb=>{
+      const n=document.querySelector(`#xfEnts input.entn[data-ent="${cb.dataset.ent}"]`);
+      cb.checked=counts[cb.dataset.ent]>0;
+      n.disabled=!cb.checked;
+      n.value=cb.checked?counts[cb.dataset.ent]:'';
+    });
+    sumEntParts();
+    if(!t.part.length)$('xfNpart').value=10;
+  });
+})();
+$('expForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const payments=[...document.querySelectorAll('#xfPays .payrow')].map(row=>{
+    const [d,a]=row.querySelectorAll('input');
+    if(!d.value||!a.value)return null;
+    return {date:new Date(d.value+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),amt:+a.value};
+  }).filter(Boolean);
+  const ents=[...document.querySelectorAll('#xfEnts input[type="checkbox"]:checked')].map(cb=>{
+    const n=document.querySelector(`#xfEnts input.entn[data-ent="${cb.dataset.ent}"]`);
+    return {ent:cb.dataset.ent,n:+n.value||0};
+  }).filter(e=>e.n>0);
+  if(!ents.length){toast('Tick at least one entity and enter its participant count — the expense must belong to the entities whose people attended.');return;}
+  EXPREC.unshift({trn:$('xfTrn').value,dates:$('xfDates').value||'—',loc:$('xfLoc').value||'—',npart:+$('xfNpart').value||ents.reduce((s,e)=>s+e.n,0),ents,cat:$('xfCat').value,type:$('xfType').value,vendor:$('xfType').value==='External'?($('xfVendor').value||'—'):'—',desc:$('xfDesc').value||'—',budget:+$('xfBudget').value||0,actual:+$('xfActual').value||0,payments,invoices:[...xfInvFiles],appr:$('xfAppr').value,remark:$('xfRemark').value||'—'});
+  renderExp();expDlg.close();ev.target.reset();
+  $('xfPays').innerHTML='';addPayRow();$('xfVendor').disabled=true;
+  xfInvFiles=[];renderInvChips();
+  document.querySelectorAll('#xfEnts input.entn').forEach(n=>{n.disabled=true;n.value='';});
+  toast('Expense record saved — entity shares split pro-rata by headcount; open the row to see the split.');
+});
+
+/* ---------- users & access ---------- */
+function renderUsers(){
+  const tb=document.querySelector('#usrTable tbody');tb.innerHTML='';
+  USERS.forEach((u,i)=>{
+    const tc=u.type==='Super admin'?'crit':u.type==='Admin'?'acc':'neutral';
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${u.name}</td><td class="mono">${u.mail}</td>
+      <td><span class="chip ${tc}">${u.type}</span></td>
+      <td><select class="select" data-ui="${i}" aria-label="Access for ${u.name}">${ACC_OPTS.map(o=>`<option${o===u.acc?' selected':''}>${o}</option>`).join('')}</select></td>
+      <td><span class="chip ${u.status==='Active'?'good':'crit'}">${u.status}</span></td>
+      <td><button class="btn small" data-ud="${i}">${u.status==='Active'?'Disable':'Enable'}</button></td></tr>`);
+  });
+  tb.querySelectorAll('select[data-ui]').forEach(s=>s.addEventListener('change',()=>{
+    const u=USERS[+s.dataset.ui];u.acc=s.value;
+    toast('Access for '+u.name+' changed to "'+s.value+'" — logged with user and timestamp.');
+  }));
+  tb.querySelectorAll('button[data-ud]').forEach(b=>b.addEventListener('click',()=>{
+    const u=USERS[+b.dataset.ud];u.status=u.status==='Active'?'Disabled':'Active';renderUsers();
+    toast(u.name+' is now '+u.status.toLowerCase()+' — Zoho SSO sign-in '+(u.status==='Active'?'restored':'blocked')+'.');
+  }));
+}
+$('usrForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  USERS.push({name:$('ufName').value,mail:$('ufMail').value,type:$('ufType').value,acc:$('ufAcc').value,status:'Active'});
+  renderUsers();usrDlg.close();ev.target.reset();
+  toast('User added — Zoho SSO invite sent to their e-mail (mocked in the prototype).');
+});
+renderUsers();
+
+/* ---------- reports ---------- */
+const REPORTS=[
+ {name:"Individual training history (passport)",live:true,gen:rptPassport,desc:"Every training on one employee's record, with hours and status."},
+ {name:"Attendance register per training",live:true,gen:rptAttendance,desc:"Day-wise register with percentages and eligibility."},
+ {name:"Training man-hours per employee",live:true,gen:rptManhours,desc:"Hours this FY against the 16 h target."},
+ {name:"Expense per training",live:true,gen:rptExpense,desc:"Budget, actual, paid, pending, variance and entity split.",cost:true},
+ {name:"Mandatory training compliance",live:true,gen:rptCompliance,desc:"Who has and hasn't completed each mandatory training."},
+ {name:"Training-wise participants & scores",desc:"Participant list with assessment scores (Phase 2)."},
+ {name:"Feedback summary — training & trainer",desc:"Averages per question, per training, per trainer."},
+ {name:"Budget vs actual spend",desc:"Per entity and cost centre.",cost:true},
+ {name:"Division training coverage %",desc:"Coverage against headcount per division."},
+ {name:"Overdue & expiring re-trainings",desc:"Validity-driven due list, 30-day horizon."},
+ {name:"Planned vs actual calendar adherence",desc:"Quarterly plan against what actually ran."},
+ {name:"New joiner induction status",desc:"Induction completion for every joiner in range."},
+ {name:"Trainee batch progress (month-wise)",desc:"MedTech Maverick month-wise mentor scores."},
+ {name:"Audit-ready evidence pack",desc:"Attendance, materials and records for a period, zipped for ISO 13485 audits."},
+];
+const RPT_XL={
+  0:()=>{const e=EMPLOYEES[0];downloadXlsx('Training-Passport-'+e.code+'.xlsx',['Code','Training','Dates','Hours','Status'],
+    empHistory(e.code).map(t=>[t.code,t.title,t.dates,t.hours||'—',t.status]),'Passport');},
+  1:()=>{const t=TRAININGS.find(x=>x.code==='TRG-105');downloadXlsx('Attendance-Register-TRG-105.xlsx',['Participant',...t.days,'Percent'],
+    Object.entries(ATT['TRG-105']).map(([c,m])=>[empName(c),...m,attPct(m)+'%']),'Attendance');},
+  2:()=>exportTab('rpt'),
+  3:()=>exportTab('exp'),
+  4:()=>{const mand=TRAININGS.filter(t=>t.mand==='Mandatory'&&t.code!=='TRG-101'&&t.code!=='TRG-099');
+    downloadXlsx('Mandatory-Compliance.xlsx',['Employee',...mand.map(t=>t.title)],
+      EMPLOYEES.filter(e=>e.status==='Active').map(e=>[e.name,...mand.map(t=>{const done=t.part.includes(e.code)&&t.status==='Completed';return done?'Done':t.part.includes(e.code)?'Booked':'Due';})]),'Compliance');},
+};
+(function(){
+  const rg=$('reportGrid');
+  REPORTS.forEach((r,i)=>{
+    rg.insertAdjacentHTML('beforeend',`<div class="report${r.cost?' admin-only':''}">
+      <div class="rname">${r.name} ${r.live?'<span class="chip acc">live</span>':''}</div>
+      <div class="rdesc">${r.desc}</div>
+      <div class="hstack">${r.live?`<button class="btn small primary" data-rpt="${i}">Preview</button>`:''}
+      ${r.live?`<button class="btn small" data-xl="${i}">Excel</button>`:`<button class="btn small" onclick="toast('This report is Phase 2 — its Excel export comes with the real build.')">Excel</button>`}
+      <button class="btn small" onclick="toast('PDF export is mocked in the prototype — the real build produces the PDF.')">PDF</button></div>
+    </div>`);
+  });
+  rg.addEventListener('click',e=>{
+    const x=e.target.closest('[data-xl]');
+    if(x){RPT_XL[+x.dataset.xl]();return;}
+    const b=e.target.closest('[data-rpt]');if(!b)return;
+    const r=REPORTS[+b.dataset.rpt];
+    $('rptTitle').textContent=r.name;
+    $('rptBody').innerHTML=r.gen();
+    rptDlg.showModal();
+  });
+})();
+function rptPassport(){
+  const e=EMPLOYEES[0];
+  return `<p style="margin-top:0;font-size:13px"><strong>${e.name}</strong> · <span class="mono">${e.code}</span> · ${ENTFULL[e.entity]} · generated ${nowIST()}</p>
+  <table class="tight" style="width:100%"><tr><th>Code</th><th>Training</th><th>Dates</th><th class="num">Hours</th><th>Status</th></tr>
+  ${empHistory(e.code).map(t=>`<tr><td class="mono">${t.code}</td><td>${t.title}</td><td class="mono">${t.dates}</td><td class="num">${t.hours||'—'}</td><td><span class="chip ${t.status==='Completed'?'good':'acc'}">${t.status}</span></td></tr>`).join('')}
+  </table><p style="font-size:12px;color:var(--ink2)">In the real build you pick any employee; the filters bar applies here too.</p>`;
+}
+function rptAttendance(){
+  const t=TRAININGS.find(x=>x.code==='TRG-105');const data=ATT['TRG-105'];
+  return `<p style="margin-top:0;font-size:13px"><strong>${t.title}</strong> · ${t.dates} · trainer ${t.trainer}</p>
+  <table class="tight" style="width:100%"><tr><th>Participant</th>${t.days.map(d=>`<th>${d}</th>`).join('')}<th class="num">%</th></tr>
+  ${Object.entries(data).map(([c,m])=>`<tr><td>${empName(c)}</td>${m.map(v=>`<td><span class="chip ${v==='P'?'good':v==='H'?'warn':v==='A'?'crit':'neutral'}">${v}</span></td>`).join('')}<td class="num mono">${attPct(m)}%</td></tr>`).join('')}
+  </table>`;
+}
+function rptManhours(){
+  return `<table class="tight" style="width:100%"><tr><th>Employee</th><th>Entity</th><th class="num">Hours FY</th><th style="width:34%">vs 16 h target</th></tr>
+  ${EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>`<tr><td>${e.name}</td><td>${ENTNAME[e.entity]}</td><td class="num mono">${e.hours}</td><td><div class="bar${e.hours<8?' warnb':''}"><i style="width:${Math.min(100,e.hours/16*100)}%"></i></div></td></tr>`).join('')}
+  </table>`;
+}
+function rptExpense(){
+  return `<table class="tight" style="width:100%"><tr><th>Training</th><th>Category</th><th>Entities</th><th class="num">Budget ₹</th><th class="num">Actual ₹</th><th class="num">Pending ₹</th><th class="num">Variance ₹</th><th>Payment</th></tr>
+  ${EXPREC.map(r=>{const paid=paidAmt(r);const varr=r.budget-r.actual;const [ps,pc]=payStatus(r);
+    return `<tr><td>${r.trn}</td><td>${r.cat}</td><td>${entSplit(r).map(s=>s.ent+' ₹'+inr(s.share)).join('<br>')||'—'}</td><td class="num mono">${inr(r.budget)}</td><td class="num mono">${inr(r.actual)}</td><td class="num mono">${inr(r.actual-paid)}</td><td class="num mono" style="color:${varr>=0?'var(--good)':'var(--crit)'}">${varr>=0?'+':''}${inr(varr)}</td><td><span class="chip ${pc}">${ps}</span></td></tr>`;}).join('')}
+  </table><p style="font-size:12px;color:var(--ink2)">Entity shares are pro-rata on participant headcount. Visible only to roles allowed to see cost data.</p>`;
+}
+function rptCompliance(){
+  const mand=TRAININGS.filter(t=>t.mand==='Mandatory'&&t.code!=='TRG-101'&&t.code!=='TRG-099');
+  return `<table class="tight" style="width:100%"><tr><th>Employee</th>${mand.map(t=>`<th>${t.cat}</th>`).join('')}</tr>
+  ${EMPLOYEES.filter(e=>e.status==='Active').slice(0,8).map(e=>`<tr><td>${e.name}</td>${mand.map(t=>{const done=t.part.includes(e.code)&&t.status==='Completed';const booked=t.part.includes(e.code);return `<td><span class="chip ${done?'good':booked?'acc':'crit'}">${done?'Done':booked?'Booked':'Due'}</span></td>`;}).join('')}</tr>`).join('')}
+  </table><p style="font-size:12px;color:var(--ink2)">"Due" rows feed the 30-day expiry alert on the dashboard.</p>`;
+}
+
+/* initial renders */
+renderEmp();renderTrn();renderExp();
+
+/* ---------- participant route: opening the QR link (#att/CODE or #fb/CODE) shows the phone page ---------- */
+(function(){
+  const m=location.hash.match(/^#(att|fb)\/([A-Za-z0-9-]+)$/);
+  if(!m)return;
+  const code=m[2].toUpperCase();
+  if(!TRAININGS.find(t=>t.code===code))return;
+  document.querySelector('.topbar').style.display='none';
+  document.querySelector('.layout').style.display='none';
+  const wrap=document.createElement('div');
+  wrap.style.cssText='max-width:430px;margin:28px auto;padding:0 16px';
+  wrap.innerHTML='<div style="text-align:center;margin-bottom:14px"><span style="display:inline-flex;align-items:center;gap:8px;font-weight:700"><span class="mark" style="width:28px;height:28px;border-radius:7px;background:var(--accent);color:#fff;display:inline-grid;place-items:center">A</span>Avana Learning Hub</span></div><div class="card pad" id="standaloneScan"></div><p style="text-align:center;font-size:11.5px;color:var(--ink2);margin-top:12px"><a href="'+location.href.split('#')[0]+'">Back to the full application</a></p>';
+  document.body.appendChild(wrap);
+  renderScanInto(document.getElementById('standaloneScan'),m[1],code,{live:false});
+})();
+</script>
