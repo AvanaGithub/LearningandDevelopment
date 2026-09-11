@@ -95,6 +95,8 @@ tr.clickable:hover td{background:var(--panel2)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .btn.primary:hover{filter:brightness(1.06)}
 .btn.small{padding:4px 10px;font-size:12px;border-radius:7px}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.danger:hover{background:var(--crit-soft)}
 .searchbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:13px "Archivo",sans-serif;color:var(--ink);min-width:200px}
 
 .note{border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);padding:10px 14px;border-radius:0 10px 10px 0;font-size:13px;margin:14px 0;max-width:72ch}
@@ -276,10 +278,10 @@ body[data-role="employee"] .mgr-up{display:none!important}
     <button class="btn primary admin-only" onclick="empDlg.showModal()">+ Add employee</button>
   </div>
   <div class="tablewrap"><table id="empTable">
-    <thead><tr><th>Code</th><th>Name</th><th>Entity</th><th>Division</th><th>Department</th><th>Designation</th><th>Manager</th><th>Status</th><th class="num">Hours FY</th></tr></thead>
+    <thead><tr><th>Code</th><th>Name</th><th>Entity</th><th>Division</th><th>Department</th><th>Designation</th><th>Manager</th><th>Status</th><th class="num">Hours FY</th><th class="admin-only">Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <div class="note">Exited employees stay visible to the administrator only and are purged after <strong>2 years</strong>. Records are deactivated, never deleted — the audit trail stays intact.</div>
+  <div class="note">Delete is admin-only, confirmed, and logged. Exited employees stay visible to the administrator only and are purged after <strong>2 years</strong>; for audit-relevant records prefer deactivation (checklist M4).</div>
 </section>
 
 <!-- ================= 02 TRAININGS ================= -->
@@ -294,7 +296,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
     <button class="btn primary admin-only" onclick="trnDlg.showModal()">+ Plan training</button>
   </div>
   <div id="trnList" class="tablewrap"><table id="trnTable">
-    <thead><tr><th>Code</th><th>Title</th><th>Category</th><th>Mode</th><th>Trainer</th><th>Dates</th><th class="num">Hours</th><th class="num">Participants</th><th>Status</th></tr></thead>
+    <thead><tr><th>Code</th><th>Title</th><th>Category</th><th>Mode</th><th>Trainer</th><th>Dates</th><th class="num">Hours</th><th class="num">Participants</th><th>Status</th><th class="admin-only">Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
   <div class="note">Each training carries a material library (agenda, decks, trainer profile, signed attendance scan) available to participants before and after the session. Mandatory trainings carry a validity period that drives re-training alerts.</div>
@@ -401,7 +403,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
     <button class="btn primary" onclick="expDlg.showModal()">+ New expense record</button>
   </div>
   <div class="tablewrap"><table id="expTable">
-    <thead><tr><th>Training</th><th>Dates</th><th>Category</th><th>Type</th><th>Entities</th><th>Vendor</th><th class="num">Budget ₹</th><th class="num">Actual ₹</th><th class="num">Paid ₹</th><th class="num">Pending ₹</th><th class="num">Variance ₹</th><th>Approval</th><th>Payment</th></tr></thead>
+    <thead><tr><th>Training</th><th>Dates</th><th>Category</th><th>Type</th><th>Entities</th><th>Vendor</th><th class="num">Budget ₹</th><th class="num">Actual ₹</th><th class="num">Paid ₹</th><th class="num">Pending ₹</th><th class="num">Variance ₹</th><th>Approval</th><th>Payment</th><th>Delete</th></tr></thead>
     <tbody></tbody>
   </table></div>
   <h2>Budget vs actual — FY 2026–27</h2>
@@ -639,6 +641,18 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <div class="dlg-body" id="scanBody"></div>
 </dialog>
 
+<dialog id="delDlg" style="max-width:430px;width:min(94vw,430px)">
+  <div class="dlg-head"><strong>Confirm delete</strong><button class="btn small" onclick="delDlg.close()">✕ Close</button></div>
+  <div class="dlg-body">
+    <p id="delMsg" style="margin:0 0 8px;font-weight:600"></p>
+    <p style="font-size:12px;color:var(--ink2);margin:0 0 14px">Delete is admin-only and is written to the audit trail. For audit-relevant records the checklist (M4) recommends deactivating instead — deleted data cannot be produced in an ISO 13485 audit.</p>
+    <div class="hstack" style="justify-content:flex-end">
+      <button class="btn" onclick="delDlg.close()">Cancel</button>
+      <button class="btn danger" id="delGo">Delete</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="usrDlg">
   <div class="dlg-head"><strong>Add user</strong><button class="btn small" onclick="usrDlg.close()">✕ Close</button></div>
   <form class="dlg-body" id="usrForm">
@@ -687,6 +701,58 @@ const $=id=>document.getElementById(id);
 function nowIST(){return new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Kolkata'})+' IST';}
 const ENTNAME={AMD:"Medical Devices",ASS:"Surgical Systems",ATS:"Technology Svcs"};
 const ENTFULL={AMD:"Avana Medical Devices Pvt Ltd",ASS:"Avana Surgical Systems Pvt Ltd",ATS:"Avana Technology Services Pvt Ltd"};
+
+/* generic admin-only delete confirmation */
+let delFn=null;
+function confirmDel(msg,fn){$('delMsg').textContent=msg;delFn=fn;delDlg.showModal();}
+$('delGo').addEventListener('click',()=>{delDlg.close();if(delFn){const f=delFn;delFn=null;f();}});
+function delEmployee(code){
+  const i=EMPLOYEES.findIndex(e=>e.code===code);if(i<0)return;
+  const name=EMPLOYEES[i].name;
+  EMPLOYEES.splice(i,1);
+  TRAININGS.forEach(t=>t.part=t.part.filter(c=>c!==code));
+  Object.values(ATT).forEach(m=>delete m[code]);
+  renderEmp();renderTrn();refreshAttSel();renderAtt();renderFbkForms();
+  toast('Employee '+name+' deleted and removed from all trainings — logged to the audit trail.');
+}
+function delTraining(code){
+  const i=TRAININGS.findIndex(t=>t.code===code);if(i<0)return;
+  const title=TRAININGS[i].title;
+  TRAININGS.splice(i,1);
+  delete ATT[code];delete FBFORMS[code];
+  renderTrn();refreshAttSel();renderAtt();renderFbkForms();renderCalendar();
+  toast('Training '+code+' ('+title+') deleted with its attendance and feedback form — logged to the audit trail.');
+}
+function delExpense(i){
+  const r=EXPREC[i];if(!r)return;
+  EXPREC.splice(i,1);renderExp();
+  toast('Expense record for "'+r.trn+'" ('+r.cat+') deleted — logged to the audit trail.');
+}
+function delUser(i){
+  const u=USERS[i];if(!u)return;
+  if(u.type==='Super admin'&&USERS.filter(x=>x.type==='Super admin'&&x.status==='Active').length<=1){
+    toast('Cannot delete the only active Super admin — assign another Super admin first.');return;
+  }
+  USERS.splice(i,1);renderUsers();
+  toast('User '+u.name+' deleted — their Zoho SSO access is revoked. Logged to the audit trail.');
+}
+function delFbForm(code){
+  const t=TRAININGS.find(x=>x.code===code);
+  confirmDel('Delete the feedback form for "'+(t?t.title:code)+'"? Collected responses are kept.',()=>{
+    delete FBFORMS[code];renderFbkForms();
+    toast('Feedback form deleted for '+code+' — responses already collected are retained.');
+  });
+}
+function delAttRow(code,emp){
+  const t=TRAININGS.find(x=>x.code===code);
+  confirmDel('Remove '+empName(emp)+' from attendance of "'+(t?t.title:code)+'"? They also leave the participant list.',()=>{
+    if(ATT[code])delete ATT[code][emp];
+    if(t)t.part=t.part.filter(c=>c!==emp);
+    renderTrn();renderAtt();renderFbkForms();
+    logAtt(`${$('attWho').value} removed ${empName(emp)} from ${code}`);
+    toast(empName(emp)+' removed from '+code+' — logged to the audit trail.');
+  });
+}
 const fmtDay=v=>{const d=new Date(v+'T00:00:00');return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'});};
 const BASEURL='https://learn.avana.in'; // placeholder — the real domain is checklist item B4
 
@@ -1041,11 +1107,15 @@ function renderEmp(){
   EMPLOYEES.filter(e=>(ent==='all'||e.entity===ent)&&Object.values(e).join(' ').toLowerCase().includes(q)).forEach(e=>{
     const st=e.status==='Active'?'good':e.status==='On notice'?'warn':'crit';
     const tr=document.createElement('tr');tr.className='clickable';
-    tr.innerHTML=`<td class="mono">${e.code}</td><td>${e.name}</td><td>${ENTNAME[e.entity]}</td><td>${e.div}</td><td>${e.dept}</td><td>${e.desig}</td><td>${e.mgr}</td><td><span class="chip ${st}">${e.status}</span></td><td class="num mono">${e.hours}</td>`;
+    tr.innerHTML=`<td class="mono">${e.code}</td><td>${e.name}</td><td>${ENTNAME[e.entity]}</td><td>${e.div}</td><td>${e.dept}</td><td>${e.desig}</td><td>${e.mgr}</td><td><span class="chip ${st}">${e.status}</span></td><td class="num mono">${e.hours}</td><td class="admin-only"><button class="btn small danger" aria-label="Delete ${e.name}">🗑</button></td>`;
     tr.addEventListener('click',()=>openEmp(e));
+    tr.querySelector('.danger').addEventListener('click',ev=>{
+      ev.stopPropagation();
+      confirmDel('Delete employee '+e.name+' ('+e.code+')? They are removed from all trainings and attendance.',()=>delEmployee(e.code));
+    });
     tb.appendChild(tr);
   });
-  if(!tb.children.length)tb.innerHTML='<tr><td colspan="9" style="color:var(--ink2)">No employees match.</td></tr>';
+  if(!tb.children.length)tb.innerHTML='<tr><td colspan="10" style="color:var(--ink2)">No employees match.</td></tr>';
 }
 $('empSearch').addEventListener('input',renderEmp);
 $('entitySel').addEventListener('change',renderEmp);
@@ -1091,8 +1161,12 @@ function renderTrn(){
   TRAININGS.forEach(t=>{
     const stc=t.status==='Completed'?'good':t.status==='Postponed'?'crit':t.status.includes('Awaiting')?'warn':'acc';
     const tr=document.createElement('tr');tr.className='clickable';
-    tr.innerHTML=`<td class="mono">${t.code}</td><td>${t.title}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.cat}</td><td>${t.mode}</td><td>${t.trainer}</td><td class="mono">${t.dates}</td><td class="num">${t.hours||'—'}</td><td class="num mono">${t.part.length}/${t.seats}</td><td><span class="chip ${stc}">${t.status}</span></td>`;
+    tr.innerHTML=`<td class="mono">${t.code}</td><td>${t.title}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.cat}</td><td>${t.mode}</td><td>${t.trainer}</td><td class="mono">${t.dates}</td><td class="num">${t.hours||'—'}</td><td class="num mono">${t.part.length}/${t.seats}</td><td><span class="chip ${stc}">${t.status}</span></td><td class="admin-only"><button class="btn small danger" aria-label="Delete ${t.title}">🗑</button></td>`;
     tr.addEventListener('click',()=>openTrn(t.code));
+    tr.querySelector('.danger').addEventListener('click',ev=>{
+      ev.stopPropagation();
+      confirmDel('Delete training '+t.code+' ("'+t.title+'")? Its attendance records and feedback form are deleted with it.',()=>delTraining(t.code));
+    });
     tb.appendChild(tr);
   });
 }
@@ -1227,12 +1301,12 @@ function refreshAttSel(){
 function renderAtt(){
   const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);const data=ATT[code];
   if(!t||!data){$('attHead').innerHTML='';$('attBody').innerHTML='<tr><td style="color:var(--ink2)">No training selected.</td></tr>';return;}
-  $('attHead').innerHTML='<tr><th>Participant</th>'+t.days.map(d=>`<th>${d}</th>`).join('')+'<th class="num">%</th><th>Eligible</th><th class="admin-only">Correct</th></tr>';
+  $('attHead').innerHTML='<tr><th>Participant</th>'+t.days.map(d=>`<th>${d}</th>`).join('')+'<th class="num">%</th><th>Eligible</th><th class="admin-only">Actions</th></tr>';
   const tb=$('attBody');tb.innerHTML='';
   Object.entries(data).forEach(([code2,marks])=>{
     const tr=document.createElement('tr');
     tr.innerHTML=`<td>${empName(code2)}</td>`+marks.map((m,i)=>`<td><button class="attcell ${m==='–'?'':m}" data-i="${i}" aria-label="${t.days[i]} attendance for ${empName(code2)}">${m}</button></td>`).join('')
-      +`<td class="num mono"></td><td></td><td class="admin-only"><button class="btn small" onclick="openAttEdit('${code}','${code2}')">Edit</button></td>`;
+      +`<td class="num mono"></td><td></td><td class="admin-only" style="white-space:nowrap"><button class="btn small" onclick="openAttEdit('${code}','${code2}')">Edit</button> <button class="btn small danger" onclick="delAttRow('${code}','${code2}')" aria-label="Remove ${empName(code2)} from this training">🗑</button></td>`;
     tb.appendChild(tr);
     tr.querySelectorAll('.attcell').forEach(c=>c.addEventListener('click',()=>{
       const prev=c.textContent;const next={'–':'P',P:'A',A:'H',H:'–'}[prev];
@@ -1299,6 +1373,7 @@ function renderFbkForms(){
         <button class="btn small admin-only" onclick="uploadFbForm('${t.code}')">⬆ Upload</button>
         <button class="btn small" onclick="qrForFeedback('${t.code}')">▦ QR / Link</button>
         <button class="btn small ${f?'':'admin-only'}" onclick="exportFbResults('${t.code}')">⬇ Results</button>
+        ${f?`<button class="btn small danger admin-only" onclick="delFbForm('${t.code}')" aria-label="Delete feedback form for ${t.title}">🗑</button>`:''}
       </td></tr>`);
   });
 }
@@ -1383,8 +1458,12 @@ function renderExp(){
       <td>${r.ents.map(e=>`<span class="chip acc">${e.ent} ${e.n}</span>`).join(' ')||'—'}</td><td>${r.vendor}</td>
       <td class="num mono">${inr(r.budget)}</td><td class="num mono">${inr(r.actual)}</td><td class="num mono">${inr(paid)}</td>
       <td class="num mono">${inr(pend)}</td><td class="num mono" style="color:${varr>=0?'var(--good)':'var(--crit)'}">${varr>=0?'+':''}${inr(varr)}</td>
-      <td><span class="chip ${ac}">${r.appr}</span></td><td><span class="chip ${pc}">${ps}</span></td>`;
+      <td><span class="chip ${ac}">${r.appr}</span></td><td><span class="chip ${pc}">${ps}</span></td><td><button class="btn small danger" aria-label="Delete expense for ${r.trn}">🗑</button></td>`;
     tr.addEventListener('click',()=>openExp(i));
+    tr.querySelector('.danger').addEventListener('click',ev=>{
+      ev.stopPropagation();
+      confirmDel('Delete the expense record for "'+r.trn+'" ('+r.cat+', ₹'+inr(r.actual)+' actual)?',()=>delExpense(i));
+    });
     tb.appendChild(tr);
   });
 }
@@ -1521,7 +1600,7 @@ function renderUsers(){
       <td><span class="chip ${tc}">${u.type}</span></td>
       <td><select class="select" data-ui="${i}" aria-label="Access for ${u.name}">${ACC_OPTS.map(o=>`<option${o===u.acc?' selected':''}>${o}</option>`).join('')}</select></td>
       <td><span class="chip ${u.status==='Active'?'good':'crit'}">${u.status}</span></td>
-      <td><button class="btn small" data-ud="${i}">${u.status==='Active'?'Disable':'Enable'}</button></td></tr>`);
+      <td style="white-space:nowrap"><button class="btn small" data-ud="${i}">${u.status==='Active'?'Disable':'Enable'}</button> <button class="btn small danger" data-udel="${i}" aria-label="Delete user ${u.name}">🗑</button></td></tr>`);
   });
   tb.querySelectorAll('select[data-ui]').forEach(s=>s.addEventListener('change',()=>{
     const u=USERS[+s.dataset.ui];u.acc=s.value;
@@ -1530,6 +1609,10 @@ function renderUsers(){
   tb.querySelectorAll('button[data-ud]').forEach(b=>b.addEventListener('click',()=>{
     const u=USERS[+b.dataset.ud];u.status=u.status==='Active'?'Disabled':'Active';renderUsers();
     toast(u.name+' is now '+u.status.toLowerCase()+' — Zoho SSO sign-in '+(u.status==='Active'?'restored':'blocked')+'.');
+  }));
+  tb.querySelectorAll('button[data-udel]').forEach(b=>b.addEventListener('click',()=>{
+    const i=+b.dataset.udel;const u=USERS[i];
+    confirmDel('Delete user '+u.name+' ('+u.mail+')? Their Zoho SSO access to the system is revoked.',()=>delUser(i));
   }));
 }
 $('usrForm').addEventListener('submit',ev=>{
