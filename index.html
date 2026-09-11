@@ -218,22 +218,22 @@ body[data-role="employee"] .mgr-up{display:none!important}
 <section class="page on" id="page-dash">
   <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div>
     <button class="btn" onclick="exportTab('dash')">⬇ Export</button></div>
-  <p class="sub">Quarter 2, FY 2026–27 (Jul–Sep) · figures are illustrative sample data across the three Avana entities.</p>
+  <p class="sub">Quarter 2, FY 2026–27 (Jul–Sep) · every figure below is computed live from the records in the system — add, edit or delete anywhere and the dashboard updates.</p>
   <div class="tiles">
-    <div class="tile"><div class="lbl">Training coverage</div><div class="val">78%</div><div class="delta up">234 of 300 employees trained this FY</div></div>
-    <div class="tile"><div class="lbl">Mandatory compliance</div><div class="val">91%</div><div class="delta warnc">27 employees overdue</div></div>
-    <div class="tile"><div class="lbl">Avg hours / employee</div><div class="val">14.6</div><div class="delta up">Target 16 h per year</div></div>
-    <div class="tile admin-only"><div class="lbl">Budget used (FY)</div><div class="val">₹8.4 L</div><div class="delta up">of ₹14.0 L annual budget</div></div>
-    <div class="tile"><div class="lbl">Trainings this quarter</div><div class="val" id="dashTrnCount">–</div><div class="delta" id="dashTrnSplit"></div></div>
+    <div class="tile"><div class="lbl">Training coverage</div><div class="val" id="dashCov">–</div><div class="delta up" id="dashCovSub"></div></div>
+    <div class="tile"><div class="lbl">Mandatory compliance</div><div class="val" id="dashComp">–</div><div class="delta warnc" id="dashCompSub"></div></div>
+    <div class="tile"><div class="lbl">Avg hours / employee</div><div class="val" id="dashHours">–</div><div class="delta up">Target 16 h per year</div></div>
+    <div class="tile admin-only"><div class="lbl">Actual spend (FY)</div><div class="val" id="dashBudget">–</div><div class="delta up" id="dashBudgetSub"></div></div>
+    <div class="tile"><div class="lbl">Trainings planned</div><div class="val" id="dashTrnCount">–</div><div class="delta" id="dashTrnSplit"></div></div>
   </div>
   <div class="cols2">
     <div class="card pad">
       <h2 style="margin-top:0">Needs your attention</h2>
       <table class="tight">
-        <tr><td><span class="chip warn">Expiring</span></td><td>Mandatory re-trainings due within 30 days</td><td class="num">11</td></tr>
-        <tr><td><span class="chip warn">Feedback</span></td><td>Feedback forms pending from participants</td><td class="num">7</td></tr>
-        <tr><td><span class="chip neutral">Evidence</span></td><td>Signed attendance sheets not yet uploaded</td><td class="num">2</td></tr>
-        <tr class="admin-only"><td><span class="chip crit">Expense</span></td><td>Cost sheets awaiting approval</td><td class="num">1</td></tr>
+        <tr><td><span class="chip warn">Mandatory</span></td><td>Missing enrolments on mandatory trainings</td><td class="num" id="attnExpiring">–</td></tr>
+        <tr><td><span class="chip warn">Feedback</span></td><td>Feedback forms pending from participants</td><td class="num" id="attnFbk">–</td></tr>
+        <tr><td><span class="chip neutral">Evidence</span></td><td>Signed attendance sheets pending upload</td><td class="num" id="attnSheets">–</td></tr>
+        <tr class="admin-only"><td><span class="chip crit">Expense</span></td><td>Cost sheets awaiting approval</td><td class="num" id="attnExp">–</td></tr>
       </table>
     </div>
     <div class="card pad">
@@ -409,12 +409,9 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <h2>Budget vs actual — FY 2026–27</h2>
   <div class="tablewrap"><table>
     <thead><tr><th>Entity</th><th class="num">Budget ₹</th><th class="num">Actual ₹</th><th style="width:30%">Used</th></tr></thead>
-    <tbody>
-      <tr><td>Avana Medical Devices</td><td class="num mono">7,00,000</td><td class="num mono">4,55,000</td><td><div class="bar"><i style="width:65%"></i></div></td></tr>
-      <tr><td>Avana Surgical Systems</td><td class="num mono">4,50,000</td><td class="num mono">2,90,000</td><td><div class="bar"><i style="width:64%"></i></div></td></tr>
-      <tr><td>Avana Technology Services</td><td class="num mono">2,50,000</td><td class="num mono">95,000</td><td><div class="bar"><i style="width:38%"></i></div></td></tr>
-    </tbody>
+    <tbody id="expBudgetBody"></tbody>
   </table></div>
+  <p style="font-size:12px;color:var(--ink2);margin:6px 0 0">Actuals are summed live from the expense records above, split per entity by headcount — delete or add a record and this table follows.</p>
   <div class="note">Variance = Approved budget − Actual expense. Amount pending = Actual − Amount paid; payment status is derived from the payment rows. Entity shares are computed pro-rata on participant headcount — open a record to see the split.</div>
 </section>
 
@@ -1090,14 +1087,31 @@ function exportTab(tab){
   }
 }
 
-/* ---------- dashboard ---------- */
-(function(){
-  const up=TRAININGS.filter(t=>['Confirmed','In progress','Awaiting cost approval'].includes(t.status));
+/* ---------- dashboard: everything computed live from the data ---------- */
+function renderDash(){
+  const act=EMPLOYEES.filter(e=>e.status!=='Exited');
+  const trained=act.filter(e=>TRAININGS.some(t=>t.part.includes(e.code)));
+  $('dashCov').textContent=(act.length?Math.round(trained.length/act.length*100):0)+'%';
+  $('dashCovSub').textContent=trained.length+' of '+act.length+' employees on at least one training';
+  const mand=TRAININGS.filter(t=>t.mand==='Mandatory'&&t.status!=='Postponed');
+  const compPct=(mand.length&&act.length)?Math.round(mand.reduce((s,t)=>s+Math.min(1,t.part.length/act.length),0)/mand.length*100):0;
+  const gaps=mand.reduce((s,t)=>s+act.filter(e=>!t.part.includes(e.code)).length,0);
+  $('dashComp').textContent=compPct+'%';
+  $('dashCompSub').textContent=gaps+' employee-enrolments still missing';
+  $('dashHours').textContent=act.length?(act.reduce((s,e)=>s+e.hours,0)/act.length).toFixed(1):'0';
+  const used=EXPREC.reduce((s,r)=>s+r.actual,0);
+  $('dashBudget').textContent='₹'+inr(used);
+  $('dashBudgetSub').textContent='of ₹14,00,000 annual budget ('+Math.round(used/1400000*100)+'% used)';
+  const up=TRAININGS.filter(t=>['Confirmed','In progress','Awaiting cost approval','Planned'].includes(t.status));
   const done=TRAININGS.filter(t=>t.status==='Completed').length;
   $('dashTrnCount').textContent=TRAININGS.length;
   $('dashTrnSplit').textContent=done+' done · '+up.length+' upcoming / running';
-  $('dashUpcoming').innerHTML=up.slice(0,4).map(t=>`<tr><td class="mono">${t.dates}</td><td>${t.title}</td><td><span class="chip ${t.tt==='External agency'?'warn':'acc'}">${t.mode}</span></td></tr>`).join('');
-})();
+  $('dashUpcoming').innerHTML=up.slice(0,4).map(t=>`<tr><td class="mono">${t.dates}</td><td>${t.title}</td><td><span class="chip ${t.tt==='External agency'?'warn':'acc'}">${t.mode}</span></td></tr>`).join('')||'<tr><td style="color:var(--ink2)">No upcoming trainings.</td></tr>';
+  $('attnExpiring').textContent=gaps;
+  $('attnFbk').textContent=Object.values(FBFORMS).reduce((s,f)=>s+Math.max(0,(+f.total||0)-(+f.resp||0)),0);
+  $('attnSheets').textContent=TRAININGS.filter(t=>t.status==='Completed'&&t.mode==='Classroom').length;
+  $('attnExp').textContent=EXPREC.filter(r=>r.appr==='Pending').length;
+}
 
 /* ---------- employees ---------- */
 function renderEmp(){
@@ -1116,6 +1130,7 @@ function renderEmp(){
     tb.appendChild(tr);
   });
   if(!tb.children.length)tb.innerHTML='<tr><td colspan="10" style="color:var(--ink2)">No employees match.</td></tr>';
+  renderDash();
 }
 $('empSearch').addEventListener('input',renderEmp);
 $('entitySel').addEventListener('change',renderEmp);
@@ -1169,6 +1184,7 @@ function renderTrn(){
     });
     tb.appendChild(tr);
   });
+  renderDash();
 }
 
 /* training detail + participants */
@@ -1376,6 +1392,7 @@ function renderFbkForms(){
         ${f?`<button class="btn small danger admin-only" onclick="delFbForm('${t.code}')" aria-label="Delete feedback form for ${t.title}">🗑</button>`:''}
       </td></tr>`);
   });
+  renderDash();
 }
 function openFbBuilder(code){
   const sel=$('fbTrn');sel.innerHTML='';
@@ -1466,6 +1483,16 @@ function renderExp(){
     });
     tb.appendChild(tr);
   });
+  if(!EXPREC.length)tb.innerHTML='<tr><td colspan="14" style="color:var(--ink2)">No expense records yet.</td></tr>';
+  /* budget vs actual per entity — live from the records */
+  const ENTBUD={AMD:700000,ASS:450000,ATS:250000};
+  const actual={AMD:0,ASS:0,ATS:0};
+  EXPREC.forEach(r=>entSplit(r).forEach(s=>{actual[s.ent]+=s.share;}));
+  $('expBudgetBody').innerHTML=['AMD','ASS','ATS'].map(k=>{
+    const pct=Math.min(100,Math.round(actual[k]/ENTBUD[k]*100));
+    return `<tr><td>${ENTFULL[k]}</td><td class="num mono">${inr(ENTBUD[k])}</td><td class="num mono">${inr(actual[k])}</td><td><div class="hstack" style="flex-wrap:nowrap;gap:8px"><div class="bar${pct>85?' warnb':''}" style="flex:1"><i style="width:${pct}%"></i></div><span class="mono" style="font-size:11px;color:var(--ink2)">${pct}%</span></div></td></tr>`;
+  }).join('');
+  renderDash();
 }
 function openExp(i){
   const r=EXPREC[i];const paid=paidAmt(r),pend=r.actual-paid,varr=r.budget-r.actual;const [ps,pc]=payStatus(r);
