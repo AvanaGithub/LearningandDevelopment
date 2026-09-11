@@ -492,17 +492,13 @@ body[data-role="employee"] .mgr-up{display:none!important}
       <div class="full"><label for="tfTitle">Training title</label><input id="tfTitle" required placeholder="Title"></div>
       <div><label for="tfCat">Category</label><select id="tfCat"><option>Induction</option><option>Product</option><option>Soft skill</option><option>Technical</option><option>Compliance</option><option>Safety</option><option>On-the-job</option></select></div>
       <div><label for="tfMode">Mode</label><select id="tfMode"><option>Classroom</option><option>Online</option><option>On-the-job</option><option>Field</option><option>External seminar</option></select></div>
-      <div><label for="tfTrainer">Trainer</label><input id="tfTrainer" required placeholder="Name / agency"></div>
+      <div><label for="tfTrainer">Trainer name</label><input id="tfTrainer" placeholder="Trainer / faculty name"></div>
       <div><label for="tfTT">Trainer type</label><select id="tfTT"><option>Internal</option><option>External agency</option></select></div>
-      <div class="full"><label for="tfDate">Training dates</label>
-        <div class="hstack" style="margin-top:4px">
-          <input type="date" id="tfDate" style="max-width:170px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Archivo',sans-serif;color:var(--ink)" aria-label="Start date">
-          <label style="font-size:11.5px;font-weight:600;color:var(--ink2)">No. of days
-            <input type="number" id="tfNumDays" min="1" value="1" style="width:64px;margin-left:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font:13px 'Archivo',sans-serif;color:var(--ink)"></label>
-          <button type="button" class="btn small" onclick="addTrnDate()">+ Add date(s)</button>
-        </div>
-        <div class="hstack" id="tfDateChips" style="margin-top:8px"></div>
-        <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 0">One date is enough — pick it and save. For a multi-day block, set "No. of days" (e.g. 3) and the consecutive dates are added from the start date automatically. Add more blocks for split schedules or month-long programmes; ✕ removes a day.</p>
+      <div class="full" id="tfAgencyWrap" hidden><label for="tfAgency">External agency name</label><input id="tfAgency" placeholder="Agency / vendor name"></div>
+      <div><label for="tfNumDays">No. of days of training</label><input id="tfNumDays" type="number" min="1" max="60" value="1"></div>
+      <div class="full"><label>Select the date(s) — you choose each date yourself</label>
+        <div class="formgrid" id="tfDayPickers" style="margin-top:4px"></div>
+        <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 0">Enter the number of days above first: 1 day shows a single calendar; more than 1 shows one calendar per day, so a 3-day or month-long programme can sit on any dates you pick — consecutive or spread out.</p>
       </div>
       <div><label for="tfBatch">Batch (optional)</label><input id="tfBatch" placeholder="e.g. Batch 2 — same training can run as several batches, even on the same day"></div>
       <div><label for="tfHoursDay">Hours per day</label><input id="tfHoursDay" type="number" min="1" value="8"></div>
@@ -1281,46 +1277,49 @@ function qrTrnFromDetail(code){
    'Display this at the venue. Scanning opens the check-in page for '+code+' — only employees assigned to this training can check in. Use "Test now" below to run the participant flow on this screen.',{mode:'att',code});
 }
 
-/* multi-date picker for plan-training */
-let tfDates=[];
-function addTrnDate(){
-  const v=$('tfDate').value;if(!v){toast('Pick a start date first.');return;}
-  const n=Math.max(1,+$('tfNumDays').value||1);
-  const start=new Date(v+'T00:00:00');
-  let added=0;
-  for(let i=0;i<n;i++){
-    const d=new Date(start);d.setDate(start.getDate()+i);
-    const f=String(d.getDate()).padStart(2,'0')+' '+MONTH_ABBR[d.getMonth()];
-    if(!tfDates.includes(f)){tfDates.push(f);added++;}
-  }
-  renderTfDates();$('tfDate').value='';
-  if(added)toast(added+' day(s) added'+(n>1?' — consecutive block starting '+fmtDay(v):'')+'.');
-}
-function renderTfDates(){
-  $('tfDateChips').innerHTML=tfDates.map((d,i)=>`<span class="datechip">${d}<button type="button" aria-label="Remove ${d}" onclick="tfDates.splice(${i},1);renderTfDates()">✕</button></span>`).join('')||'<span style="font-size:12px;color:var(--ink2)">No dates added yet.</span>';
+/* day pickers for plan-training: enter the count first, then pick every date yourself */
+function renderDayPickers(){
+  const n=Math.min(60,Math.max(1,+$('tfNumDays').value||1));
+  const prev=[...document.querySelectorAll('#tfDayPickers input')].map(i=>i.value);
+  $('tfDayPickers').innerHTML=Array.from({length:n},(_,i)=>`<div><label for="tfDay${i}">Day ${i+1}</label><input type="date" id="tfDay${i}" value="${prev[i]||''}"></div>`).join('');
   updTotalHours();
 }
 function updTotalHours(){
   const per=+$('tfHoursDay').value||0;
-  $('tfHours').value=per*Math.max(1,tfDates.length);
+  $('tfHours').value=per*Math.min(60,Math.max(1,+$('tfNumDays').value||1));
 }
+$('tfNumDays').addEventListener('input',renderDayPickers);
 $('tfHoursDay').addEventListener('input',updTotalHours);
-renderTfDates();
+$('tfTT').addEventListener('change',()=>{$('tfAgencyWrap').hidden=$('tfTT').value!=='External agency';});
+renderDayPickers();
 
 $('trnForm').addEventListener('submit',ev=>{
   ev.preventDefault();
-  if(!tfDates.length&&$('tfDate').value)addTrnDate(); // a picked-but-not-added date counts
-  if(!tfDates.length){toast('Pick at least one training date.');return;}
-  const code='TRG-'+(109+TRAININGS.filter(t=>t.code.startsWith('TRG-1')).length);
-  const days=[...tfDates];
+  const picks=[...document.querySelectorAll('#tfDayPickers input')];
+  const vals=picks.map(p=>p.value).filter(Boolean);
+  if(!vals.length){toast('Pick the training date for Day 1.');return;}
+  if(vals.length<picks.length){toast('Pick a date for each of the '+picks.length+' days — or reduce "No. of days".');return;}
+  const uniq=[...new Set(vals)].sort();
+  if(uniq.length<vals.length){toast('Two day pickers hold the same date — give each day its own date.');return;}
+  const isExt=$('tfTT').value==='External agency';
+  const agency=$('tfAgency').value.trim();
+  if(isExt&&!agency){toast('Enter the external agency name.');return;}
+  if(!isExt&&!$('tfTrainer').value.trim()){toast('Enter the trainer name.');return;}
+  const days=uniq.map(fmtDay);
   const per=+$('tfHoursDay').value||8;
   const batch=$('tfBatch').value.trim();
-  TRAININGS.push({code,title:$('tfTitle').value,batch,cat:$('tfCat').value,mode:$('tfMode').value,trainer:$('tfTrainer').value,tt:$('tfTT').value,dates:days.length>3?days[0]+' → '+days[days.length-1]+' ('+days.length+' days)':days.join(', '),days,hours:per*days.length,seats:+$('tfSeats').value,mand:$('tfMand').value,status:'Planned',part:[]});
+  const code='TRG-'+(109+TRAININGS.filter(t=>t.code.startsWith('TRG-1')).length);
+  TRAININGS.push({code,title:$('tfTitle').value,batch,cat:$('tfCat').value,mode:$('tfMode').value,
+    trainer:isExt?agency+($('tfTrainer').value.trim()?' — '+$('tfTrainer').value.trim():''):$('tfTrainer').value.trim(),
+    tt:$('tfTT').value,
+    dates:days.length>3?days[0]+' → '+days[days.length-1]+' ('+days.length+' days)':days.join(', '),
+    days,hours:per*days.length,seats:+$('tfSeats').value,mand:$('tfMand').value,status:'Planned',part:[]});
   ATT[code]={};
   /* jump the shared calendar to the training's first month so it's visible immediately */
-  const m0=MONTH_ABBR.indexOf(days[0].split(/[\s-]+/)[1]);if(m0>=0)calM=m0;
-  renderTrn();refreshAttSel();renderFbkForms();renderCalendar();trnDlg.close();ev.target.reset();tfDates=[];renderTfDates();$('tfNumDays').value=1;
-  toast(code+' saved — '+days.length+' day(s), '+(per*days.length)+' h total. It is on the Training Calendar now; click its row to add participants.');
+  const d0=new Date(uniq[0]+'T00:00:00');calY=d0.getFullYear();calM=d0.getMonth();
+  renderTrn();refreshAttSel();renderFbkForms();renderCalendar();trnDlg.close();ev.target.reset();
+  $('tfNumDays').value=1;renderDayPickers();$('tfAgencyWrap').hidden=true;
+  toast(code+' saved — '+days.length+' day(s), '+(per*days.length)+' h total. It is on the Training Calendar; click its row to add participants.');
 });
 
 /* ---------- shared training calendar (all roles) ---------- */
