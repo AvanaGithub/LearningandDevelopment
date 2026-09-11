@@ -174,7 +174,8 @@ body[data-role="employee"] .mgr-up{display:none!important}
 
 <div class="topbar">
   <div class="brand"><span class="mark">A</span><span>Avana Learning Hub<small>Learning &amp; Development · Internal</small></span></div>
-  <span class="proto-tag">Prototype · sample data</span>
+  <span class="proto-tag">Prototype</span>
+  <button class="btn small" onclick="resetData()" title="Discard all changes saved on this device and restore the original sample data">↺ Reset data</button>
   <div class="spacer"></div>
   <label><span class="select-label">Entity</span>
     <select class="select" id="entitySel">
@@ -811,6 +812,34 @@ const USERS=[
 ];
 const ACC_OPTS=["View","View, Add","View, Add, Edit","Full access"];
 
+/* ---------- persistence: every change is saved on this device and survives reloads ---------- */
+const STORE_KEY='avana-lh-state-v1';
+function saveState(){
+  try{
+    localStorage.setItem(STORE_KEY,JSON.stringify({emp:EMPLOYEES,trn:TRAININGS,att:ATT,fbf:FBFORMS,fbr:FB_RESP,exp:EXPREC,usr:USERS}));
+  }catch(e){}
+}
+function loadState(){
+  try{
+    const s=JSON.parse(localStorage.getItem(STORE_KEY)||'null');
+    if(!s||!s.emp)return;
+    EMPLOYEES.length=0;EMPLOYEES.push(...s.emp);
+    TRAININGS.length=0;TRAININGS.push(...s.trn);
+    Object.keys(ATT).forEach(k=>delete ATT[k]);Object.assign(ATT,s.att||{});
+    Object.keys(FBFORMS).forEach(k=>delete FBFORMS[k]);Object.assign(FBFORMS,s.fbf||{});
+    FB_RESP.length=0;FB_RESP.push(...(s.fbr||[]));
+    EXPREC.length=0;EXPREC.push(...(s.exp||[]));
+    USERS.length=0;USERS.push(...(s.usr||[]));
+  }catch(e){}
+}
+loadState();
+function resetData(){
+  confirmDel('Reset ALL data to the original sample set? Every change made on this device — deletes, additions, attendance, expenses — is discarded.',()=>{
+    try{localStorage.removeItem(STORE_KEY);}catch(e){}
+    location.reload();
+  });
+}
+
 /* ---------- navigation ---------- */
 const navBtns=[...document.querySelectorAll('.rail .nav:not(:disabled)')];
 navBtns.forEach(b=>b.addEventListener('click',()=>{
@@ -1130,7 +1159,7 @@ function renderEmp(){
     tb.appendChild(tr);
   });
   if(!tb.children.length)tb.innerHTML='<tr><td colspan="10" style="color:var(--ink2)">No employees match.</td></tr>';
-  renderDash();
+  renderDash();saveState();
 }
 $('empSearch').addEventListener('input',renderEmp);
 $('entitySel').addEventListener('change',renderEmp);
@@ -1167,7 +1196,7 @@ $('empForm').addEventListener('submit',ev=>{
   ev.preventDefault();
   EMPLOYEES.unshift({code:$('efCode').value,name:$('efName').value,entity:$('efEntity').value,div:$('efDiv').value,dept:$('efDept').value,desig:$('efDesig').value,mgr:$('efMgr').value||'—',type:$('efType').value,mail:$('efMail').value||'—',mob:$('efMob').value||'—',doj:$('efDoj').value||'—',loc:$('efLoc').value||'—',status:'Active',hours:0});
   renderEmp();empDlg.close();ev.target.reset();
-  toast('Employee saved (prototype: in-memory only — data resets on reload).');
+  toast('Employee saved — stored on this device, survives page reloads.');
 });
 
 /* ---------- trainings ---------- */
@@ -1184,7 +1213,7 @@ function renderTrn(){
     });
     tb.appendChild(tr);
   });
-  renderDash();
+  renderDash();saveState();
 }
 
 /* training detail + participants */
@@ -1328,9 +1357,11 @@ function renderAtt(){
       const prev=c.textContent;const next={'–':'P',P:'A',A:'H',H:'–'}[prev];
       c.textContent=next;c.className='attcell '+(next==='–'?'':next);marks[c.dataset.i]=next;recalcAtt(tr,marks);
       logAtt(`${$('attWho').value} changed ${empName(code2)}, ${t.days[c.dataset.i]}: ${prev} → ${next}`);
+      saveState();
     }));
     recalcAtt(tr,marks);
   });
+  saveState();
 }
 function recalcAtt(tr,marks){
   const score=attPct(marks);
@@ -1392,7 +1423,7 @@ function renderFbkForms(){
         ${f?`<button class="btn small danger admin-only" onclick="delFbForm('${t.code}')" aria-label="Delete feedback form for ${t.title}">🗑</button>`:''}
       </td></tr>`);
   });
-  renderDash();
+  renderDash();saveState();
 }
 function openFbBuilder(code){
   const sel=$('fbTrn');sel.innerHTML='';
@@ -1492,7 +1523,7 @@ function renderExp(){
     const pct=Math.min(100,Math.round(actual[k]/ENTBUD[k]*100));
     return `<tr><td>${ENTFULL[k]}</td><td class="num mono">${inr(ENTBUD[k])}</td><td class="num mono">${inr(actual[k])}</td><td><div class="hstack" style="flex-wrap:nowrap;gap:8px"><div class="bar${pct>85?' warnb':''}" style="flex:1"><i style="width:${pct}%"></i></div><span class="mono" style="font-size:11px;color:var(--ink2)">${pct}%</span></div></td></tr>`;
   }).join('');
-  renderDash();
+  renderDash();saveState();
 }
 function openExp(i){
   const r=EXPREC[i];const paid=paidAmt(r),pend=r.actual-paid,varr=r.budget-r.actual;const [ps,pc]=payStatus(r);
@@ -1567,7 +1598,7 @@ $('invFile').addEventListener('change',e=>{
   const files=[...e.target.files].map(f=>f.name);
   if(!files.length)return;
   if(invMode==='form'){xfInvFiles.push(...files);renderInvChips();toast(files.length+' invoice file(s) attached to this expense.');}
-  else{const r=EXPREC[invRecIdx];r.invoices=r.invoices||[];r.invoices.push(...files);openExp(invRecIdx);toast(files.length+' invoice file(s) added to the record.');}
+  else{const r=EXPREC[invRecIdx];r.invoices=r.invoices||[];r.invoices.push(...files);saveState();openExp(invRecIdx);toast(files.length+' invoice file(s) added to the record.');}
   e.target.value='';
 });
 function renderInvChips(){
@@ -1630,7 +1661,7 @@ function renderUsers(){
       <td style="white-space:nowrap"><button class="btn small" data-ud="${i}">${u.status==='Active'?'Disable':'Enable'}</button> <button class="btn small danger" data-udel="${i}" aria-label="Delete user ${u.name}">🗑</button></td></tr>`);
   });
   tb.querySelectorAll('select[data-ui]').forEach(s=>s.addEventListener('change',()=>{
-    const u=USERS[+s.dataset.ui];u.acc=s.value;
+    const u=USERS[+s.dataset.ui];u.acc=s.value;saveState();
     toast('Access for '+u.name+' changed to "'+s.value+'" — logged with user and timestamp.');
   }));
   tb.querySelectorAll('button[data-ud]').forEach(b=>b.addEventListener('click',()=>{
@@ -1641,6 +1672,7 @@ function renderUsers(){
     const i=+b.dataset.udel;const u=USERS[i];
     confirmDel('Delete user '+u.name+' ('+u.mail+')? Their Zoho SSO access to the system is revoked.',()=>delUser(i));
   }));
+  saveState();
 }
 $('usrForm').addEventListener('submit',ev=>{
   ev.preventDefault();
