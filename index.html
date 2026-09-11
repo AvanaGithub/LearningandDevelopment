@@ -496,9 +496,9 @@ body[data-role="employee"] .mgr-up{display:none!important}
       <div><label for="tfTT">Trainer type</label><select id="tfTT"><option>Internal</option><option>External agency</option></select></div>
       <div class="full" id="tfAgencyWrap" hidden><label for="tfAgency">External agency name</label><input id="tfAgency" placeholder="Agency / vendor name"></div>
       <div><label for="tfNumDays">No. of days of training</label><input id="tfNumDays" type="number" min="1" max="60" value="1"></div>
-      <div class="full"><label>Select the date(s) — you choose each date yourself</label>
+      <div class="full"><label>Select the date(s)</label>
         <div class="formgrid" id="tfDayPickers" style="margin-top:4px"></div>
-        <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 0">Enter the number of days above first: 1 day shows a single calendar; more than 1 shows one calendar per day, so a 3-day or month-long programme can sit on any dates you pick — consecutive or spread out.</p>
+        <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 0">Enter the number of days above first: 1 day shows a single calendar; more than 1 shows <strong>from</strong> and <strong>to</strong> dates — pick the from date and the to date fills in automatically (4 days → from + 3), with every day in between blocked as the training sequence.</p>
       </div>
       <div><label for="tfBatch">Batch (optional)</label><input id="tfBatch" placeholder="e.g. Batch 2 — same training can run as several batches, even on the same day"></div>
       <div><label for="tfHoursDay">Hours per day</label><input id="tfHoursDay" type="number" min="1" value="8"></div>
@@ -756,6 +756,7 @@ function delAttRow(code,emp){
 }
 const MONTH_ABBR=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtDay=v=>{const d=new Date(v+'T00:00:00');return String(d.getDate()).padStart(2,'0')+' '+MONTH_ABBR[d.getMonth()];};
+const isoDate=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const BASEURL='https://learn.avana.in'; // placeholder — the real domain is checklist item B4
 
 /* ---------- data ---------- */
@@ -1277,12 +1278,46 @@ function qrTrnFromDetail(code){
    'Display this at the venue. Scanning opens the check-in page for '+code+' — only employees assigned to this training can check in. Use "Test now" below to run the participant flow on this screen.',{mode:'att',code});
 }
 
-/* day pickers for plan-training: enter the count first, then pick every date yourself */
+/* dates for plan-training: 1 day = single calendar; more = from/to range, days in between block automatically */
 function renderDayPickers(){
   const n=Math.min(60,Math.max(1,+$('tfNumDays').value||1));
-  const prev=[...document.querySelectorAll('#tfDayPickers input')].map(i=>i.value);
-  $('tfDayPickers').innerHTML=Array.from({length:n},(_,i)=>`<div><label for="tfDay${i}">Day ${i+1}</label><input type="date" id="tfDay${i}" value="${prev[i]||''}"></div>`).join('');
+  const prevFrom=($('tfFrom')||{}).value||'';
+  const prevTo=($('tfTo')||{}).value||'';
+  if(n===1){
+    $('tfDayPickers').innerHTML=`<div class="full"><label for="tfFrom">Training date</label><input type="date" id="tfFrom" value="${prevFrom}"></div>`;
+  }else{
+    $('tfDayPickers').innerHTML=`<div><label for="tfFrom">From date</label><input type="date" id="tfFrom" value="${prevFrom}"></div>
+      <div><label for="tfTo">To date</label><input type="date" id="tfTo" value="${prevTo}"></div>
+      <div class="full" id="tfSeqInfo" style="font-size:12px;color:var(--ink2)"></div>`;
+    $('tfFrom').addEventListener('change',syncTo);
+    $('tfTo').addEventListener('change',()=>{
+      const f=$('tfFrom').value,t=$('tfTo').value;
+      if(f&&t&&t>=f){
+        const span=Math.round((new Date(t+'T00:00:00')-new Date(f+'T00:00:00'))/86400000)+1;
+        if(span>=1&&span<=60){$('tfNumDays').value=span;updTotalHours();}
+      }
+      seqInfo();
+    });
+    syncTo();
+  }
   updTotalHours();
+}
+function syncTo(){
+  const n=Math.min(60,Math.max(1,+$('tfNumDays').value||1));
+  const f=$('tfFrom')?$('tfFrom').value:'';
+  if($('tfTo')&&f){
+    const d=new Date(f+'T00:00:00');d.setDate(d.getDate()+n-1);
+    $('tfTo').value=isoDate(d);
+  }
+  seqInfo();
+}
+function seqInfo(){
+  const el=$('tfSeqInfo');if(!el)return;
+  const f=$('tfFrom').value,t=$('tfTo')?$('tfTo').value:'';
+  if(f&&t&&t>=f){
+    const span=Math.round((new Date(t+'T00:00:00')-new Date(f+'T00:00:00'))/86400000)+1;
+    el.textContent='Blocked automatically: '+fmtDay(f)+' → '+fmtDay(t)+' · '+span+' consecutive days.';
+  }else el.textContent='Pick the from date — the to date fills in from "No. of days", and every day in between is blocked automatically. Adjusting the to date updates the day count.';
 }
 function updTotalHours(){
   const per=+$('tfHoursDay').value||0;
@@ -1295,12 +1330,20 @@ renderDayPickers();
 
 $('trnForm').addEventListener('submit',ev=>{
   ev.preventDefault();
-  const picks=[...document.querySelectorAll('#tfDayPickers input')];
-  const vals=picks.map(p=>p.value).filter(Boolean);
-  if(!vals.length){toast('Pick the training date for Day 1.');return;}
-  if(vals.length<picks.length){toast('Pick a date for each of the '+picks.length+' days — or reduce "No. of days".');return;}
-  const uniq=[...new Set(vals)].sort();
-  if(uniq.length<vals.length){toast('Two day pickers hold the same date — give each day its own date.');return;}
+  const n=Math.min(60,Math.max(1,+$('tfNumDays').value||1));
+  const f=$('tfFrom').value;
+  if(!f){toast(n===1?'Pick the training date.':'Pick the from date.');return;}
+  let uniq=[f];
+  if(n>1){
+    const t=$('tfTo').value;
+    if(!t){toast('Pick the to date.');return;}
+    if(t<f){toast('The to date must be on or after the from date.');return;}
+    const span=Math.round((new Date(t+'T00:00:00')-new Date(f+'T00:00:00'))/86400000)+1;
+    if(span>60){toast('Maximum 60 days per training block.');return;}
+    uniq=[];
+    const d0=new Date(f+'T00:00:00');
+    for(let i=0;i<span;i++){const d=new Date(d0);d.setDate(d0.getDate()+i);uniq.push(isoDate(d));}
+  }
   const isExt=$('tfTT').value==='External agency';
   const agency=$('tfAgency').value.trim();
   if(isExt&&!agency){toast('Enter the external agency name.');return;}
