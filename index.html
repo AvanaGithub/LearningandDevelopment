@@ -449,7 +449,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
 
 <!-- ============ dialogs ============ -->
 <dialog id="empDlg">
-  <div class="dlg-head"><strong>Add employee</strong><button class="btn small" onclick="empDlg.close()">✕ Close</button></div>
+  <div class="dlg-head"><strong id="empDlgTitle">Add employee</strong><button class="btn small" onclick="empDlg.close()">✕ Close</button></div>
   <form class="dlg-body" id="empForm">
     <div class="formgrid">
       <div><label for="efCode">Employee code (Zoho)</label><input id="efCode" required placeholder="ZH-1234"></div>
@@ -483,7 +483,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
 </dialog>
 
 <dialog id="trnDlg">
-  <div class="dlg-head"><strong>Plan a training</strong><button class="btn small" onclick="trnDlg.close()">✕ Close</button></div>
+  <div class="dlg-head"><strong id="trnDlgTitle">Plan a training</strong><button class="btn small" onclick="trnDlg.close()">✕ Close</button></div>
   <form class="dlg-body" id="trnForm">
     <div class="formgrid">
       <div class="full"><label for="tfTitle">Training title</label><input id="tfTitle" required placeholder="Title"></div>
@@ -502,6 +502,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
       <div><label for="tfHours">Total training hours (auto: days × hours/day)</label><input id="tfHours" type="number" min="1" value="8" readonly style="background:var(--panel2)"></div>
       <div><label for="tfSeats">Maximum seats</label><input id="tfSeats" type="number" min="1" value="20"></div>
       <div><label for="tfMand">Mandatory?</label><select id="tfMand"><option>Optional</option><option>Mandatory</option></select></div>
+      <div><label for="tfStatus">Status</label><select id="tfStatus"><option>Planned</option><option>Confirmed</option><option>In progress</option><option>Completed</option><option>Postponed</option><option>Cancelled</option></select></div>
     </div>
     <p style="font-size:12px;color:var(--ink2);margin:12px 0 0">After saving, click the training's row in the list to add its participants.</p>
     <div class="hstack" style="margin-top:10px;justify-content:flex-end">
@@ -553,7 +554,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
 </dialog>
 
 <dialog id="expDlg">
-  <div class="dlg-head"><strong>New expense record</strong><button class="btn small" onclick="expDlg.close()">✕ Close</button></div>
+  <div class="dlg-head"><strong id="expDlgTitle">New expense record</strong><button class="btn small" onclick="expDlg.close()">✕ Close</button></div>
   <form class="dlg-body" id="expForm">
     <div class="formgrid">
       <div class="full"><label for="xfTrn">Training name</label><select id="xfTrn"></select></div>
@@ -1219,17 +1220,42 @@ function openEmp(e){
     <h2 style="margin:16px 0 8px">Training history (follows the person across entities)</h2>
     ${hist.length?`<table class="tight" style="width:100%">${hist.map(t=>`<tr><td class="mono">${t.code}</td><td>${t.title}</td><td class="mono">${t.dates}</td><td><span class="chip ${t.status==='Completed'?'good':'acc'}">${t.status}</span></td></tr>`).join('')}</table>`:'<p style="color:var(--ink2);font-size:13px">No trainings on record yet.</p>'}
     <div class="hstack" style="margin-top:12px">
-      <button class="btn small admin-only" onclick="toast('Mocked — opens the edit form; every change is logged to the audit trail.')">Edit</button>
+      <button class="btn small primary admin-only" onclick="empView.close();openEmpEdit('${e.code}')">✎ Edit</button>
       <button class="btn small admin-only" onclick="toast('Deactivation, not deletion — record stays for the audit trail and is purged after 2 years if exited.')">Deactivate…</button>
     </div>`;
   empView.showModal();
 }
 
+let empEditIdx=null;
+function openEmpEdit(code){
+  const i=EMPLOYEES.findIndex(e=>e.code===code);if(i<0)return;
+  const e=EMPLOYEES[i];empEditIdx=i;
+  $('empDlgTitle').textContent='Edit employee — '+e.code;
+  $('efCode').value=e.code;$('efCode').readOnly=true;$('efCode').style.background='var(--panel2)';
+  $('efName').value=e.name;$('efEntity').value=e.entity;
+  $('efDiv').value=[...$('efDiv').options].some(o=>o.value===e.div||o.text===e.div)?e.div:$('efDiv').value;
+  $('efDept').value=e.dept==='—'?'':e.dept;$('efDesig').value=e.desig==='—'?'':e.desig;
+  $('efMgr').value=e.mgr==='—'?'':e.mgr;$('efType').value=e.type;
+  $('efMail').value=e.mail==='—'?'':e.mail;$('efMob').value=e.mob==='—'?'':e.mob;
+  const p=Date.parse(e.doj);$('efDoj').value=isNaN(p)?'':isoDate(new Date(p));
+  $('efLoc').value=e.loc==='—'?'':e.loc;
+  empDlg.showModal();
+}
+empDlg.addEventListener('close',()=>{empEditIdx=null;$('empDlgTitle').textContent='Add employee';$('efCode').readOnly=false;$('efCode').style.background='';$('empForm').reset();});
 $('empForm').addEventListener('submit',ev=>{
   ev.preventDefault();
-  EMPLOYEES.unshift({code:$('efCode').value,name:$('efName').value,entity:$('efEntity').value,div:$('efDiv').value,dept:$('efDept').value,desig:$('efDesig').value,mgr:$('efMgr').value||'—',type:$('efType').value,mail:$('efMail').value||'—',mob:$('efMob').value||'—',doj:$('efDoj').value||'—',loc:$('efLoc').value||'—',status:'Active',hours:0});
-  renderEmp();empDlg.close();ev.target.reset();
-  toast('Employee saved — stored on this device, survives page reloads.');
+  const idx=empEditIdx;
+  const doj=$('efDoj').value?fmtDay($('efDoj').value)+' '+$('efDoj').value.slice(0,4):null;
+  const rec={code:$('efCode').value,name:$('efName').value,entity:$('efEntity').value,div:$('efDiv').value,dept:$('efDept').value,desig:$('efDesig').value,mgr:$('efMgr').value||'—',type:$('efType').value,mail:$('efMail').value||'—',mob:$('efMob').value||'—',doj:doj||'—',loc:$('efLoc').value||'—'};
+  if(idx!==null){
+    Object.assign(EMPLOYEES[idx],rec,{doj:doj||EMPLOYEES[idx].doj});
+    renderEmp();empDlg.close();
+    toast('Employee updated — the change is logged to the audit trail.');
+  }else{
+    EMPLOYEES.unshift(Object.assign(rec,{status:'Active',hours:0}));
+    renderEmp();empDlg.close();
+    toast('Employee saved — stored on this device, survives page reloads.');
+  }
 });
 
 /* ---------- trainings ---------- */
@@ -1263,6 +1289,7 @@ function openTrn(code){
       <dt>Status</dt><dd>${t.status}</dd>
     </dl>
     <div class="hstack" style="margin-top:12px">
+      <button class="btn small primary admin-only" onclick="trnViewDlg.close();openTrnEdit('${t.code}')">✎ Edit</button>
       <button class="btn small" onclick="trnViewDlg.close();qrTrnFromDetail('${t.code}')">▦ Attendance QR</button>
       <button class="btn small" onclick="trnViewDlg.close();qrForFeedback('${t.code}')">▦ Feedback QR</button>
     </div>
@@ -1356,8 +1383,36 @@ $('tfHoursDay').addEventListener('input',updTotalHours);
 $('tfTT').addEventListener('change',()=>{$('tfAgencyWrap').hidden=$('tfTT').value!=='External agency';});
 renderDayPickers();
 
+let trnEditCode=null;
+const dayToIso=s=>{const p=s.trim().split(/[\s-]+/);return '2026-'+String(MONTH_ABBR.indexOf(p[1])+1).padStart(2,'0')+'-'+String(+p[0]).padStart(2,'0');};
+function openTrnEdit(code){
+  const t=TRAININGS.find(x=>x.code===code);if(!t)return;
+  trnEditCode=code;
+  $('trnDlgTitle').textContent='Edit training — '+code;
+  $('tfTitle').value=t.title;$('tfBatch').value=t.batch||'';
+  $('tfCat').value=t.cat;$('tfMode').value=t.mode;
+  $('tfTT').value=t.tt;$('tfAgencyWrap').hidden=t.tt!=='External agency';
+  if(t.tt==='External agency'){
+    const parts=t.trainer.split(' — ');
+    $('tfAgency').value=parts[0]||'';$('tfTrainer').value=parts[1]||'';
+  }else{$('tfAgency').value='';$('tfTrainer').value=t.trainer;}
+  const n=Math.max(1,t.days.length);
+  $('tfNumDays').value=n;
+  $('tfHoursDay').value=n?Math.max(1,Math.round((t.hours||8)/n)):8;
+  renderDayPickers();
+  if(t.days.length){
+    $('tfFrom').value=dayToIso(t.days[0]);
+    if(n>1&&$('tfTo'))$('tfTo').value=dayToIso(t.days[t.days.length-1]);
+    if(typeof seqInfo==='function')seqInfo();
+  }
+  $('tfSeats').value=t.seats;$('tfMand').value=t.mand;$('tfStatus').value=t.status;
+  updTotalHours();
+  trnDlg.showModal();
+}
+trnDlg.addEventListener('close',()=>{trnEditCode=null;$('trnDlgTitle').textContent='Plan a training';$('trnForm').reset();$('tfNumDays').value=1;renderDayPickers();$('tfAgencyWrap').hidden=true;});
 $('trnForm').addEventListener('submit',ev=>{
   ev.preventDefault();
+  const editCode=trnEditCode;
   const n=Math.min(60,Math.max(1,+$('tfNumDays').value||1));
   const f=$('tfFrom').value;
   if(!f){toast(n===1?'Pick the training date.':'Pick the from date.');return;}
@@ -1379,18 +1434,32 @@ $('trnForm').addEventListener('submit',ev=>{
   const days=uniq.map(fmtDay);
   const per=+$('tfHoursDay').value||8;
   const batch=$('tfBatch').value.trim();
-  const code='TRG-'+(109+TRAININGS.filter(t=>t.code.startsWith('TRG-1')).length);
-  TRAININGS.push({code,title:$('tfTitle').value,batch,cat:$('tfCat').value,mode:$('tfMode').value,
+  const fields={title:$('tfTitle').value,batch,cat:$('tfCat').value,mode:$('tfMode').value,
     trainer:isExt?agency+($('tfTrainer').value.trim()?' — '+$('tfTrainer').value.trim():''):$('tfTrainer').value.trim(),
     tt:$('tfTT').value,
     dates:days.length>3?days[0]+' → '+days[days.length-1]+' ('+days.length+' days)':days.join(', '),
-    days,hours:per*days.length,seats:+$('tfSeats').value,mand:$('tfMand').value,status:'Planned',part:[]});
-  ATT[code]={};
+    days,hours:per*days.length,seats:+$('tfSeats').value,mand:$('tfMand').value,status:$('tfStatus').value};
+  let code;
+  if(editCode){
+    code=editCode;
+    const t=TRAININGS.find(x=>x.code===code);
+    const oldLen=t.days.length;
+    Object.assign(t,fields);
+    /* re-shape existing attendance marks to the new number of days */
+    if(ATT[code])Object.keys(ATT[code]).forEach(emp=>{
+      const m=ATT[code][emp];
+      if(days.length>oldLen)ATT[code][emp]=m.concat(Array(days.length-oldLen).fill('–'));
+      else if(days.length<oldLen)ATT[code][emp]=m.slice(0,days.length);
+    });
+  }else{
+    code='TRG-'+(109+TRAININGS.filter(t=>t.code.startsWith('TRG-1')).length);
+    TRAININGS.push(Object.assign({code,part:[]},fields));
+    ATT[code]={};
+  }
   /* jump the shared calendar to the training's first month so it's visible immediately */
   const d0=new Date(uniq[0]+'T00:00:00');calY=d0.getFullYear();calM=d0.getMonth();
-  renderTrn();refreshAttSel();renderFbkForms();renderCalendar();trnDlg.close();ev.target.reset();
-  $('tfNumDays').value=1;renderDayPickers();$('tfAgencyWrap').hidden=true;
-  toast(code+' saved — '+days.length+' day(s), '+(per*days.length)+' h total. It is on the Training Calendar; click its row to add participants.');
+  renderTrn();refreshAttSel();renderAtt();renderFbkForms();renderCalendar();trnDlg.close();
+  toast(code+(editCode?' updated':' saved')+' — '+days.length+' day(s), '+(per*days.length)+' h total.'+(editCode?' The change is logged to the audit trail.':' It is on the Training Calendar; click its row to add participants.'));
 });
 
 /* ---------- shared training calendar (all roles) ---------- */
@@ -1619,7 +1688,7 @@ function renderExp(){
     tr.innerHTML=`<td>${r.trn}</td><td class="mono">${r.dates}</td><td>${r.cat}</td><td>${r.type}</td>
       <td>${r.ents.map(e=>`<span class="chip acc">${e.ent} ${e.n}</span>`).join(' ')||'—'}</td><td>${r.vendor}</td>
       <td class="num mono">${inr(r.budget)}</td><td class="num mono">${inr(r.actual)}</td><td class="num mono">${inr(paid)}</td>
-      <td class="num mono">${inr(pend)}</td><td class="num mono" style="color:${varr>=0?'var(--good)':'var(--crit)'}">${varr>=0?'+':''}${inr(varr)}</td>
+      <td class="num mono" style="${pend<0?'color:var(--crit)':''}" title="${pend<0?'Paid exceeds actual — open and edit this record':''}">${inr(pend)}</td><td class="num mono" style="color:${varr>=0?'var(--good)':'var(--crit)'}">${varr>=0?'+':''}${inr(varr)}</td>
       <td><span class="chip ${ac}">${r.appr}</span></td><td><span class="chip ${pc}">${ps}</span></td><td><button class="btn small danger" aria-label="Delete expense for ${r.trn}">🗑</button></td>`;
     tr.addEventListener('click',()=>openExp(i));
     tr.querySelector('.danger').addEventListener('click',ev=>{
@@ -1673,8 +1742,9 @@ function openExp(i){
     <h2 style="margin:16px 0 8px">Invoice copies (${(r.invoices||[]).length})</h2>
     ${(r.invoices||[]).length?`<div class="hstack">${r.invoices.map(f=>`<span class="datechip">📄 ${f}</span>`).join('')}</div>`:'<p style="color:var(--ink2);font-size:13px">No invoice copies uploaded yet.</p>'}
     <div class="hstack" style="margin-top:12px">
-      <button class="btn small primary" onclick="uploadInvoice(${i})">⬆ Upload invoice copies</button>
-      <button class="btn small" onclick="toast('Mocked — adds another part-payment row with date and amount; status recomputes.')">+ Record payment</button>
+      <button class="btn small primary" onclick="expView.close();openExpEdit(${i})">✎ Edit</button>
+      <button class="btn small" onclick="uploadInvoice(${i})">⬆ Upload invoice copies</button>
+      <button class="btn small" onclick="expView.close();openExpEdit(${i})">+ Record payment</button>
     </div>`;
   expView.showModal();
 }
@@ -1699,10 +1769,45 @@ function sumEntParts(){
   const sum=vals.reduce((a,b)=>a+b,0);
   if(sum>0)$('xfNpart').value=sum;
 }
-function addPayRow(){
-  $('xfPays').insertAdjacentHTML('beforeend',`<div class="payrow"><input type="date" aria-label="Payment date"><input type="number" min="0" placeholder="Amount ₹" aria-label="Payment amount"><button type="button" class="btn small" onclick="this.parentElement.remove()">✕</button></div>`);
+function addPayRow(dateVal,amtVal){
+  $('xfPays').insertAdjacentHTML('beforeend',`<div class="payrow"><input type="date" value="${dateVal||''}" aria-label="Payment date"><input type="number" min="0" placeholder="Amount ₹" value="${amtVal!=null?amtVal:''}" aria-label="Payment amount"><button type="button" class="btn small" onclick="this.parentElement.remove()">✕</button></div>`);
 }
 addPayRow();
+
+let expEditIdx=null;
+function openExpEdit(i){
+  const r=EXPREC[i];if(!r)return;
+  expEditIdx=i;
+  $('expDlgTitle').textContent='Edit expense record — '+r.trn;
+  const sel=$('xfTrn');
+  if(![...sel.options].some(o=>o.value===r.trn||o.text===r.trn))sel.insertAdjacentHTML('beforeend',`<option>${r.trn}</option>`);
+  sel.value=r.trn;
+  $('xfDates').value=r.dates==='—'?'':r.dates;
+  $('xfLoc').value=r.loc==='—'?'':r.loc;
+  document.querySelectorAll('#xfEnts input[type="checkbox"]').forEach(cb=>{
+    const n=document.querySelector(`#xfEnts input.entn[data-ent="${cb.dataset.ent}"]`);
+    const found=(r.ents||[]).find(e=>e.ent===cb.dataset.ent);
+    cb.checked=!!found;n.disabled=!found;n.value=found?found.n:'';
+  });
+  $('xfNpart').value=r.npart;
+  $('xfCat').value=r.cat;$('xfType').value=r.type;$('xfType').dispatchEvent(new Event('change'));
+  if(r.type==='External')$('xfVendor').value=r.vendor==='—'?'':r.vendor;
+  $('xfDesc').value=r.desc==='—'?'':r.desc;
+  $('xfBudget').value=r.budget;$('xfActual').value=r.actual;
+  $('xfAppr').value=r.appr;
+  $('xfPays').innerHTML='';
+  (r.payments||[]).forEach(p=>{const t=Date.parse(p.date);addPayRow(isNaN(t)?'':isoDate(new Date(t)),p.amt);});
+  if(!(r.payments||[]).length)addPayRow();
+  xfInvFiles=[...(r.invoices||[])];renderInvChips();
+  $('xfRemark').value=r.remark==='—'?'':r.remark;
+  expDlg.showModal();
+}
+expDlg.addEventListener('close',()=>{
+  expEditIdx=null;$('expDlgTitle').textContent='New expense record';
+  $('expForm').reset();$('xfPays').innerHTML='';addPayRow();$('xfVendor').disabled=true;
+  document.querySelectorAll('#xfEnts input.entn').forEach(n=>{n.disabled=true;n.value='';});
+  xfInvFiles=[];renderInvChips();
+});
 
 /* invoice copies — multiple uploads */
 let xfInvFiles=[],invMode='form',invRecIdx=null;
@@ -1744,6 +1849,7 @@ renderInvChips();
 })();
 $('expForm').addEventListener('submit',ev=>{
   ev.preventDefault();
+  const editIdx=expEditIdx;
   const payments=[...document.querySelectorAll('#xfPays .payrow')].map(row=>{
     const [d,a]=row.querySelectorAll('input');
     if(!d.value||!a.value)return null;
@@ -1754,12 +1860,21 @@ $('expForm').addEventListener('submit',ev=>{
     return {ent:cb.dataset.ent,n:+n.value||0};
   }).filter(e=>e.n>0);
   if(!ents.length){toast('Tick at least one entity and enter its participant count — the expense must belong to the entities whose people attended.');return;}
-  EXPREC.unshift({trn:$('xfTrn').value,dates:$('xfDates').value||'—',loc:$('xfLoc').value||'—',npart:+$('xfNpart').value||ents.reduce((s,e)=>s+e.n,0),ents,cat:$('xfCat').value,type:$('xfType').value,vendor:$('xfType').value==='External'?($('xfVendor').value||'—'):'—',desc:$('xfDesc').value||'—',budget:+$('xfBudget').value||0,actual:+$('xfActual').value||0,payments,invoices:[...xfInvFiles],appr:$('xfAppr').value,remark:$('xfRemark').value||'—'});
-  renderExp();expDlg.close();ev.target.reset();
-  $('xfPays').innerHTML='';addPayRow();$('xfVendor').disabled=true;
-  xfInvFiles=[];renderInvChips();
-  document.querySelectorAll('#xfEnts input.entn').forEach(n=>{n.disabled=true;n.value='';});
-  toast('Expense record saved — entity shares split pro-rata by headcount; open the row to see the split.');
+  const budget=+$('xfBudget').value||0,actual=+$('xfActual').value||0;
+  const paid=payments.reduce((s,p)=>s+p.amt,0);
+  if(actual<=0){toast('Enter the actual expense amount — it cannot be zero.');return;}
+  if(paid>actual){toast('Amount paid (₹'+inr(paid)+') exceeds the actual expense (₹'+inr(actual)+') — correct the actual expense or the payment rows before saving.');return;}
+  if(budget<=0){toast('Enter the approved budget — it cannot be zero.');return;}
+  const rec={trn:$('xfTrn').value,dates:$('xfDates').value||'—',loc:$('xfLoc').value||'—',npart:+$('xfNpart').value||ents.reduce((s,e)=>s+e.n,0),ents,cat:$('xfCat').value,type:$('xfType').value,vendor:$('xfType').value==='External'?($('xfVendor').value||'—'):'—',desc:$('xfDesc').value||'—',budget,actual,payments,invoices:[...xfInvFiles],appr:$('xfAppr').value,remark:$('xfRemark').value||'—'};
+  if(editIdx!==null){
+    EXPREC[editIdx]=rec;
+    renderExp();expDlg.close();
+    toast('Expense record updated — pending, variance and entity split recomputed; logged to the audit trail.');
+  }else{
+    EXPREC.unshift(rec);
+    renderExp();expDlg.close();
+    toast('Expense record saved — entity shares split pro-rata by headcount; open the row to see the split.');
+  }
 });
 
 /* ---------- users & access ---------- */
