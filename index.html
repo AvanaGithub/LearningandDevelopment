@@ -193,6 +193,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
 <div class="layout">
 <nav class="rail" aria-label="Modules">
   <button class="nav" data-page="dash" aria-current="true"><span class="mnum">◈</span>Dashboard</button>
+  <button class="nav" data-page="cal"><span class="mnum">▤</span>Training Calendar</button>
   <div class="grouplbl">Phase 1</div>
   <button class="nav" data-page="emp"><span class="mnum">01</span>Employees</button>
   <button class="nav" data-page="trn"><span class="mnum">02</span>Trainings</button>
@@ -241,6 +242,28 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <div class="note">This system is the audit evidence trail for <strong>ISO 13485</strong> training records under SOP series <span class="mono">AMD/QSP04</span>. Every create, edit and correction is logged with user, timestamp and reason.</div>
 </section>
 
+<!-- ================= TRAINING CALENDAR (all roles) ================= -->
+<section class="page" id="page-cal">
+  <h1>Training calendar</h1>
+  <p class="sub">Visible to everyone in the organisation — every training from the plan, on its planned days. Click a training on the calendar or in the list to open its details.</p>
+  <div class="card pad">
+    <div class="hstack" style="margin-bottom:12px">
+      <button class="btn small" id="calPrev" aria-label="Previous month">◀</button>
+      <strong id="calMonthLbl" style="min-width:160px;text-align:center">September 2026</strong>
+      <button class="btn small" id="calNext" aria-label="Next month">▶</button>
+      <span style="flex:1"></span>
+      <span class="chip acc">Internal</span><span class="chip warn">External</span><span class="chip neutral">• = Mandatory</span>
+    </div>
+    <div class="cal" id="calGrid2"></div>
+  </div>
+  <h2>Trainings in <span id="calMonthLbl2">September 2026</span></h2>
+  <div class="tablewrap"><table id="calList">
+    <thead><tr><th>Dates</th><th>Training</th><th>Mode</th><th>Trainer</th><th>Status</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="note">Postponed trainings keep their original planned date visible for plan-vs-actual reporting. New trainings planned in Module 02 (or imported from Excel) appear here automatically.</div>
+</section>
+
 <!-- ================= 01 EMPLOYEES ================= -->
 <section class="page" id="page-emp">
   <h1>Module 01 · Employee list</h1>
@@ -264,8 +287,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <h1>Module 02 · Trainings</h1>
   <p class="sub">Plan the training, then click its row to open it — add participants, generate the attendance QR, and manage the session from there.</p>
   <div class="toolbar">
-    <button class="btn" onclick="trnView('list')">List</button>
-    <button class="btn" onclick="trnView('cal')">Calendar · Sep 2026</button>
+    <button class="btn" onclick="document.querySelector('.rail .nav[data-page=cal]').click()">▤ Open training calendar</button>
     <div class="grow"></div>
     <button class="btn admin-only" onclick="importFor('Trainings')">⬆ Import (Excel)</button>
     <button class="btn" onclick="exportTab('trn')">⬇ Export</button>
@@ -275,10 +297,6 @@ body[data-role="employee"] .mgr-up{display:none!important}
     <thead><tr><th>Code</th><th>Title</th><th>Category</th><th>Mode</th><th>Trainer</th><th>Dates</th><th class="num">Hours</th><th class="num">Participants</th><th>Status</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <div id="trnCal" class="card pad" hidden>
-    <div class="cal" id="calGrid"></div>
-    <p style="color:var(--ink2);font-size:12px;margin:10px 0 0">Teal — internal · amber — external. Postponed trainings keep their original planned date visible for plan-vs-actual reporting.</p>
-  </div>
   <div class="note">Each training carries a material library (agenda, decks, trainer profile, signed attendance scan) available to participants before and after the session. Mandatory trainings carry a validity period that drives re-training alerts.</div>
 </section>
 
@@ -694,7 +712,7 @@ const TRAININGS=[
  {code:"TRG-107",title:"ISO 13485 Awareness",cat:"Compliance",mode:"Online",trainer:"QA team",tt:"Internal",dates:"22 Sep",days:["22 Sep"],hours:4,seats:60,mand:"Mandatory",status:"Confirmed",part:["ZH-1042","ZH-1077","ZH-0918","ZH-0844","ZH-0721","ZH-1101","ZH-1115"]},
  {code:"TRG-108",title:"Advanced Negotiation Skills",cat:"Soft skill",mode:"External seminar",trainer:"Dale & Grey Consulting",tt:"External agency",dates:"29 Sep",days:["29 Sep"],hours:8,seats:12,mand:"Optional",status:"Awaiting cost approval",part:["ZH-1042","ZH-0918"]},
  {code:"TRG-101",title:"Field OJT — MedTech Maverick month 3",cat:"On-the-job",mode:"Field",trainer:"Assigned mentors",tt:"Internal",dates:"All month",days:[],hours:0,seats:6,mand:"Mandatory",status:"In progress",part:["ZH-1130","ZH-1131"]},
- {code:"TRG-099",title:"Fire Safety Drill",cat:"Safety",mode:"Classroom",trainer:"SafeWorks",tt:"External agency",dates:"Was 05 Sep → 10 Oct",days:[],hours:2,seats:100,mand:"Mandatory",status:"Postponed",part:[]},
+ {code:"TRG-099",title:"Fire Safety Drill",cat:"Safety",mode:"Classroom",trainer:"SafeWorks",tt:"External agency",dates:"Was 05 Sep → 10 Oct",days:["10 Oct"],hours:2,seats:100,mand:"Mandatory",status:"Postponed",part:[]},
 ];
 
 const ATT={
@@ -737,6 +755,7 @@ navBtns.forEach(b=>b.addEventListener('click',()=>{
   b.setAttribute('aria-current','true');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   $('page-'+b.dataset.page).classList.add('on');
+  if(b.dataset.page==='cal'&&typeof renderCalendar==='function')renderCalendar();
   window.scrollTo({top:0});
 }));
 
@@ -1067,7 +1086,6 @@ $('empForm').addEventListener('submit',ev=>{
 });
 
 /* ---------- trainings ---------- */
-function trnView(v){$('trnList').hidden=v!=='list';$('trnCal').hidden=v!=='cal';}
 function renderTrn(){
   const tb=document.querySelector('#trnTable tbody');tb.innerHTML='';
   TRAININGS.forEach(t=>{
@@ -1160,18 +1178,43 @@ $('trnForm').addEventListener('submit',ev=>{
   toast(code+' saved — now click its row in the list to add participants.');
 });
 
-/* calendar Sept 2026 (starts Tuesday) */
-(function(){
-  const g=$('calGrid');
+/* ---------- shared training calendar (all roles) ---------- */
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let calY=2026,calM=8; // opens on September 2026, where the sample plan lives
+function trnOnDay(d,m){
+  return TRAININGS.filter(t=>t.days.some(s=>{const p=s.trim().split(/\s+/);return +p[0]===d&&MONTHS.indexOf(p[1])===m;}));
+}
+function renderCalendar(){
+  const lbl=new Date(calY,calM,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  $('calMonthLbl').textContent=lbl;$('calMonthLbl2').textContent=lbl;
+  const g=$('calGrid2');g.innerHTML='';
   ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>g.insertAdjacentHTML('beforeend',`<div class="dow">${d}</div>`));
-  const evts={1:['Induction'],2:['Induction'],3:['Induction'],5:['Fire Safety ✕'],8:['Orthotics DD'],9:['Orthotics DD'],15:['Endoscopy B2'],16:['Endoscopy B2'],22:['ISO 13485'],29:['Negotiation*']};
-  g.insertAdjacentHTML('beforeend','<div class="day blank"></div>');
-  for(let d=1;d<=30;d++){
-    let inner=`<span class="dnum">${d}</span>`;
-    (evts[d]||[]).forEach(e=>{inner+=`<span class="evt${e.includes('*')?' ext':''}">${e.replace('*','')}</span>`;});
-    g.insertAdjacentHTML('beforeend',`<div class="day">${inner}</div>`);
+  const off=(new Date(calY,calM,1).getDay()+6)%7;
+  const n=new Date(calY,calM+1,0).getDate();
+  for(let i=0;i<off;i++)g.insertAdjacentHTML('beforeend','<div class="day blank"></div>');
+  const today=new Date();
+  for(let d=1;d<=n;d++){
+    const isToday=today.getFullYear()===calY&&today.getMonth()===calM&&today.getDate()===d;
+    let inner=`<span class="dnum"${isToday?' style="font-weight:700;color:var(--accent-ink)"':''}>${d}${isToday?' · today':''}</span>`;
+    trnOnDay(d,calM).forEach(t=>{
+      inner+=`<button class="evt${t.tt==='External agency'?' ext':''}" data-cal="${t.code}" title="${t.title} — ${t.trainer}" style="border:0;width:100%;text-align:left;cursor:pointer;font-family:inherit">${t.mand==='Mandatory'?'• ':''}${t.title}</button>`;
+    });
+    g.insertAdjacentHTML('beforeend',`<div class="day"${isToday?' style="border-color:var(--accent)"':''}>${inner}</div>`);
   }
-})();
+  const tb=document.querySelector('#calList tbody');tb.innerHTML='';
+  const inMonth=TRAININGS.filter(t=>t.days.some(s=>MONTHS.indexOf(s.trim().split(/\s+/)[1])===calM));
+  inMonth.forEach(t=>{
+    const stc=t.status==='Completed'?'good':t.status==='Postponed'?'crit':t.status.includes('Awaiting')?'warn':'acc';
+    const tr=document.createElement('tr');tr.className='clickable';
+    tr.innerHTML=`<td class="mono">${t.dates}</td><td>${t.title}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.mode}</td><td>${t.trainer}</td><td><span class="chip ${stc}">${t.status}</span></td>`;
+    tr.addEventListener('click',()=>openTrn(t.code));
+    tb.appendChild(tr);
+  });
+  if(!inMonth.length)tb.innerHTML='<tr><td colspan="5" style="color:var(--ink2)">No trainings planned this month yet.</td></tr>';
+}
+$('calPrev').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--;}renderCalendar();});
+$('calNext').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++;}renderCalendar();});
+$('calGrid2').addEventListener('click',e=>{const b=e.target.closest('[data-cal]');if(b)openTrn(b.dataset.cal);});
 
 /* ---------- attendance ---------- */
 const attPct=m=>Math.round(m.reduce((s,v)=>s+(v==='P'?1:v==='H'?0.5:0),0)/m.length*100);
@@ -1579,7 +1622,7 @@ function rptCompliance(){
 }
 
 /* initial renders */
-renderEmp();renderTrn();renderExp();
+renderEmp();renderTrn();renderExp();renderCalendar();
 
 /* ---------- participant route: opening the QR link (#att/CODE or #fb/CODE) shows the phone page ---------- */
 (function(){
