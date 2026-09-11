@@ -119,6 +119,12 @@ dialog::backdrop{background:rgba(10,20,18,.45)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px;margin:0}
 .kv dt{color:var(--ink2)} .kv dd{margin:0}
 
+.msel{position:relative;display:inline-block}
+.msel-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:45;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px 12px;min-width:280px;max-height:300px;overflow:auto}
+.msel-menu label{display:flex;gap:8px;align-items:center;padding:5px 2px;font-size:13px;cursor:pointer}
+.msel-menu input{accent-color:var(--accent)}
+.msel-menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+
 .datechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent-ink);border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600}
 .datechip button{border:0;background:none;cursor:pointer;color:inherit;font-size:12px;padding:0 3px}
 .payrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:6px;align-items:center}
@@ -309,7 +315,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <h1>Module 04 · Attendance</h1>
   <p class="sub">Attendance runs separately per training, per participant, per day. Participants can self-mark by scanning the training's QR — the scan tags them to the right training automatically — and the organizer or trainer can mark or correct anything, with every change logged.</p>
   <div class="toolbar">
-    <label><span class="select-label">Training</span><select class="select" id="attTrnSel"></select></label>
+    <span class="select-label">Filter</span><div class="msel" id="attFilter"></div>
     <label><span class="select-label">Marking as</span>
       <select class="select" id="attWho">
         <option>Organizer — Lokshni (L&amp;D Admin)</option>
@@ -319,19 +325,8 @@ body[data-role="employee"] .mgr-up{display:none!important}
     <button class="btn admin-only" onclick="importFor('Attendance')">⬆ Import</button>
     <button class="btn" onclick="exportTab('att')">⬇ Export</button>
   </div>
-  <div class="card pad">
-    <div class="hstack" style="margin-bottom:10px">
-      <button class="btn small primary" onclick="markAllPresent()">✓ Mark all present</button>
-      <button class="btn small" onclick="qrForAttendance()">▦ QR check-in</button>
-      <span style="flex:1"></span>
-      <button class="btn small admin-only" onclick="toast('Upload the scanned signed sheet — required before this training can be closed.')">⬆ Signed sheet</button>
-    </div>
-    <div class="tablewrap" style="box-shadow:none"><table style="min-width:560px" id="attTable">
-      <thead id="attHead"></thead>
-      <tbody id="attBody"></tbody>
-    </table></div>
-    <p style="font-size:12px;color:var(--ink2);margin:10px 0 0">– not marked · P present · A absent · H half-day. Click a cell to cycle, or use <strong>Edit</strong> on a row to correct a participant with a recorded reason. Eligibility assumes minimum <strong>75%</strong> attendance (open checklist item F3).</p>
-  </div>
+  <p style="font-size:12px;color:var(--ink2);margin:0 0 12px">– not marked · P present · A absent · H half-day. Click a cell to cycle, or use <strong>Edit</strong> on a row to correct a participant with a recorded reason. Eligibility assumes minimum <strong>75%</strong> attendance (open checklist item F3). Tick several trainings in the filter to view their registers together.</p>
+  <div id="attGrids"></div>
   <h2>Correction audit log</h2>
   <div class="card pad">
     <ul class="loglist" id="attLog">
@@ -347,6 +342,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <h1>Module 05 · Feedback</h1>
   <p class="sub">Each training carries its own feedback form — built here or uploaded. Share it by QR or link; responses tag to that training's form automatically. When completion triggers the auto-e-mail, anyone who already submitted via the QR or link is excluded.</p>
   <div class="toolbar">
+    <span class="select-label">Filter</span><div class="msel" id="fbkFilter"></div>
     <div class="grow"></div>
     <button class="btn admin-only" onclick="importFor('Feedback')">⬆ Import</button>
     <button class="btn" onclick="exportTab('fbk')">⬇ Export results</button>
@@ -704,6 +700,36 @@ function nowIST(){return new Date().toLocaleString('en-IN',{day:'2-digit',month:
 const ENTNAME={AMD:"Medical Devices",ASS:"Surgical Systems",ATS:"Technology Svcs"};
 const ENTFULL={AMD:"Avana Medical Devices Pvt Ltd",ASS:"Avana Surgical Systems Pvt Ltd",ATS:"Avana Technology Services Pvt Ltd"};
 
+/* multi-choice dropdown filter (used on Attendance and Feedback) */
+let attMsel=null,fbkMsel=null;
+function makeMsel(el,label,getItems,onChange){
+  const state={sel:new Set()};
+  el.innerHTML='<button type="button" class="btn msel-btn"></button><div class="msel-menu" hidden></div>';
+  const btn=el.querySelector('.msel-btn'),menu=el.querySelector('.msel-menu');
+  function lbl(){
+    const items=getItems();const n=[...state.sel].filter(v=>items.some(i=>i.v===v)).length;
+    let txt=label+': All';
+    if(n===1){const it=items.find(i=>state.sel.has(i.v));txt=it?it.t:'1 selected';if(txt.length>36)txt=txt.slice(0,34)+'…';}
+    else if(n>1)txt=label+': '+n+' selected';
+    btn.textContent=txt+' ▾';
+  }
+  function fill(){
+    const items=getItems();
+    menu.innerHTML='<label><input type="checkbox" data-all'+(state.sel.size===0?' checked':'')+'> All trainings</label><hr>'+
+      items.map(i=>'<label><input type="checkbox" value="'+i.v+'"'+(state.sel.has(i.v)?' checked':'')+'> '+i.t+'</label>').join('');
+    menu.querySelector('[data-all]').addEventListener('change',()=>{state.sel.clear();fill();lbl();onChange();});
+    menu.querySelectorAll('input[value]').forEach(c=>c.addEventListener('change',()=>{
+      if(c.checked)state.sel.add(c.value);else state.sel.delete(c.value);
+      fill();lbl();onChange();
+    }));
+  }
+  btn.addEventListener('click',()=>{menu.hidden=!menu.hidden;if(!menu.hidden)fill();});
+  document.addEventListener('click',e=>{if(!el.contains(e.target))menu.hidden=true;});
+  state.refresh=()=>{const valid=new Set(getItems().map(i=>i.v));[...state.sel].forEach(v=>{if(!valid.has(v))state.sel.delete(v);});lbl();};
+  lbl();
+  return state;
+}
+
 /* generic admin-only delete confirmation */
 let delFn=null;
 function confirmDel(msg,fn){$('delMsg').textContent=msg;delFn=fn;delDlg.showModal();}
@@ -890,8 +916,8 @@ function simulateScan(){
   renderScanInto($('scanBody'),qrCtx.mode,qrCtx.code,{live:true});
   scanDlg.showModal();
 }
-function qrForAttendance(){
-  const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);
+function qrForAttendance(code){
+  const t=TRAININGS.find(x=>x.code===code);if(!t)return;
   showQr('Attendance QR — '+t.title,scanUrl('att',code),
    'Display this at the venue. Scanning opens the check-in page for '+code+' — the participant confirms and attendance tags to this training automatically. Use "Test now" below to run the participant flow on this screen and watch the grid update.',{mode:'att',code});
 }
@@ -1101,9 +1127,9 @@ function exportTab(tab){
     downloadXlsx('Trainings.xlsx',['Code','Title','Category','Mode','Trainer','Trainer type','Dates','Hours','Seats','Participants','Mandatory','Status'],
       TRAININGS.map(t=>[t.code,t.title,t.cat,t.mode,t.trainer,t.tt,t.dates,t.hours,t.seats,t.part.length,t.mand,t.status]),'Trainings');
   }else if(tab==='att'){
-    const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);const data=ATT[code];
-    downloadXlsx('Attendance-'+code+'.xlsx',['Participant',...t.days,'Percent'],
-      Object.entries(data).map(([c,m])=>[empName(c),...m,attPct(m)+'%']),'Attendance');
+    const list=attShown();
+    downloadXlsx('Attendance.xlsx',['Training','Batch','Dates','Participant','Day-wise marks','Percent'],
+      list.flatMap(t=>Object.entries(ATT[t.code]).map(([c,m])=>[t.title,t.batch||'—',t.dates,empName(c),t.days.map((d,i)=>d+': '+m[i]).join(' | '),attPct(m)+'%'])),'Attendance');
   }else if(tab==='fbk'){
     downloadXlsx('Feedback-Results.xlsx',['Respondent','Relevance','Knowledge','Delivery','Confidence','Overall','Comment'],FB_RESP,'Feedback');
   }else if(tab==='exp'){
@@ -1406,29 +1432,44 @@ $('calGrid2').addEventListener('click',e=>{const b=e.target.closest('[data-cal]'
 
 /* ---------- attendance ---------- */
 const attPct=m=>Math.round(m.reduce((s,v)=>s+(v==='P'?1:v==='H'?0.5:0),0)/m.length*100);
-function refreshAttSel(){
-  const sel=$('attTrnSel');const cur=sel.value;sel.innerHTML='';
-  Object.keys(ATT).forEach(c=>{const t=TRAININGS.find(x=>x.code===c);
-    if(t&&t.days.length&&Object.keys(ATT[c]).length)sel.insertAdjacentHTML('beforeend',`<option value="${c}">${t.title}${t.batch?' — '+t.batch:''} (${t.dates})</option>`);});
-  if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+function attEligible(){return TRAININGS.filter(t=>t.days.length&&ATT[t.code]);}
+function attShown(){
+  const all=attEligible();
+  if(!attMsel||attMsel.sel.size===0)return all.filter(t=>Object.keys(ATT[t.code]).length);
+  return all.filter(t=>attMsel.sel.has(t.code));
 }
+function refreshAttSel(){if(attMsel)attMsel.refresh();}
 function renderAtt(){
-  const code=$('attTrnSel').value;const t=TRAININGS.find(x=>x.code===code);const data=ATT[code];
-  if(!t||!data){$('attHead').innerHTML='';$('attBody').innerHTML='<tr><td style="color:var(--ink2)">No training selected.</td></tr>';return;}
-  $('attHead').innerHTML='<tr><th>Participant</th>'+t.days.map(d=>`<th>${d}</th>`).join('')+'<th class="num">%</th><th>Eligible</th><th class="admin-only">Actions</th></tr>';
-  const tb=$('attBody');tb.innerHTML='';
-  Object.entries(data).forEach(([code2,marks])=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${empName(code2)}</td>`+marks.map((m,i)=>`<td><button class="attcell ${m==='–'?'':m}" data-i="${i}" aria-label="${t.days[i]} attendance for ${empName(code2)}">${m}</button></td>`).join('')
-      +`<td class="num mono"></td><td></td><td class="admin-only" style="white-space:nowrap"><button class="btn small" onclick="openAttEdit('${code}','${code2}')">Edit</button> <button class="btn small danger" onclick="delAttRow('${code}','${code2}')" aria-label="Remove ${empName(code2)} from this training">🗑</button></td>`;
-    tb.appendChild(tr);
-    tr.querySelectorAll('.attcell').forEach(c=>c.addEventListener('click',()=>{
-      const prev=c.textContent;const next={'–':'P',P:'A',A:'H',H:'–'}[prev];
-      c.textContent=next;c.className='attcell '+(next==='–'?'':next);marks[c.dataset.i]=next;recalcAtt(tr,marks);
-      logAtt(`${$('attWho').value} changed ${empName(code2)}, ${t.days[c.dataset.i]}: ${prev} → ${next}`);
-      saveState();
-    }));
-    recalcAtt(tr,marks);
+  const box=$('attGrids');if(!box)return;box.innerHTML='';
+  const list=attShown();
+  if(!list.length){box.innerHTML='<div class="card pad" style="color:var(--ink2)">No trainings with attendance match the filter.</div>';saveState();return;}
+  list.forEach(t=>{
+    const code=t.code,data=ATT[code];
+    const card=document.createElement('div');card.className='card pad';card.style.marginBottom='14px';
+    card.innerHTML=`<div class="hstack" style="margin-bottom:10px"><strong>${t.title}${t.batch?' — '+t.batch:''}</strong><span class="chip acc">${t.dates}</span><span style="flex:1"></span>
+      <button class="btn small primary" data-ma>✓ Mark all present</button>
+      <button class="btn small" data-qr>▦ QR check-in</button>
+      <button class="btn small admin-only" data-ss>⬆ Signed sheet</button></div>
+      <div class="tablewrap" style="box-shadow:none"><table style="min-width:560px"><thead><tr><th>Participant</th>${t.days.map(d=>`<th>${d}</th>`).join('')}<th class="num">%</th><th>Eligible</th><th class="admin-only">Actions</th></tr></thead><tbody></tbody></table></div>`;
+    const tb=card.querySelector('tbody');
+    Object.entries(data).forEach(([code2,marks])=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${empName(code2)}</td>`+marks.map((m,i)=>`<td><button class="attcell ${m==='–'?'':m}" data-i="${i}" aria-label="${t.days[i]} attendance for ${empName(code2)}">${m}</button></td>`).join('')
+        +`<td class="num mono"></td><td></td><td class="admin-only" style="white-space:nowrap"><button class="btn small" onclick="openAttEdit('${code}','${code2}')">Edit</button> <button class="btn small danger" onclick="delAttRow('${code}','${code2}')" aria-label="Remove ${empName(code2)} from this training">🗑</button></td>`;
+      tb.appendChild(tr);
+      tr.querySelectorAll('.attcell').forEach(c=>c.addEventListener('click',()=>{
+        const prev=c.textContent;const next={'–':'P',P:'A',A:'H',H:'–'}[prev];
+        c.textContent=next;c.className='attcell '+(next==='–'?'':next);marks[c.dataset.i]=next;recalcAtt(tr,marks);
+        logAtt(`${$('attWho').value} changed ${empName(code2)}, ${t.days[c.dataset.i]}: ${prev} → ${next}`);
+        saveState();
+      }));
+      recalcAtt(tr,marks);
+    });
+    if(!Object.keys(data).length)tb.innerHTML='<tr><td style="color:var(--ink2)">No participants yet — add them from this training\'s row in Module 02.</td></tr>';
+    card.querySelector('[data-ma]').addEventListener('click',()=>markAllPresent(code));
+    card.querySelector('[data-qr]').addEventListener('click',()=>qrForAttendance(code));
+    card.querySelector('[data-ss]').addEventListener('click',()=>toast('Upload the scanned signed sheet — required before this training can be closed.'));
+    box.appendChild(card);
   });
   saveState();
 }
@@ -1440,8 +1481,9 @@ function recalcAtt(tr,marks){
   cells[cells.length-2].innerHTML=unmarked?'<span class="chip neutral">Not marked</span>':(score>=75?'<span class="chip good">Eligible</span>':'<span class="chip crit">Below 75%</span>');
 }
 function logAtt(msg){$('attLog').insertAdjacentHTML('afterbegin',`<li><span class="mono">${nowIST()}</span> — ${msg}</li>`);}
-function markAllPresent(){
-  const code=$('attTrnSel').value;const data=ATT[code];const t=TRAININGS.find(x=>x.code===code);
+function markAllPresent(code){
+  const data=ATT[code];const t=TRAININGS.find(x=>x.code===code);
+  if(!data||!t)return;
   Object.values(data).forEach(m=>m.forEach((v,i)=>m[i]='P'));
   renderAtt();
   logAtt(`${$('attWho').value} marked ALL participants present for ${t.title}`);
@@ -1470,15 +1512,17 @@ $('attEditForm').addEventListener('submit',ev=>{
   renderAtt();attEditDlg.close();
   toast(changes.length?'Correction saved and logged with your reason.':'No changes made.');
 });
-refreshAttSel();
-$('attTrnSel').addEventListener('change',renderAtt);
+attMsel=makeMsel($('attFilter'),'Trainings',()=>attEligible().map(t=>({v:t.code,t:t.title+(t.batch?' — '+t.batch:'')+' ('+t.dates+')'})),()=>renderAtt());
 renderAtt();
 
 /* ---------- feedback ---------- */
 const STD_QS=["Relevance of content to my job","Trainer's subject knowledge","Trainer's delivery and clarity","Quality of material handed out","Duration was adequate","Confidence to apply this at work","Overall rating","Would you recommend this training (NPS)"];
 function renderFbkForms(){
+  if(fbkMsel)fbkMsel.refresh();
   const tb=document.querySelector('#fbkFormsTable tbody');tb.innerHTML='';
-  TRAININGS.filter(t=>t.status!=='Postponed').forEach(t=>{
+  const shown=TRAININGS.filter(t=>t.status!=='Postponed'&&(!fbkMsel||fbkMsel.sel.size===0||fbkMsel.sel.has(t.code)));
+  if(!shown.length)tb.innerHTML='<tr><td colspan="5" style="color:var(--ink2)">No trainings match the filter.</td></tr>';
+  shown.forEach(t=>{
     const f=FBFORMS[t.code];
     tb.insertAdjacentHTML('beforeend',`<tr>
       <td>${t.title}</td><td class="mono">${t.dates}</td>
@@ -1544,6 +1588,7 @@ $('fbkForm').addEventListener('submit',e=>{
   e.preventDefault();
   toast('Feedback submitted — tagged to this training\'s form; you\'re now excluded from the automatic feedback e-mail.');
 });
+fbkMsel=makeMsel($('fbkFilter'),'Trainings',()=>TRAININGS.filter(t=>t.status!=='Postponed').map(t=>({v:t.code,t:t.title+(t.batch?' — '+t.batch:'')})),()=>renderFbkForms());
 renderFbkForms();
 
 /* ---------- expenses ---------- */
