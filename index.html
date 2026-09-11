@@ -494,12 +494,19 @@ body[data-role="employee"] .mgr-up{display:none!important}
       <div><label for="tfMode">Mode</label><select id="tfMode"><option>Classroom</option><option>Online</option><option>On-the-job</option><option>Field</option><option>External seminar</option></select></div>
       <div><label for="tfTrainer">Trainer</label><input id="tfTrainer" required placeholder="Name / agency"></div>
       <div><label for="tfTT">Trainer type</label><select id="tfTT"><option>Internal</option><option>External agency</option></select></div>
-      <div class="full"><label for="tfDate">Training dates — add each day (2–3 day trainings supported)</label>
-        <div class="hstack" style="margin-top:4px"><input type="date" id="tfDate" style="max-width:180px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Archivo',sans-serif;color:var(--ink)"><button type="button" class="btn small" onclick="addTrnDate()">+ Add date</button></div>
+      <div class="full"><label for="tfDate">Training dates</label>
+        <div class="hstack" style="margin-top:4px">
+          <input type="date" id="tfDate" style="max-width:170px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Archivo',sans-serif;color:var(--ink)" aria-label="Start date">
+          <label style="font-size:11.5px;font-weight:600;color:var(--ink2)">No. of days
+            <input type="number" id="tfNumDays" min="1" value="1" style="width:64px;margin-left:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font:13px 'Archivo',sans-serif;color:var(--ink)"></label>
+          <button type="button" class="btn small" onclick="addTrnDate()">+ Add date(s)</button>
+        </div>
         <div class="hstack" id="tfDateChips" style="margin-top:8px"></div>
+        <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 0">One date is enough — pick it and save. For a multi-day block, set "No. of days" (e.g. 3) and the consecutive dates are added from the start date automatically. Add more blocks for split schedules or month-long programmes; ✕ removes a day.</p>
       </div>
-      <div><label for="tfHours">Training hours (total)</label><input id="tfHours" type="number" min="1" value="8"></div>
+      <div><label for="tfBatch">Batch (optional)</label><input id="tfBatch" placeholder="e.g. Batch 2 — same training can run as several batches, even on the same day"></div>
       <div><label for="tfHoursDay">Hours per day</label><input id="tfHoursDay" type="number" min="1" value="8"></div>
+      <div><label for="tfHours">Total training hours (auto: days × hours/day)</label><input id="tfHours" type="number" min="1" value="8" readonly style="background:var(--panel2)"></div>
       <div><label for="tfSeats">Maximum seats</label><input id="tfSeats" type="number" min="1" value="20"></div>
       <div><label for="tfMand">Mandatory?</label><select id="tfMand"><option>Optional</option><option>Mandatory</option></select></div>
     </div>
@@ -751,7 +758,8 @@ function delAttRow(code,emp){
     toast(empName(emp)+' removed from '+code+' — logged to the audit trail.');
   });
 }
-const fmtDay=v=>{const d=new Date(v+'T00:00:00');return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'});};
+const MONTH_ABBR=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDay=v=>{const d=new Date(v+'T00:00:00');return String(d.getDate()).padStart(2,'0')+' '+MONTH_ABBR[d.getMonth()];};
 const BASEURL='https://learn.avana.in'; // placeholder — the real domain is checklist item B4
 
 /* ---------- data ---------- */
@@ -1205,7 +1213,7 @@ function renderTrn(){
   TRAININGS.forEach(t=>{
     const stc=t.status==='Completed'?'good':t.status==='Postponed'?'crit':t.status.includes('Awaiting')?'warn':'acc';
     const tr=document.createElement('tr');tr.className='clickable';
-    tr.innerHTML=`<td class="mono">${t.code}</td><td>${t.title}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.cat}</td><td>${t.mode}</td><td>${t.trainer}</td><td class="mono">${t.dates}</td><td class="num">${t.hours||'—'}</td><td class="num mono">${t.part.length}/${t.seats}</td><td><span class="chip ${stc}">${t.status}</span></td><td class="admin-only"><button class="btn small danger" aria-label="Delete ${t.title}">🗑</button></td>`;
+    tr.innerHTML=`<td class="mono">${t.code}</td><td>${t.title}${t.batch?' <span class="chip acc">'+t.batch+'</span>':''}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.cat}</td><td>${t.mode}</td><td>${t.trainer}</td><td class="mono">${t.dates}</td><td class="num">${t.hours||'—'}</td><td class="num mono">${t.part.length}/${t.seats}</td><td><span class="chip ${stc}">${t.status}</span></td><td class="admin-only"><button class="btn small danger" aria-label="Delete ${t.title}">🗑</button></td>`;
     tr.addEventListener('click',()=>openTrn(t.code));
     tr.querySelector('.danger').addEventListener('click',ev=>{
       ev.stopPropagation();
@@ -1219,7 +1227,7 @@ function renderTrn(){
 /* training detail + participants */
 function openTrn(code){
   const t=TRAININGS.find(x=>x.code===code);if(!t)return;
-  $('tvTitle').textContent=t.code+' · '+t.title;
+  $('tvTitle').textContent=t.code+' · '+t.title+(t.batch?' — '+t.batch:'');
   const avail=EMPLOYEES.filter(e=>e.status==='Active'&&!t.part.includes(e.code));
   $('tvBody').innerHTML=`
     <dl class="kv">
@@ -1276,32 +1284,49 @@ function qrTrnFromDetail(code){
 /* multi-date picker for plan-training */
 let tfDates=[];
 function addTrnDate(){
-  const v=$('tfDate').value;if(!v){toast('Pick a date first, then press + Add date.');return;}
-  const f=fmtDay(v);
-  if(tfDates.includes(f)){toast(f+' is already added.');return;}
-  tfDates.push(f);renderTfDates();$('tfDate').value='';
+  const v=$('tfDate').value;if(!v){toast('Pick a start date first.');return;}
+  const n=Math.max(1,+$('tfNumDays').value||1);
+  const start=new Date(v+'T00:00:00');
+  let added=0;
+  for(let i=0;i<n;i++){
+    const d=new Date(start);d.setDate(start.getDate()+i);
+    const f=String(d.getDate()).padStart(2,'0')+' '+MONTH_ABBR[d.getMonth()];
+    if(!tfDates.includes(f)){tfDates.push(f);added++;}
+  }
+  renderTfDates();$('tfDate').value='';
+  if(added)toast(added+' day(s) added'+(n>1?' — consecutive block starting '+fmtDay(v):'')+'.');
 }
 function renderTfDates(){
-  $('tfDateChips').innerHTML=tfDates.map((d,i)=>`<span class="datechip">${d}<button type="button" aria-label="Remove ${d}" onclick="tfDates.splice(${i},1);renderTfDates()">✕</button></span>`).join('')||'<span style="font-size:12px;color:var(--ink2)">No dates added yet — a 2-day training gets two chips.</span>';
+  $('tfDateChips').innerHTML=tfDates.map((d,i)=>`<span class="datechip">${d}<button type="button" aria-label="Remove ${d}" onclick="tfDates.splice(${i},1);renderTfDates()">✕</button></span>`).join('')||'<span style="font-size:12px;color:var(--ink2)">No dates added yet.</span>';
+  updTotalHours();
 }
+function updTotalHours(){
+  const per=+$('tfHoursDay').value||0;
+  $('tfHours').value=per*Math.max(1,tfDates.length);
+}
+$('tfHoursDay').addEventListener('input',updTotalHours);
 renderTfDates();
 
 $('trnForm').addEventListener('submit',ev=>{
   ev.preventDefault();
-  if(!tfDates.length){toast('Add at least one training date.');return;}
+  if(!tfDates.length&&$('tfDate').value)addTrnDate(); // a picked-but-not-added date counts
+  if(!tfDates.length){toast('Pick at least one training date.');return;}
   const code='TRG-'+(109+TRAININGS.filter(t=>t.code.startsWith('TRG-1')).length);
   const days=[...tfDates];
-  TRAININGS.push({code,title:$('tfTitle').value,cat:$('tfCat').value,mode:$('tfMode').value,trainer:$('tfTrainer').value,tt:$('tfTT').value,dates:days.join(', '),days,hours:+$('tfHours').value,seats:+$('tfSeats').value,mand:$('tfMand').value,status:'Planned',part:[]});
+  const per=+$('tfHoursDay').value||8;
+  const batch=$('tfBatch').value.trim();
+  TRAININGS.push({code,title:$('tfTitle').value,batch,cat:$('tfCat').value,mode:$('tfMode').value,trainer:$('tfTrainer').value,tt:$('tfTT').value,dates:days.length>3?days[0]+' → '+days[days.length-1]+' ('+days.length+' days)':days.join(', '),days,hours:per*days.length,seats:+$('tfSeats').value,mand:$('tfMand').value,status:'Planned',part:[]});
   ATT[code]={};
-  renderTrn();refreshAttSel();renderFbkForms();trnDlg.close();ev.target.reset();tfDates=[];renderTfDates();
-  toast(code+' saved — now click its row in the list to add participants.');
+  /* jump the shared calendar to the training's first month so it's visible immediately */
+  const m0=MONTH_ABBR.indexOf(days[0].split(/[\s-]+/)[1]);if(m0>=0)calM=m0;
+  renderTrn();refreshAttSel();renderFbkForms();renderCalendar();trnDlg.close();ev.target.reset();tfDates=[];renderTfDates();$('tfNumDays').value=1;
+  toast(code+' saved — '+days.length+' day(s), '+(per*days.length)+' h total. It is on the Training Calendar now; click its row to add participants.');
 });
 
 /* ---------- shared training calendar (all roles) ---------- */
-const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let calY=2026,calM=8; // opens on September 2026, where the sample plan lives
 function trnOnDay(d,m){
-  return TRAININGS.filter(t=>t.days.some(s=>{const p=s.trim().split(/\s+/);return +p[0]===d&&MONTHS.indexOf(p[1])===m;}));
+  return TRAININGS.filter(t=>t.days.some(s=>{const p=s.trim().split(/[\s-]+/);return +p[0]===d&&MONTH_ABBR.indexOf(p[1])===m;}));
 }
 function renderCalendar(){
   const lbl=new Date(calY,calM,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
@@ -1316,16 +1341,16 @@ function renderCalendar(){
     const isToday=today.getFullYear()===calY&&today.getMonth()===calM&&today.getDate()===d;
     let inner=`<span class="dnum"${isToday?' style="font-weight:700;color:var(--accent-ink)"':''}>${d}${isToday?' · today':''}</span>`;
     trnOnDay(d,calM).forEach(t=>{
-      inner+=`<button class="evt${t.tt==='External agency'?' ext':''}" data-cal="${t.code}" title="${t.title} — ${t.trainer}" style="border:0;width:100%;text-align:left;cursor:pointer;font-family:inherit">${t.mand==='Mandatory'?'• ':''}${t.title}</button>`;
+      inner+=`<button class="evt${t.tt==='External agency'?' ext':''}" data-cal="${t.code}" title="${t.title}${t.batch?' ('+t.batch+')':''} — ${t.trainer}" style="border:0;width:100%;text-align:left;cursor:pointer;font-family:inherit">${t.mand==='Mandatory'?'• ':''}${t.title}${t.batch?' · '+t.batch:''}</button>`;
     });
     g.insertAdjacentHTML('beforeend',`<div class="day"${isToday?' style="border-color:var(--accent)"':''}>${inner}</div>`);
   }
   const tb=document.querySelector('#calList tbody');tb.innerHTML='';
-  const inMonth=TRAININGS.filter(t=>t.days.some(s=>MONTHS.indexOf(s.trim().split(/\s+/)[1])===calM));
+  const inMonth=TRAININGS.filter(t=>t.days.some(s=>MONTH_ABBR.indexOf(s.trim().split(/[\s-]+/)[1])===calM));
   inMonth.forEach(t=>{
     const stc=t.status==='Completed'?'good':t.status==='Postponed'?'crit':t.status.includes('Awaiting')?'warn':'acc';
     const tr=document.createElement('tr');tr.className='clickable';
-    tr.innerHTML=`<td class="mono">${t.dates}</td><td>${t.title}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.mode}</td><td>${t.trainer}</td><td><span class="chip ${stc}">${t.status}</span></td>`;
+    tr.innerHTML=`<td class="mono">${t.dates}</td><td>${t.title}${t.batch?' <span class="chip acc">'+t.batch+'</span>':''}${t.mand==='Mandatory'?' <span class="chip warn">Mandatory</span>':''}</td><td>${t.mode}</td><td>${t.trainer}</td><td><span class="chip ${stc}">${t.status}</span></td>`;
     tr.addEventListener('click',()=>openTrn(t.code));
     tb.appendChild(tr);
   });
@@ -1340,7 +1365,7 @@ const attPct=m=>Math.round(m.reduce((s,v)=>s+(v==='P'?1:v==='H'?0.5:0),0)/m.leng
 function refreshAttSel(){
   const sel=$('attTrnSel');const cur=sel.value;sel.innerHTML='';
   Object.keys(ATT).forEach(c=>{const t=TRAININGS.find(x=>x.code===c);
-    if(t&&t.days.length&&Object.keys(ATT[c]).length)sel.insertAdjacentHTML('beforeend',`<option value="${c}">${t.title} (${t.dates})</option>`);});
+    if(t&&t.days.length&&Object.keys(ATT[c]).length)sel.insertAdjacentHTML('beforeend',`<option value="${c}">${t.title}${t.batch?' — '+t.batch:''} (${t.dates})</option>`);});
   if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
 }
 function renderAtt(){
