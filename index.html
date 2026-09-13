@@ -330,7 +330,7 @@ body[data-role="employee"] .mgr-up{display:none!important}
   <p class="sub">Attendance runs separately per training, per participant, per day. Participants can self-mark by scanning the training's QR — the scan tags them to the right training automatically — and the organizer or trainer can mark or correct anything, with every change logged.</p>
   <div class="toolbar">
     <span class="select-label">Filter</span><div class="msel" id="attFilter"></div>
-    <label><span class="select-label">Marking as</span>
+    <label class="admin-only"><span class="select-label">Marking as</span>
       <select class="select" id="attWho">
         <option>Organizer — Lokshni (L&amp;D Admin)</option>
         <option>Trainer</option>
@@ -1530,7 +1530,7 @@ function renderAtt(){
     const code=t.code,data=ATT[code];
     const card=document.createElement('div');card.className='card pad';card.style.marginBottom='14px';
     card.innerHTML=`<div class="hstack" style="margin-bottom:10px"><strong>${t.title}${t.batch?' — '+t.batch:''}</strong><span class="chip acc">${t.dates}</span><span style="flex:1"></span>
-      <button class="btn small primary" data-ma>✓ Mark all present</button>
+      <button class="btn small primary admin-only" data-ma>✓ Mark all present</button>
       <button class="btn small" data-qr>▦ QR check-in</button>
       <button class="btn small admin-only" data-ss>⬆ Signed sheet</button></div>
       <div class="tablewrap" style="box-shadow:none"><table style="min-width:560px"><thead><tr><th>Participant</th>${t.days.map(d=>`<th>${d}</th>`).join('')}<th class="num">%</th><th>Eligible</th><th class="admin-only">Actions</th></tr></thead><tbody></tbody></table></div>`;
@@ -1541,6 +1541,8 @@ function renderAtt(){
         +`<td class="num mono"></td><td></td><td class="admin-only" style="white-space:nowrap"><button class="btn small" onclick="openAttEdit('${code}','${code2}')">Edit</button> <button class="btn small danger" onclick="delAttRow('${code}','${code2}')" aria-label="Remove ${empName(code2)} from this training">🗑</button></td>`;
       tb.appendChild(tr);
       tr.querySelectorAll('.attcell').forEach(c=>c.addEventListener('click',()=>{
+        const role=document.body.dataset.role||'admin';
+        if(role!=='admin'){toast('View-only in this role — attendance is marked by the organizer (admin) or the trainer.');return;}
         const prev=c.textContent;const next={'–':'P',P:'A',A:'H',H:'–'}[prev];
         c.textContent=next;c.className='attcell '+(next==='–'?'':next);marks[c.dataset.i]=next;recalcAtt(tr,marks);
         logAtt(`${$('attWho').value} changed ${empName(code2)}, ${t.days[c.dataset.i]}: ${prev} → ${next}`);
