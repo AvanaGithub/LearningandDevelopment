@@ -205,13 +205,35 @@ body[data-role="employee"] .mgr-up{display:none!important}
       <option value="ASS">Avana Surgical Systems</option>
       <option value="ATS">Avana Technology Services</option>
     </select></label>
-  <label><span class="select-label">View as</span>
+  <label id="viewAsWrap"><span class="select-label">View as</span>
     <select class="select" id="roleSel">
       <option value="admin">HR / L&amp;D Admin</option>
       <option value="manager">Reporting Manager</option>
       <option value="employee">Employee</option>
     </select></label>
   <div class="userchip"><span class="avatar">L</span><span id="userName">Lokshni · Admin</span></div>
+  <button class="btn small" onclick="signOut()" title="Return to the sign-in screen">Sign out</button>
+</div>
+
+<div id="loginView" style="position:fixed;inset:0;background:var(--bg);z-index:100;display:grid;place-items:center;padding:20px">
+  <div class="card pad" style="max-width:400px;width:100%;text-align:center">
+    <img id="loginLogo" alt="Avana" src="" style="height:44px;width:auto;background:#fff;padding:6px 12px;border-radius:10px;border:1px solid var(--line);display:inline-block">
+    <h1 style="margin:14px 0 2px">Learning Hub</h1>
+    <p style="color:var(--ink2);font-size:12.5px;margin:0 0 18px">Learning &amp; Development · Internal</p>
+    <form id="loginForm" style="text-align:left">
+      <label class="flabel" for="loginMail">Zoho e-mail ID</label>
+      <input id="loginMail" type="email" required placeholder="name@avanasurgical.com" style="width:100%;margin:4px 0 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:13.5px 'Archivo',sans-serif;color:var(--ink)">
+      <button class="btn primary" type="submit" style="width:100%">Sign in with Zoho</button>
+      <p id="loginErr" style="color:var(--crit);font-size:12.5px;min-height:18px;margin:8px 0 0"></p>
+    </form>
+    <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 10px">Prototype: simulated Zoho SSO — the e-mail is checked against Users &amp; Access, no password needed. The real build redirects to the actual Zoho sign-in.</p>
+    <div class="hstack" style="justify-content:center;gap:6px">
+      <span style="font-size:11px;color:var(--ink2)">Try:</span>
+      <button type="button" class="btn small" onclick="fillLogin('lokshni@avanasurgical.com')">Super admin</button>
+      <button type="button" class="btn small" onclick="fillLogin('vivek@avanasurgical.com')">Admin</button>
+      <button type="button" class="btn small" onclick="fillLogin('ashokkrishnaraj@avanasurgical.com')">Manager</button>
+    </div>
+  </div>
 </div>
 
 <div class="layout">
@@ -2008,8 +2030,41 @@ function rptCompliance(){
   </table><p style="font-size:12px;color:var(--ink2)">"Due" rows feed the 30-day expiry alert on the dashboard.</p>`;
 }
 
+/* ---------- simulated Zoho SSO sign-in ---------- */
+function fillLogin(m){$('loginMail').value=m;$('loginErr').textContent='';}
+function roleOf(u){return (u.type==='Super admin'||u.type==='Admin')?'admin':(u.type==='Manager'?'manager':'employee');}
+function applyLogin(u){
+  $('loginView').hidden=true;
+  const role=roleOf(u);
+  document.body.dataset.role=role;
+  $('roleSel').value=role;
+  $('userName').textContent=u.name+' · '+u.type;
+  document.querySelector('.userchip .avatar').textContent=(u.name.trim()[0]||'A').toUpperCase();
+  $('viewAsWrap').hidden=u.type!=='Super admin'; // only the Super admin keeps the demo role switcher
+  const cur=document.querySelector('.rail .nav[aria-current="true"]');
+  if(cur&&getComputedStyle(cur).display==='none')navBtns[0].click();
+}
+$('loginForm').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const mail=$('loginMail').value.trim().toLowerCase();
+  const u=USERS.find(x=>x.mail.toLowerCase()===mail);
+  if(!u){$('loginErr').textContent='No access for this e-mail — the administrator must add it in Users & Access first.';return;}
+  if(u.status!=='Active'){$('loginErr').textContent='This account is disabled — contact the administrator.';return;}
+  try{sessionStorage.setItem('avana-lh-user',JSON.stringify({mail:u.mail}));}catch(e){}
+  applyLogin(u);
+  toast('Signed in as '+u.name+' ('+u.type+' · '+u.acc+') via simulated Zoho SSO.');
+});
+function signOut(){try{sessionStorage.removeItem('avana-lh-user');}catch(e){}location.reload();}
+(function(){
+  if(location.hash.match(/^#(att|fb)\//)){$('loginView').hidden=true;return;} // participant QR pages need no sign-in
+  let saved=null;
+  try{saved=JSON.parse(sessionStorage.getItem('avana-lh-user')||'null');}catch(e){}
+  const u=saved&&USERS.find(x=>x.mail.toLowerCase()===String(saved.mail).toLowerCase());
+  if(u&&u.status==='Active')applyLogin(u);
+})();
+
 /* initial renders */
-$('brandLogo').src=LOGO;
+$('brandLogo').src=LOGO;$('loginLogo').src=LOGO;
 renderEmp();renderTrn();renderExp();renderCalendar();
 
 /* ---------- participant route: opening the QR link (#att/CODE or #fb/CODE) shows the phone page ---------- */
