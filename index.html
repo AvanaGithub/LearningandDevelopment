@@ -2057,6 +2057,16 @@ $('loginForm').addEventListener('submit',ev=>{
 function signOut(){try{sessionStorage.removeItem('avana-lh-user');}catch(e){}location.reload();}
 (function(){
   if(location.hash.match(/^#(att|fb)\//)){$('loginView').hidden=true;return;} // participant QR pages need no sign-in
+  const as=location.hash.match(/^#as\/(.+)$/); // direct test link: #as/<email> signs straight in
+  if(as){
+    const u=USERS.find(x=>x.mail.toLowerCase()===decodeURIComponent(as[1]).trim().toLowerCase());
+    if(u&&u.status==='Active'){
+      try{sessionStorage.setItem('avana-lh-user',JSON.stringify({mail:u.mail}));}catch(e){}
+      applyLogin(u);
+      toast('Signed in as '+u.name+' ('+u.type+' · '+u.acc+') via direct test link.');
+      return;
+    }
+  }
   let saved=null;
   try{saved=JSON.parse(sessionStorage.getItem('avana-lh-user')||'null');}catch(e){}
   const u=saved&&USERS.find(x=>x.mail.toLowerCase()===String(saved.mail).toLowerCase());
