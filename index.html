@@ -262,8 +262,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= DASHBOARD ================= -->
 <section class="page on" id="page-dash">
-  <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div>
-    <button class="btn" onclick="exportTab('dash')">⬇ Export</button></div>
+  <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div></div>
   <p class="sub">Quarter 2, FY 2026–27 (Jul–Sep) · every figure below is computed live from the records in the system — add, edit or delete anywhere and the dashboard updates.</p>
   <div class="tiles">
     <div class="tile"><div class="lbl">Training coverage</div><div class="val" id="dashCov">–</div><div class="delta up" id="dashCovSub"></div></div>
@@ -338,7 +337,6 @@ body[data-role="manager"] .no-mgr{display:none!important}
     <button class="btn" onclick="document.querySelector('.rail .nav[data-page=cal]').click()">▤ Open training calendar</button>
     <div class="grow"></div>
     <button class="btn admin-only" onclick="importFor('Trainings')">⬆ Import (Excel)</button>
-    <button class="btn" onclick="exportTab('trn')">⬇ Export</button>
     <button class="btn primary admin-only" onclick="trnDlg.showModal()">+ Plan training</button>
   </div>
   <div id="trnList" class="tablewrap"><table id="trnTable">
@@ -1641,7 +1639,8 @@ function renderFbkForms(){
         <button class="btn small admin-only" onclick="openFbBuilder('${t.code}')">${f?'Edit form':'Create form'}</button>
         <button class="btn small admin-only" onclick="uploadFbForm('${t.code}')">⬆ Upload</button>
         <button class="btn small no-mgr" onclick="qrForFeedback('${t.code}')">▦ QR / Link</button>
-        <button class="btn small no-mgr ${f?'':'admin-only'}" onclick="exportFbResults('${t.code}')">⬇ Results</button>
+        <button class="btn small mgr-up" onclick="viewFbResults('${t.code}')">📊 Results</button>
+        <button class="btn small no-mgr ${f?'':'admin-only'}" onclick="exportFbResults('${t.code}')">⬇ Excel</button>
         ${f?`<button class="btn small danger admin-only" onclick="delFbForm('${t.code}')" aria-label="Delete feedback form for ${t.title}">🗑</button>`:''}
       </td></tr>`);
   });
@@ -1681,6 +1680,23 @@ function uploadFbForm(code){
     e.target.value='';
   };
   inp.click();
+}
+function viewFbResults(code){
+  const t=TRAININGS.find(x=>x.code===code);if(!t)return;
+  const f=FBFORMS[code];
+  $('rptTitle').textContent='Feedback results — '+t.title+(t.batch?' ('+t.batch+')':'');
+  if(code==='TRG-105'&&FB_RESP.length){
+    const qs=['Relevance','Knowledge','Delivery','Confidence','Overall'];
+    const avg=qs.map((q,i)=>FB_RESP.reduce((s,r)=>s+(+r[i+1]||0),0)/FB_RESP.length);
+    $('rptBody').innerHTML=`<p style="margin-top:0;font-size:13px">${FB_RESP.length} response(s)${f?' · form: '+f.name:''} · scale 1–5</p>
+      <table class="tight" style="width:100%"><tr><th>Respondent</th>${qs.map(q=>`<th class="num">${q}</th>`).join('')}<th>Comment</th></tr>
+      ${FB_RESP.map(r=>`<tr><td>${r[0]}</td>${qs.map((q,i)=>`<td class="num mono">${r[i+1]}</td>`).join('')}<td style="font-size:12px;color:var(--ink2)">${r[6]}</td></tr>`).join('')}
+      <tr style="font-weight:700"><td>Average</td>${avg.map(a=>`<td class="num mono">${a.toFixed(1)}</td>`).join('')}<td></td></tr></table>
+      <p style="font-size:12px;color:var(--ink2)">Results are view-on-screen for managers; the Excel download is an admin function.</p>`;
+  }else{
+    $('rptBody').innerHTML='<p style="color:var(--ink2);margin-top:0">'+(f?f.resp+' of '+f.total+' responses received for this training.':'No feedback form created for this training yet.')+' Detailed answer rows exist for the Orthotics Product Deep-Dive sample in this prototype; the real build shows them for every training.</p>';
+  }
+  rptDlg.showModal();
 }
 function exportFbResults(code){
   const t=TRAININGS.find(x=>x.code===code);
