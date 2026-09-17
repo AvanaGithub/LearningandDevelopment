@@ -875,6 +875,7 @@ const USERS=[
  {name:"Praveen Raghavendra",mail:"praveen@avanamedical.com",type:"Manager",acc:"View",status:"Active"},
  {name:"Y Azgar Hussain",mail:"azgarhussain@avanasurgical.com",type:"Manager",acc:"View",status:"Active"},
  {name:"Ashok Krishna Raj",mail:"ashokkrishnaraj@avanasurgical.com",type:"Manager",acc:"View",status:"Active"},
+ {name:"Pushparaj",mail:"pushparaj@avanasurgical.com",type:"Manager",acc:"View",status:"Active"},
 ];
 const ACC_OPTS=["View","View, Add","View, Add, Edit","Full access"];
 
@@ -914,8 +915,11 @@ function loadState(){
     USERS.length=0;USERS.push(...(s.usr||[]));
   }catch(e){}
 }
+const DEFAULT_USERS=USERS.map(u=>({...u}));
 loadState();
 EMPLOYEES.forEach(migrateEmp); // older saved records get mapped onto the current division/department structure
+/* users added to the built-in list reach devices that already have saved data */
+DEFAULT_USERS.forEach(d=>{if(!USERS.some(u=>String(u.mail).toLowerCase()===d.mail.toLowerCase()))USERS.push({...d});});
 function resetData(){
   confirmDel('Reset ALL data to the original sample set? Every change made on this device — deletes, additions, attendance, expenses — is discarded.',()=>{
     try{localStorage.removeItem(STORE_KEY);}catch(e){}
