@@ -1,6 +1,6 @@
 <title>Avana Learning Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Arimo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{
   --bg:#F7F5EF; --panel:#FFFFFF; --panel2:#F1EDE1; --ink:#211B10; --ink2:#6E6450;
@@ -33,10 +33,11 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{margin:0;background-color:var(--bg);color:var(--ink);font:14px/1.55 "Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+body{margin:0;background-color:var(--bg);color:var(--ink);font:14px/1.55 "Arimo",system-ui,-apple-system,"Segoe UI",sans-serif;
   background-image:radial-gradient(color-mix(in srgb,var(--ink) 5%,transparent) 1px,transparent 1px);background-size:22px 22px}
 button{font:inherit;color:inherit}
 .mono{font-family:"IBM Plex Mono",Consolas,monospace}
+h1,h2,h3,.brand,.dlg-head strong,.grouplbl,.tile .lbl,.report .rname{font-family:"Fira Sans","Arimo",system-ui,sans-serif}
 a{color:var(--accent-ink)}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
 
@@ -51,7 +52,7 @@ a{color:var(--accent-ink)}
 .brandlogo{height:34px;width:auto;background:#fff;padding:4px 9px;border-radius:8px;display:block;border:1px solid var(--topbar-line)}
 .brand small{display:block;font-weight:500;color:var(--topbar-mut);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 .topbar .spacer{flex:1}
-.select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--ink);font:13px "Archivo",sans-serif}
+.select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;color:var(--ink);font:13px "Arimo",sans-serif}
 .select-label{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);margin-right:4px}
 .userchip{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px;font-size:13px}
 .userchip .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-weight:600;font-size:12px}
@@ -113,7 +114,7 @@ tr.clickable:hover td{background:var(--panel2)}
 .btn.small{padding:4px 10px;font-size:12px;border-radius:7px}
 .btn.danger{color:var(--crit);border-color:var(--crit)}
 .btn.danger:hover{background:var(--crit-soft)}
-.searchbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:13px "Archivo",sans-serif;color:var(--ink);min-width:200px}
+.searchbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:13px "Arimo",sans-serif;color:var(--ink);min-width:200px}
 
 .note{border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--accent-ink);padding:10px 14px;border-radius:0 10px 10px 0;font-size:13px;margin:14px 0;max-width:72ch}
 .note.warnn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
@@ -128,7 +129,7 @@ dialog::backdrop{background:rgba(10,20,18,.45)}
 .dlg-body{padding:16px 18px;max-height:72vh;overflow:auto}
 .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
 .formgrid label,.flabel{display:block;font-size:11.5px;font-weight:600;color:var(--ink2);letter-spacing:.03em}
-.formgrid input,.formgrid select,.formgrid textarea{width:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px "Archivo",sans-serif;color:var(--ink)}
+.formgrid input,.formgrid select,.formgrid textarea{width:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px "Arimo",sans-serif;color:var(--ink)}
 .formgrid .full{grid-column:1/-1}
 @media(max-width:560px){.formgrid{grid-template-columns:1fr}}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px;margin:0}
@@ -143,7 +144,7 @@ dialog::backdrop{background:rgba(10,20,18,.45)}
 .datechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent-ink);border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600}
 .datechip button{border:0;background:none;cursor:pointer;color:inherit;font-size:12px;padding:0 3px}
 .payrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:6px;align-items:center}
-.payrow input{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px "Archivo",sans-serif;color:var(--ink);width:100%}
+.payrow input{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px "Arimo",sans-serif;color:var(--ink);width:100%}
 
 .attcell{width:34px;height:28px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);font-weight:600;font-size:12px;cursor:pointer;color:var(--ink2)}
 .attcell.P{background:var(--good-soft);color:var(--good);border-color:transparent}
@@ -167,10 +168,10 @@ dialog::backdrop{background:rgba(10,20,18,.45)}
 .scale label{display:grid;place-items:center;width:34px;height:30px;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:13px}
 .scale input{position:absolute;opacity:0;width:0}
 .scale label:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-textarea{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px 10px;font:13px "Archivo",sans-serif;resize:vertical}
+textarea{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px 10px;font:13px "Arimo",sans-serif;resize:vertical}
 .qopt{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13px}
 .qopt input[type="checkbox"]{accent-color:var(--accent)}
-.qopt input[type="number"]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:13px "Archivo",sans-serif;color:var(--ink)}
+.qopt input[type="number"]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:13px "Arimo",sans-serif;color:var(--ink)}
 
 .bar{height:8px;border-radius:999px;background:var(--panel2);overflow:hidden;min-width:90px}
 .bar i{display:block;height:100%;background:var(--grad);border-radius:999px}
@@ -224,7 +225,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
     <p style="color:var(--ink2);font-size:12.5px;margin:0 0 18px">Learning &amp; Development · Internal</p>
     <form id="loginForm" style="text-align:left">
       <label class="flabel" for="loginMail">Zoho e-mail ID</label>
-      <input id="loginMail" type="email" required placeholder="name@avanasurgical.com" style="width:100%;margin:4px 0 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:13.5px 'Archivo',sans-serif;color:var(--ink)">
+      <input id="loginMail" type="email" required placeholder="name@avanasurgical.com" style="width:100%;margin:4px 0 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:13.5px 'Arimo',sans-serif;color:var(--ink)">
       <button class="btn primary" type="submit" style="width:100%">Sign in with Zoho</button>
       <p id="loginErr" style="color:var(--crit);font-size:12.5px;min-height:18px;margin:8px 0 0"></p>
     </form>
@@ -243,19 +244,19 @@ body[data-role="manager"] .no-mgr{display:none!important}
   <button class="nav" data-page="dash" aria-current="true"><span class="mnum">◈</span>Dashboard</button>
   <button class="nav" data-page="cal"><span class="mnum">▤</span>Training Calendar</button>
   <div class="grouplbl">Phase 1</div>
-  <button class="nav no-mgr" data-page="emp"><span class="mnum">01</span>Employees</button>
-  <button class="nav" data-page="trn"><span class="mnum">02</span>Trainings</button>
-  <button class="nav" data-page="att"><span class="mnum">04</span>Attendance</button>
-  <button class="nav" data-page="fbk"><span class="mnum">05</span>Feedback</button>
-  <button class="nav admin-only" data-page="exp"><span class="mnum">08</span>Expenses</button>
-  <button class="nav mgr-up" data-page="rpt"><span class="mnum">09</span>Reports</button>
+  <button class="nav no-mgr" data-page="emp">Employees</button>
+  <button class="nav" data-page="trn">Trainings</button>
+  <button class="nav" data-page="att">Attendance</button>
+  <button class="nav" data-page="fbk">Feedback</button>
+  <button class="nav admin-only" data-page="exp">Expenses</button>
+  <button class="nav mgr-up" data-page="rpt">Reports</button>
   <div class="grouplbl">Administration</div>
   <button class="nav admin-only" data-page="usr"><span class="mnum">⚙</span>Users &amp; Access</button>
   <div class="grouplbl">Phase 2 · planned</div>
-  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">03</span>Nominations</button>
-  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">06</span>Effectiveness</button>
-  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">07</span>Assessments</button>
-  <button class="nav" disabled title="Planned for Phase 2"><span class="mnum">10</span>Certificates</button>
+  <button class="nav" disabled title="Planned for Phase 2">Nominations</button>
+  <button class="nav" disabled title="Planned for Phase 2">Effectiveness</button>
+  <button class="nav" disabled title="Planned for Phase 2">Assessments</button>
+  <button class="nav" disabled title="Planned for Phase 2">Certificates</button>
 </nav>
 
 <main>
@@ -263,7 +264,6 @@ body[data-role="manager"] .no-mgr{display:none!important}
 <!-- ================= DASHBOARD ================= -->
 <section class="page on" id="page-dash">
   <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div></div>
-  <p class="sub">Quarter 2, FY 2026–27 (Jul–Sep) · every figure below is computed live from the records in the system — add, edit or delete anywhere and the dashboard updates.</p>
   <div class="tiles">
     <div class="tile"><div class="lbl">Training coverage</div><div class="val" id="dashCov">–</div><div class="delta up" id="dashCovSub"></div></div>
     <div class="tile"><div class="lbl">Mandatory compliance</div><div class="val" id="dashComp">–</div><div class="delta warnc" id="dashCompSub"></div></div>
@@ -292,7 +292,6 @@ body[data-role="manager"] .no-mgr{display:none!important}
 <!-- ================= TRAINING CALENDAR (all roles) ================= -->
 <section class="page" id="page-cal">
   <h1>Training calendar</h1>
-  <p class="sub">Visible to everyone in the organisation — every training from the plan, on its planned days. Click a training on the calendar or in the list to open its details.</p>
   <div class="card pad">
     <div class="hstack" style="margin-bottom:12px">
       <button class="btn small" id="calPrev" aria-label="Previous month">◀</button>
@@ -308,13 +307,12 @@ body[data-role="manager"] .no-mgr{display:none!important}
     <thead><tr><th>Dates</th><th>Training</th><th>Mode</th><th>Trainer</th><th>Status</th></tr></thead>
     <tbody></tbody>
   </table></div>
-  <div class="note">Postponed trainings keep their original planned date visible for plan-vs-actual reporting. New trainings planned in Module 02 (or imported from Excel) appear here automatically.</div>
+  <div class="note">Postponed trainings keep their original planned date visible for plan-vs-actual reporting. New trainings planned in the Trainings tab (or imported from Excel) appear here automatically.</div>
 </section>
 
 <!-- ================= 01 EMPLOYEES ================= -->
 <section class="page" id="page-emp">
-  <h1>Module 01 · Employee list</h1>
-  <p class="sub">Master record for every employee. IDs come from Zoho; data arrives by HR bulk upload. Click a row to open the full record with training history.</p>
+  <h1>Employees</h1>
   <div class="toolbar">
     <input class="searchbox" id="empSearch" placeholder="Search name, code, department…" aria-label="Search employees">
     <div class="grow"></div>
@@ -331,8 +329,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= 02 TRAININGS ================= -->
 <section class="page" id="page-trn">
-  <h1>Module 02 · Trainings</h1>
-  <p class="sub">Plan the training, then click its row to open it — add participants, generate the attendance QR, and manage the session from there.</p>
+  <h1>Trainings</h1>
   <div class="toolbar">
     <button class="btn" onclick="document.querySelector('.rail .nav[data-page=cal]').click()">▤ Open training calendar</button>
     <div class="grow"></div>
@@ -348,8 +345,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= 04 ATTENDANCE ================= -->
 <section class="page" id="page-att">
-  <h1>Module 04 · Attendance</h1>
-  <p class="sub">Attendance runs separately per training, per participant, per day. Participants can self-mark by scanning the training's QR — the scan tags them to the right training automatically — and the organizer or trainer can mark or correct anything, with every change logged.</p>
+  <h1>Attendance</h1>
   <div class="toolbar">
     <span class="select-label">Filter</span><div class="msel" id="attFilter"></div>
     <label class="admin-only"><span class="select-label">Marking as</span>
@@ -375,8 +371,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= 05 FEEDBACK ================= -->
 <section class="page" id="page-fbk">
-  <h1>Module 05 · Feedback</h1>
-  <p class="sub">Each training carries its own feedback form — built here or uploaded. Share it by QR or link; responses tag to that training's form automatically. When completion triggers the auto-e-mail, anyone who already submitted via the QR or link is excluded.</p>
+  <h1>Feedback</h1>
   <div class="toolbar">
     <span class="select-label">Filter</span><div class="msel" id="fbkFilter"></div>
     <div class="grow"></div>
@@ -428,8 +423,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= 08 EXPENSES ================= -->
 <section class="page" id="page-exp">
-  <h1>Module 08 · Expenses</h1>
-  <p class="sub">One expense record per training. Tick the entities whose people attended and give each entity's participant count — the cost splits across entities by headcount automatically. Approvers: Vivek sir &amp; Sundar sir.</p>
+  <h1>Expenses</h1>
   <div class="toolbar">
     <div class="grow"></div>
     <button class="btn" onclick="importFor('Expenses')">⬆ Import (Excel)</button>
@@ -451,8 +445,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= 09 REPORTS ================= -->
 <section class="page" id="page-rpt">
-  <h1>Module 09 · Reports</h1>
-  <p class="sub">Standard filters on every report — date range, entity, division, department, location, training type, trainer, employee — with Excel and PDF export. Reports marked <em>live</em> actually generate from this prototype's sample data.</p>
+  <h1>Reports</h1>
   <div class="toolbar">
     <div class="grow"></div>
     <button class="btn admin-only" onclick="importFor('Reports')">⬆ Import</button>
@@ -465,7 +458,6 @@ body[data-role="manager"] .no-mgr{display:none!important}
 <!-- ================= USERS & ACCESS ================= -->
 <section class="page" id="page-usr">
   <h1>Users &amp; Access</h1>
-  <p class="sub">System users sign in with their <strong>Zoho credentials</strong> (Zoho single sign-on) — no separate passwords to manage, and access ends automatically when the Zoho account is disabled. Access is role-based per the matrix below.</p>
   <div class="toolbar">
     <div class="grow"></div>
     <button class="btn" onclick="importFor('Users')">⬆ Import</button>
@@ -558,7 +550,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
   <form class="dlg-body" id="attEditForm">
     <div id="aeDays" class="formgrid"></div>
     <div style="margin-top:12px"><label class="flabel" for="aeReason">Reason for correction (mandatory — goes to the audit log)</label>
-      <input id="aeReason" required placeholder="e.g. was present, forgot to scan" style="width:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Archivo',sans-serif;color:var(--ink)"></div>
+      <input id="aeReason" required placeholder="e.g. was present, forgot to scan" style="width:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:13px 'Arimo',sans-serif;color:var(--ink)"></div>
     <div class="hstack" style="margin-top:14px;justify-content:flex-end">
       <button class="btn" type="button" onclick="attEditDlg.close()">Cancel</button>
       <button class="btn primary" type="submit">Save correction</button>
@@ -981,7 +973,7 @@ function renderScanInto(box,mode,code,opts){
       <select class="select" data-sc="day" style="width:100%;margin:3px 0 12px">${days.map((d,i)=>`<option value="${i}">${d}</option>`).join('')}</select>
       <label class="flabel">I am</label>
       <select class="select" data-sc="who" style="width:100%;margin:3px 0 16px">${t.part.map(c=>`<option value="${c}">${empName(c)}</option>`).join('')}</select>
-      ${t.part.length?'':'<p style="color:var(--crit);font-size:13px;margin:0 0 10px">No participants assigned to this training yet — add them from its row in Module 02 first.</p>'}
+      ${t.part.length?'':'<p style="color:var(--crit);font-size:13px;margin:0 0 10px">No participants assigned to this training yet — add them from its row in the Trainings tab first.</p>'}
       <button class="btn primary" data-sc="go" style="width:100%" ${t.part.length?'':'disabled'}>✓ Check in</button>
       <p style="font-size:11.5px;color:var(--ink2);margin:10px 0 0">Only employees assigned to ${t.code} can check in. In the real build the phone is already signed in via Zoho, so there is no name selection — the scan alone identifies the person.</p>`;
     box.querySelector('[data-sc="go"]').addEventListener('click',()=>{
@@ -995,7 +987,7 @@ function renderScanInto(box,mode,code,opts){
       }
       logAtt(`QR self check-in: ${empName(emp)} scanned in to ${t.title}, ${t.days[di]||'today'}`);
       box.innerHTML=succHTML('Checked in!',`${empName(emp)} · ${t.code} · ${t.days[di]||'today'}`,
-        live?'Marked P and written to the audit log — open Module 04 to see this in the grid.':'This phone confirms the check-in; live sync to the organizer\'s screen comes with the real server.');
+        live?'Marked P and written to the audit log — open the Attendance tab to see this in the grid.':'This phone confirms the check-in; live sync to the organizer\'s screen comes with the real server.');
     });
   }else{
     const qs=["Relevance of content to my job","Trainer's subject knowledge","Trainer's delivery and clarity","Confidence to apply this at work","Overall rating"];
@@ -1018,7 +1010,7 @@ function renderScanInto(box,mode,code,opts){
       if(code==='TRG-105')FB_RESP.push([who,...scores,cmt]);
       renderFbkForms();
       box.innerHTML=succHTML('Feedback submitted!',`${who} · ${t.code}`,
-        'Tagged to this training\'s form — this participant is now excluded from the automatic reminder e-mail. The response count has updated in Module 05'+(code==='TRG-105'?' and the response is in the Excel results export.':'.'));
+        'Tagged to this training\'s form — this participant is now excluded from the automatic reminder e-mail. The response count has updated in the Feedback tab'+(code==='TRG-105'?' and the response is in the Excel results export.':'.'));
     });
   }
 }
@@ -1572,7 +1564,7 @@ function renderAtt(){
       }));
       recalcAtt(tr,marks);
     });
-    if(!Object.keys(data).length)tb.innerHTML='<tr><td style="color:var(--ink2)">No participants yet — add them from this training\'s row in Module 02.</td></tr>';
+    if(!Object.keys(data).length)tb.innerHTML='<tr><td style="color:var(--ink2)">No participants yet — add them from this training\'s row in the Trainings tab.</td></tr>';
     card.querySelector('[data-ma]').addEventListener('click',()=>markAllPresent(code));
     card.querySelector('[data-qr]').addEventListener('click',()=>qrForAttendance(code));
     card.querySelector('[data-ss]').addEventListener('click',()=>toast('Upload the scanned signed sheet — required before this training can be closed.'));
