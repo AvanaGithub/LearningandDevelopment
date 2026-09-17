@@ -199,15 +199,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
 <div class="topbar">
   <div class="brand"><img class="brandlogo" id="brandLogo" alt="Avana" src=""><span>Learning Hub<small>Learning &amp; Development · Internal</small></span></div>
   <span class="proto-tag">Prototype</span>
-  <button class="btn small" onclick="resetData()" title="Discard all changes saved on this device and restore the original sample data">↺ Reset data</button>
   <div class="spacer"></div>
-  <label><span class="select-label">Entity</span>
-    <select class="select" id="entitySel">
-      <option value="all">All entities</option>
-      <option value="AMD">Avana Medical Devices</option>
-      <option value="ASS">Avana Surgical Systems</option>
-      <option value="ATS">Avana Technology Services</option>
-    </select></label>
   <label id="viewAsWrap"><span class="select-label">View as</span>
     <select class="select" id="roleSel">
       <option value="admin">HR / L&amp;D Admin</option>
@@ -268,6 +260,7 @@ body[data-role="manager"] .no-mgr{display:none!important}
   </div>
   <div class="card pad" id="dashFilterPanel" hidden style="margin-bottom:16px">
     <div class="hstack">
+      <div class="msel" id="dfEnt"></div>
       <div class="msel" id="dfEmp"></div>
       <div class="msel" id="dfTrn"></div>
       <div class="msel" id="dfDiv"></div>
@@ -886,7 +879,7 @@ const ACC_OPTS=["View","View, Add","View, Add, Edit","Full access"];
 
 /* single source of truth for divisions & departments — drives the employee form AND the dashboard filters */
 const DIVISIONS=['Sports Medicine','Dex & Bio','Endospine','Orthotics','Business Support'];
-const DEPARTMENTS=['Accounts','Administration','Clinical Support','Commercial','Graphic Design','Human Resource','IT','Marketing','Medical Education','Operations','Quality','Sales','SCM','Service','Warehouse'];
+const DEPARTMENTS=['Accounts','Administration','Clinical Support','Commercial','Graphic Design','Human Resource','IT','Marketing','Medical Education','Operations','Quality','Sales','SCM','Service'];
 function migrateEmp(e){
   if(!DIVISIONS.includes(e.div)){
     const old=e.div;
@@ -896,6 +889,7 @@ function migrateEmp(e){
   if(!DEPARTMENTS.includes(e.dept)){
     if(e.dept==='Technology')e.dept='IT';
     else if(e.dept==='HR')e.dept='Human Resource';
+    else if(e.dept==='Warehouse')e.dept='SCM';
   }
 }
 
@@ -1208,6 +1202,7 @@ function exportTab(tab){
 const dashMs={};
 function initDashFilters(){
   if(dashMs.emp||!$('dfEmp'))return;
+  dashMs.ent=makeMsel($('dfEnt'),'Entities',()=>['AMD','ASS','ATS'].map(k=>({v:k,t:ENTFULL[k]})),renderDash);
   dashMs.emp=makeMsel($('dfEmp'),'Employees',()=>EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>({v:e.code,t:e.name})),renderDash);
   dashMs.trn=makeMsel($('dfTrn'),'Trainings',()=>TRAININGS.map(t=>({v:t.code,t:t.title+(t.batch?' — '+t.batch:'')})),renderDash);
   dashMs.div=makeMsel($('dfDiv'),'Divisions',()=>{
@@ -1239,8 +1234,9 @@ function clearDashFilters(){
 function renderDash(){
   initDashFilters();
   Object.values(dashMs).forEach(m=>m.refresh());
-  const S={emp:dashMs.emp.sel,trn:dashMs.trn.sel,div:dashMs.div.sel,dept:dashMs.dept.sel,mgr:dashMs.mgr.sel,from:$('dfFrom').value,to:$('dfTo').value};
+  const S={ent:dashMs.ent.sel,emp:dashMs.emp.sel,trn:dashMs.trn.sel,div:dashMs.div.sel,dept:dashMs.dept.sel,mgr:dashMs.mgr.sel,from:$('dfFrom').value,to:$('dfTo').value};
   const emps=EMPLOYEES.filter(e=>e.status!=='Exited'
+    &&(!S.ent.size||S.ent.has(e.entity))
     &&(!S.emp.size||S.emp.has(e.code))
     &&(!S.div.size||S.div.has(e.div))
     &&(!S.dept.size||S.dept.has(e.dept))
@@ -1273,7 +1269,9 @@ function renderDash(){
   $('dashHours').textContent=emps.length?(emps.reduce((s,e)=>s+hoursOf(e),0)/emps.length).toFixed(1):'0';
   const titles=new Set(trns.map(t=>t.title));
   const recs=(S.trn.size||S.from||S.to)?EXPREC.filter(r=>titles.has(r.trn)):EXPREC;
-  const used=recs.reduce((s,r)=>s+r.actual,0);
+  const used=S.ent.size
+    ?recs.reduce((s,r)=>s+entSplit(r).filter(x=>S.ent.has(x.ent)).reduce((a,b)=>a+b.share,0),0)
+    :recs.reduce((s,r)=>s+r.actual,0);
   $('dashBudget').textContent='₹'+inr(used);
   $('dashBudgetSub').textContent='of ₹14,00,000 annual budget ('+Math.round(used/1400000*100)+'% used)';
   const up=trns.filter(t=>['Confirmed','In progress','Awaiting cost approval','Planned'].includes(t.status));
@@ -1291,9 +1289,8 @@ function renderDash(){
 /* ---------- employees ---------- */
 function renderEmp(){
   const q=($('empSearch').value||'').toLowerCase();
-  const ent=$('entitySel').value;
   const tb=document.querySelector('#empTable tbody');tb.innerHTML='';
-  EMPLOYEES.filter(e=>(ent==='all'||e.entity===ent)&&Object.values(e).join(' ').toLowerCase().includes(q)).forEach(e=>{
+  EMPLOYEES.filter(e=>Object.values(e).join(' ').toLowerCase().includes(q)).forEach(e=>{
     const st=e.status==='Active'?'good':e.status==='On notice'?'warn':'crit';
     const tr=document.createElement('tr');tr.className='clickable';
     tr.innerHTML=`<td class="mono">${e.code}</td><td>${e.name}</td><td>${ENTNAME[e.entity]}</td><td>${e.div}</td><td>${e.dept}</td><td>${e.desig}</td><td>${e.mgr}</td><td><span class="chip ${st}">${e.status}</span></td><td class="num mono">${e.hours}</td><td class="admin-only"><button class="btn small danger" aria-label="Delete ${e.name}">🗑</button></td>`;
@@ -1308,7 +1305,6 @@ function renderEmp(){
   renderDash();saveState();
 }
 $('empSearch').addEventListener('input',renderEmp);
-$('entitySel').addEventListener('change',renderEmp);
 
 function empHistory(code){return TRAININGS.filter(t=>t.part.includes(code));}
 const empName=c=>{const e=EMPLOYEES.find(x=>x.code===c);return e?e.name:c;};
