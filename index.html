@@ -498,16 +498,8 @@ body[data-role="manager"] .no-mgr{display:none!important}
       <div><label for="efCode">Employee code (Zoho)</label><input id="efCode" required placeholder="ZH-1234"></div>
       <div><label for="efName">Full name</label><input id="efName" required placeholder="Full name"></div>
       <div><label for="efEntity">Entity</label><select id="efEntity"><option value="AMD">Avana Medical Devices</option><option value="ASS">Avana Surgical Systems</option><option value="ATS">Avana Technology Services</option></select></div>
-      <div><label for="efDiv">Division</label><select id="efDiv">
-        <option>Sports Medicine</option><option>Dex &amp; Bio</option><option>Endospine</option>
-        <option>Orthotics</option><option>Business Support</option>
-      </select></div>
-      <div><label for="efDept">Department</label><select id="efDept">
-        <option>Accounts</option><option>Administration</option><option>Clinical Support</option><option>Commercial</option>
-        <option>Graphic Design</option><option>Human Resource</option><option>IT</option>
-        <option>Marketing</option><option>Medical Education</option><option>Operations</option><option>Quality</option>
-        <option>Sales</option><option>SCM</option><option>Service</option><option>Warehouse</option>
-      </select></div>
+      <div><label for="efDiv">Division</label><select id="efDiv"></select></div>
+      <div><label for="efDept">Department</label><select id="efDept"></select></div>
       <div><label for="efDesig">Designation</label><input id="efDesig" required placeholder="e.g. Sales Executive"></div>
       <div><label for="efMgr">Reporting manager</label><input id="efMgr" placeholder="Manager name"></div>
       <div><label for="efType">Employment type</label><select id="efType"><option>Permanent</option><option>Trainee</option><option>Intern</option><option>Contract</option><option>Consultant</option></select></div>
@@ -892,6 +884,21 @@ const USERS=[
 ];
 const ACC_OPTS=["View","View, Add","View, Add, Edit","Full access"];
 
+/* single source of truth for divisions & departments — drives the employee form AND the dashboard filters */
+const DIVISIONS=['Sports Medicine','Dex & Bio','Endospine','Orthotics','Business Support'];
+const DEPARTMENTS=['Accounts','Administration','Clinical Support','Commercial','Graphic Design','Human Resource','IT','Marketing','Medical Education','Operations','Quality','Sales','SCM','Service','Warehouse'];
+function migrateEmp(e){
+  if(!DIVISIONS.includes(e.div)){
+    const old=e.div;
+    e.div=old==='Endoscopy'||old==='Endospine'?'Endospine':'Business Support';
+    if(DEPARTMENTS.includes(old)&&!DEPARTMENTS.includes(e.dept))e.dept=old;
+  }
+  if(!DEPARTMENTS.includes(e.dept)){
+    if(e.dept==='Technology')e.dept='IT';
+    else if(e.dept==='HR')e.dept='Human Resource';
+  }
+}
+
 /* ---------- persistence: every change is saved on this device and survives reloads ---------- */
 const STORE_KEY='avana-lh-state-v1';
 function saveState(){
@@ -913,6 +920,7 @@ function loadState(){
   }catch(e){}
 }
 loadState();
+EMPLOYEES.forEach(migrateEmp); // older saved records get mapped onto the current division/department structure
 function resetData(){
   confirmDel('Reset ALL data to the original sample set? Every change made on this device — deletes, additions, attendance, expenses — is discarded.',()=>{
     try{localStorage.removeItem(STORE_KEY);}catch(e){}
@@ -1202,8 +1210,14 @@ function initDashFilters(){
   if(dashMs.emp||!$('dfEmp'))return;
   dashMs.emp=makeMsel($('dfEmp'),'Employees',()=>EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>({v:e.code,t:e.name})),renderDash);
   dashMs.trn=makeMsel($('dfTrn'),'Trainings',()=>TRAININGS.map(t=>({v:t.code,t:t.title+(t.batch?' — '+t.batch:'')})),renderDash);
-  dashMs.div=makeMsel($('dfDiv'),'Divisions',()=>[...new Set(EMPLOYEES.map(e=>e.div))].sort().map(v=>({v:v,t:v})),renderDash);
-  dashMs.dept=makeMsel($('dfDept'),'Departments',()=>[...new Set(EMPLOYEES.map(e=>e.dept))].sort().map(v=>({v:v,t:v})),renderDash);
+  dashMs.div=makeMsel($('dfDiv'),'Divisions',()=>{
+    const extra=[...new Set(EMPLOYEES.map(e=>e.div))].filter(v=>!DIVISIONS.includes(v)).sort();
+    return [...DIVISIONS,...extra].map(v=>({v:v,t:v}));
+  },renderDash);
+  dashMs.dept=makeMsel($('dfDept'),'Departments',()=>{
+    const extra=[...new Set(EMPLOYEES.map(e=>e.dept))].filter(v=>!DEPARTMENTS.includes(v)).sort();
+    return [...DEPARTMENTS,...extra].map(v=>({v:v,t:v}));
+  },renderDash);
   dashMs.mgr=makeMsel($('dfMgr'),'Teams',()=>[...new Set(EMPLOYEES.map(e=>e.mgr.replace(/^Mentor: /,'')))].sort().map(v=>({v:v,t:v})),renderDash);
   $('dfFrom').addEventListener('change',renderDash);
   $('dfTo').addEventListener('change',renderDash);
@@ -2181,6 +2195,8 @@ function signOut(){try{sessionStorage.removeItem('avana-lh-user');}catch(e){}loc
 })();
 
 /* initial renders */
+$('efDiv').innerHTML=DIVISIONS.map(d=>`<option>${d}</option>`).join('');
+$('efDept').innerHTML=DEPARTMENTS.map(d=>`<option>${d}</option>`).join('');
 $('brandLogo').src=LOGO;$('loginLogo').src=LOGO;
 renderEmp();renderTrn();renderExp();renderCalendar();
 
