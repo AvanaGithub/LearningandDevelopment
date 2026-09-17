@@ -250,13 +250,13 @@ body[data-role="manager"] .no-mgr{display:none!important}
   <button class="nav" data-page="fbk">Feedback</button>
   <button class="nav admin-only" data-page="exp">Expenses</button>
   <button class="nav mgr-up" data-page="rpt">Reports</button>
-  <div class="grouplbl">Administration</div>
+  <div class="grouplbl admin-only">Administration</div>
   <button class="nav admin-only" data-page="usr"><span class="mnum">⚙</span>Users &amp; Access</button>
-  <div class="grouplbl">Phase 2 · planned</div>
-  <button class="nav" disabled title="Planned for Phase 2">Nominations</button>
-  <button class="nav" disabled title="Planned for Phase 2">Effectiveness</button>
-  <button class="nav" disabled title="Planned for Phase 2">Assessments</button>
-  <button class="nav" disabled title="Planned for Phase 2">Certificates</button>
+  <div class="grouplbl no-mgr">Phase 2 · planned</div>
+  <button class="nav no-mgr" disabled title="Planned for Phase 2">Nominations</button>
+  <button class="nav no-mgr" disabled title="Planned for Phase 2">Effectiveness</button>
+  <button class="nav no-mgr" disabled title="Planned for Phase 2">Assessments</button>
+  <button class="nav no-mgr" disabled title="Planned for Phase 2">Certificates</button>
 </nav>
 
 <main>
@@ -264,6 +264,18 @@ body[data-role="manager"] .no-mgr{display:none!important}
 <!-- ================= DASHBOARD ================= -->
 <section class="page on" id="page-dash">
   <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div></div>
+  <div class="card pad" style="margin-bottom:16px">
+    <div class="hstack">
+      <label><span class="select-label">Employee</span><select class="select" id="dfEmp"></select></label>
+      <label><span class="select-label">Training</span><select class="select" id="dfTrn"></select></label>
+      <label><span class="select-label">Division</span><select class="select" id="dfDiv"></select></label>
+      <label><span class="select-label">Department</span><select class="select" id="dfDept"></select></label>
+      <label><span class="select-label">Team</span><select class="select" id="dfMgr"></select></label>
+      <label><span class="select-label">From</span><input type="date" id="dfFrom" class="select"></label>
+      <label><span class="select-label">To</span><input type="date" id="dfTo" class="select"></label>
+      <button class="btn small" onclick="clearDashFilters()">✕ Clear</button>
+    </div>
+  </div>
   <div class="tiles">
     <div class="tile"><div class="lbl">Training coverage</div><div class="val" id="dashCov">–</div><div class="delta up" id="dashCovSub"></div></div>
     <div class="tile"><div class="lbl">Mandatory compliance</div><div class="val" id="dashComp">–</div><div class="delta warnc" id="dashCompSub"></div></div>
@@ -484,12 +496,15 @@ body[data-role="manager"] .no-mgr{display:none!important}
       <div><label for="efName">Full name</label><input id="efName" required placeholder="Full name"></div>
       <div><label for="efEntity">Entity</label><select id="efEntity"><option value="AMD">Avana Medical Devices</option><option value="ASS">Avana Surgical Systems</option><option value="ATS">Avana Technology Services</option></select></div>
       <div><label for="efDiv">Division</label><select id="efDiv">
-        <option>Accounts</option><option>Administration</option><option>Commercial</option><option>Dex &amp; Bio</option>
-        <option>Endoscopy</option><option>Graphic Design</option><option>Human Resource</option><option>IT</option>
-        <option>Marketing</option><option>Medical Education</option><option>Orthotics</option><option>SCM</option>
-        <option>Service</option><option>Sports Medicine</option>
+        <option>Sports Medicine</option><option>Dex &amp; Bio</option><option>Endospine</option>
+        <option>Orthotics</option><option>Business Support</option>
       </select></div>
-      <div><label for="efDept">Department</label><input id="efDept" required placeholder="e.g. Sales"></div>
+      <div><label for="efDept">Department</label><select id="efDept">
+        <option>Accounts</option><option>Administration</option><option>Clinical Support</option><option>Commercial</option>
+        <option>Graphic Design</option><option>Human Resource</option><option>IT</option>
+        <option>Marketing</option><option>Medical Education</option><option>Operations</option><option>Quality</option>
+        <option>Sales</option><option>SCM</option><option>Service</option><option>Warehouse</option>
+      </select></div>
       <div><label for="efDesig">Designation</label><input id="efDesig" required placeholder="e.g. Sales Executive"></div>
       <div><label for="efMgr">Reporting manager</label><input id="efMgr" placeholder="Manager name"></div>
       <div><label for="efType">Employment type</label><select id="efType"><option>Permanent</option><option>Trainee</option><option>Intern</option><option>Contract</option><option>Consultant</option></select></div>
@@ -820,15 +835,15 @@ const BASEURL='https://learn.avana.in'; // placeholder — the real domain is ch
 const EMPLOYEES=[
  {code:"ZH-1042",name:"Priya Nair",entity:"AMD",div:"Orthotics",dept:"Sales",desig:"Territory Manager",mgr:"K. Iyer",type:"Permanent",mail:"priya.n@avanasurgical.com",mob:"+91 98400 11221",doj:"12 Mar 2022",loc:"Chennai",status:"Active",hours:22},
  {code:"ZH-1077",name:"Arjun Reddy",entity:"AMD",div:"Sports Medicine",dept:"Sales",desig:"Sales Executive",mgr:"K. Iyer",type:"Permanent",mail:"arjun.r@avanasurgical.com",mob:"+91 98400 33445",doj:"05 Jul 2023",loc:"Hyderabad",status:"Active",hours:16},
- {code:"ZH-0918",name:"Meena Joseph",entity:"ASS",div:"Endoscopy",dept:"Clinical Support",desig:"Clinical Specialist",mgr:"D. Rao",type:"Permanent",mail:"meena.j@avanasurgical.com",mob:"+91 98847 55667",doj:"19 Jan 2021",loc:"Kochi",status:"Active",hours:19},
- {code:"ZH-0844",name:"Suresh Kumar",entity:"ASS",div:"Service",dept:"Service",desig:"Service Engineer",mgr:"D. Rao",type:"Permanent",mail:"suresh.k@avanasurgical.com",mob:"+91 98847 77889",doj:"02 Nov 2020",loc:"Bengaluru",status:"Active",hours:11},
- {code:"ZH-1101",name:"Ananya Iyer",entity:"ATS",div:"Commercial",dept:"Operations",desig:"Ops Analyst",mgr:"F. Thomas",type:"Permanent",mail:"ananya.i@avanasurgical.com",mob:"+91 90030 12321",doj:"22 Apr 2024",loc:"Chennai",status:"Active",hours:8},
- {code:"ZH-1115",name:"Rahul Menon",entity:"ATS",div:"IT",dept:"Technology",desig:"Software Engineer",mgr:"F. Thomas",type:"Permanent",mail:"rahul.m@avanasurgical.com",mob:"+91 90030 45654",doj:"09 Sep 2024",loc:"Chennai",status:"Active",hours:6},
+ {code:"ZH-0918",name:"Meena Joseph",entity:"ASS",div:"Endospine",dept:"Clinical Support",desig:"Clinical Specialist",mgr:"D. Rao",type:"Permanent",mail:"meena.j@avanasurgical.com",mob:"+91 98847 55667",doj:"19 Jan 2021",loc:"Kochi",status:"Active",hours:19},
+ {code:"ZH-0844",name:"Suresh Kumar",entity:"ASS",div:"Endospine",dept:"Service",desig:"Service Engineer",mgr:"D. Rao",type:"Permanent",mail:"suresh.k@avanasurgical.com",mob:"+91 98847 77889",doj:"02 Nov 2020",loc:"Bengaluru",status:"Active",hours:11},
+ {code:"ZH-1101",name:"Ananya Iyer",entity:"ATS",div:"Business Support",dept:"Commercial",desig:"Ops Analyst",mgr:"F. Thomas",type:"Permanent",mail:"ananya.i@avanasurgical.com",mob:"+91 90030 12321",doj:"22 Apr 2024",loc:"Chennai",status:"Active",hours:8},
+ {code:"ZH-1115",name:"Rahul Menon",entity:"ATS",div:"Business Support",dept:"IT",desig:"Software Engineer",mgr:"F. Thomas",type:"Permanent",mail:"rahul.m@avanasurgical.com",mob:"+91 90030 45654",doj:"09 Sep 2024",loc:"Chennai",status:"Active",hours:6},
  {code:"ZH-0721",name:"Kavitha Raman",entity:"AMD",div:"Orthotics",dept:"Quality",desig:"QA Executive",mgr:"G. Pillai",type:"Permanent",mail:"kavitha.r@avanasurgical.com",mob:"+91 98410 88990",doj:"14 Jun 2019",loc:"Chennai",status:"Active",hours:24},
  {code:"ZH-1130",name:"Vignesh S",entity:"AMD",div:"Orthotics",dept:"Sales",desig:"Trainee — MedTech Maverick B-3",mgr:"Mentor: R. Krishnan",type:"Trainee",mail:"vignesh.s@avanasurgical.com",mob:"+91 97910 11213",doj:"01 Jul 2026",loc:"Chennai",status:"Active",hours:31},
- {code:"ZH-1131",name:"Divya Prakash",entity:"ASS",div:"Endoscopy",dept:"Sales",desig:"Trainee — MedTech Maverick B-3",mgr:"Mentor: S. Mehta",type:"Trainee",mail:"divya.p@avanasurgical.com",mob:"+91 97910 14151",doj:"01 Jul 2026",loc:"Coimbatore",status:"Active",hours:29},
- {code:"ZH-0655",name:"Mohan Das",entity:"AMD",div:"SCM",dept:"Warehouse",desig:"Store Executive",mgr:"G. Pillai",type:"Permanent",mail:"mohan.d@avanasurgical.com",mob:"+91 98410 66778",doj:"03 Feb 2018",loc:"Chennai",status:"On notice",hours:4},
- {code:"ZH-0410",name:"Rekha V",entity:"ASS",div:"Endoscopy",dept:"Sales",desig:"Area Manager",mgr:"D. Rao",type:"Permanent",mail:"—",mob:"—",doj:"11 Aug 2016",loc:"Chennai",status:"Exited",hours:0},
+ {code:"ZH-1131",name:"Divya Prakash",entity:"ASS",div:"Endospine",dept:"Sales",desig:"Trainee — MedTech Maverick B-3",mgr:"Mentor: S. Mehta",type:"Trainee",mail:"divya.p@avanasurgical.com",mob:"+91 97910 14151",doj:"01 Jul 2026",loc:"Coimbatore",status:"Active",hours:29},
+ {code:"ZH-0655",name:"Mohan Das",entity:"AMD",div:"Business Support",dept:"SCM",desig:"Store Executive",mgr:"G. Pillai",type:"Permanent",mail:"mohan.d@avanasurgical.com",mob:"+91 98410 66778",doj:"03 Feb 2018",loc:"Chennai",status:"On notice",hours:4},
+ {code:"ZH-0410",name:"Rekha V",entity:"ASS",div:"Endospine",dept:"Sales",desig:"Area Manager",mgr:"D. Rao",type:"Permanent",mail:"—",mob:"—",doj:"11 Aug 2016",loc:"Chennai",status:"Exited",hours:0},
 ];
 
 const TRAININGS=[
@@ -1178,30 +1193,69 @@ function exportTab(tab){
   }
 }
 
-/* ---------- dashboard: everything computed live from the data ---------- */
+/* ---------- dashboard: computed live from the data, with filters ---------- */
+function fillDashSel(id,pairs){
+  const s=$(id);if(!s)return;const cur=s.value;
+  s.innerHTML='<option value="">All</option>'+pairs.map(p=>`<option value="${p[0]}">${p[1]}</option>`).join('');
+  if([...s.options].some(o=>o.value===cur))s.value=cur;
+}
+function populateDashFilters(){
+  fillDashSel('dfEmp',EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>[e.code,e.name]));
+  fillDashSel('dfTrn',TRAININGS.map(t=>[t.code,t.title+(t.batch?' — '+t.batch:'')]));
+  fillDashSel('dfDiv',[...new Set(EMPLOYEES.map(e=>e.div))].sort().map(v=>[v,v]));
+  fillDashSel('dfDept',[...new Set(EMPLOYEES.map(e=>e.dept))].sort().map(v=>[v,v]));
+  fillDashSel('dfMgr',[...new Set(EMPLOYEES.map(e=>e.mgr.replace(/^Mentor: /,'')))].sort().map(v=>[v,v]));
+}
+function clearDashFilters(){['dfEmp','dfTrn','dfDiv','dfDept','dfMgr','dfFrom','dfTo'].forEach(id=>{if($(id))$(id).value='';});renderDash();}
+['dfEmp','dfTrn','dfDiv','dfDept','dfMgr','dfFrom','dfTo'].forEach(id=>{const el=$(id);if(el)el.addEventListener('change',renderDash);});
 function renderDash(){
-  const act=EMPLOYEES.filter(e=>e.status!=='Exited');
-  const trained=act.filter(e=>TRAININGS.some(t=>t.part.includes(e.code)));
-  $('dashCov').textContent=(act.length?Math.round(trained.length/act.length*100):0)+'%';
-  $('dashCovSub').textContent=trained.length+' of '+act.length+' employees on at least one training';
-  const mand=TRAININGS.filter(t=>t.mand==='Mandatory'&&t.status!=='Postponed');
-  const compPct=(mand.length&&act.length)?Math.round(mand.reduce((s,t)=>s+Math.min(1,t.part.length/act.length),0)/mand.length*100):0;
-  const gaps=mand.reduce((s,t)=>s+act.filter(e=>!t.part.includes(e.code)).length,0);
+  populateDashFilters();
+  const F={emp:$('dfEmp').value,trn:$('dfTrn').value,div:$('dfDiv').value,dept:$('dfDept').value,mgr:$('dfMgr').value,from:$('dfFrom').value,to:$('dfTo').value};
+  const emps=EMPLOYEES.filter(e=>e.status!=='Exited'
+    &&(!F.emp||e.code===F.emp)
+    &&(!F.div||e.div===F.div)
+    &&(!F.dept||e.dept===F.dept)
+    &&(!F.mgr||e.mgr.replace(/^Mentor: /,'')===F.mgr));
+  const empCodes=new Set(emps.map(e=>e.code));
+  const trns=TRAININGS.filter(t=>{
+    if(F.trn&&t.code!==F.trn)return false;
+    if(F.from||F.to){
+      if(!t.days.length)return false;
+      const d=new Date(dayToIso(t.days[0])+'T00:00:00');
+      if(F.from&&d<new Date(F.from+'T00:00:00'))return false;
+      if(F.to&&d>new Date(F.to+'T00:00:00'))return false;
+    }
+    return true;
+  });
+  const trained=emps.filter(e=>trns.some(t=>t.part.includes(e.code)));
+  $('dashCov').textContent=(emps.length?Math.round(trained.length/emps.length*100):0)+'%';
+  $('dashCovSub').textContent=trained.length+' of '+emps.length+' employee(s) on at least one training in scope';
+  const mand=trns.filter(t=>t.mand==='Mandatory'&&t.status!=='Postponed');
+  const compPct=(mand.length&&emps.length)?Math.round(mand.reduce((s,t)=>s+Math.min(1,t.part.filter(c=>empCodes.has(c)).length/emps.length),0)/mand.length*100):0;
+  const gaps=mand.reduce((s,t)=>s+emps.filter(e=>!t.part.includes(e.code)).length,0);
   $('dashComp').textContent=compPct+'%';
   $('dashCompSub').textContent=gaps+' employee-enrolments still missing';
-  $('dashHours').textContent=act.length?(act.reduce((s,e)=>s+e.hours,0)/act.length).toFixed(1):'0';
-  const used=EXPREC.reduce((s,r)=>s+r.actual,0);
+  const hoursOf=e=>trns.reduce((s,t)=>{
+    if(!t.part.includes(e.code))return s;
+    const m=ATT[t.code]&&ATT[t.code][e.code];
+    const pct=m?attPct(m)/100:(t.status==='Completed'?1:0);
+    return s+(t.hours||0)*pct;
+  },0);
+  $('dashHours').textContent=emps.length?(emps.reduce((s,e)=>s+hoursOf(e),0)/emps.length).toFixed(1):'0';
+  const titles=new Set(trns.map(t=>t.title));
+  const recs=(F.trn||F.from||F.to)?EXPREC.filter(r=>titles.has(r.trn)):EXPREC;
+  const used=recs.reduce((s,r)=>s+r.actual,0);
   $('dashBudget').textContent='₹'+inr(used);
   $('dashBudgetSub').textContent='of ₹14,00,000 annual budget ('+Math.round(used/1400000*100)+'% used)';
-  const up=TRAININGS.filter(t=>['Confirmed','In progress','Awaiting cost approval','Planned'].includes(t.status));
-  const done=TRAININGS.filter(t=>t.status==='Completed').length;
-  $('dashTrnCount').textContent=TRAININGS.length;
+  const up=trns.filter(t=>['Confirmed','In progress','Awaiting cost approval','Planned'].includes(t.status));
+  const done=trns.filter(t=>t.status==='Completed').length;
+  $('dashTrnCount').textContent=trns.length;
   $('dashTrnSplit').textContent=done+' done · '+up.length+' upcoming / running';
-  $('dashUpcoming').innerHTML=up.slice(0,4).map(t=>`<tr><td class="mono">${t.dates}</td><td>${t.title}</td><td><span class="chip ${t.tt==='External agency'?'warn':'acc'}">${t.mode}</span></td></tr>`).join('')||'<tr><td style="color:var(--ink2)">No upcoming trainings.</td></tr>';
+  $('dashUpcoming').innerHTML=up.slice(0,4).map(t=>`<tr><td class="mono">${t.dates}</td><td>${t.title}${t.batch?' — '+t.batch:''}</td><td><span class="chip ${t.tt==='External agency'?'warn':'acc'}">${t.mode}</span></td></tr>`).join('')||'<tr><td style="color:var(--ink2)">No upcoming trainings in scope.</td></tr>';
   $('attnExpiring').textContent=gaps;
-  $('attnFbk').textContent=Object.values(FBFORMS).reduce((s,f)=>s+Math.max(0,(+f.total||0)-(+f.resp||0)),0);
-  $('attnSheets').textContent=TRAININGS.filter(t=>t.status==='Completed'&&t.mode==='Classroom').length;
-  $('attnExp').textContent=EXPREC.filter(r=>r.appr==='Pending').length;
+  $('attnFbk').textContent=trns.reduce((s,t)=>{const f=FBFORMS[t.code];return s+(f?Math.max(0,(+f.total||0)-(+f.resp||0)):0);},0);
+  $('attnSheets').textContent=trns.filter(t=>t.status==='Completed'&&t.mode==='Classroom').length;
+  $('attnExp').textContent=recs.filter(r=>r.appr==='Pending').length;
 }
 
 /* ---------- employees ---------- */
@@ -1964,6 +2018,7 @@ const REPORTS=[
  {name:"Individual training history (passport)",live:true,gen:rptPassport,desc:"Every training on one employee's record, with hours and status."},
  {name:"Attendance register per training",live:true,gen:rptAttendance,desc:"Day-wise register with percentages and eligibility."},
  {name:"Training man-hours per employee",live:true,gen:rptManhours,desc:"Hours this FY against the 16 h target."},
+ {name:"Individual employee training hours",live:true,gen:rptEmpHours,after:()=>rehFill(),desc:"Pick an employee — hours per training, weighted by attendance, with the total."},
  {name:"Expense per training",live:true,gen:rptExpense,desc:"Budget, actual, paid, pending, variance and entity split.",cost:true},
  {name:"Mandatory training compliance",live:true,gen:rptCompliance,desc:"Who has and hasn't completed each mandatory training."},
  {name:"Training-wise participants & scores",desc:"Participant list with assessment scores (Phase 2)."},
@@ -1982,8 +2037,12 @@ const RPT_XL={
   1:()=>{const t=TRAININGS.find(x=>x.code==='TRG-105');downloadXlsx('Attendance-Register-TRG-105.xlsx',['Participant',...t.days,'Percent'],
     Object.entries(ATT['TRG-105']).map(([c,m])=>[empName(c),...m,attPct(m)+'%']),'Attendance');},
   2:()=>exportTab('rpt'),
-  3:()=>exportTab('exp'),
-  4:()=>{const mand=TRAININGS.filter(t=>t.mand==='Mandatory'&&t.code!=='TRG-101'&&t.code!=='TRG-099');
+  3:()=>{const code=($('rehSel')&&$('rehSel').value)||(EMPLOYEES[0]&&EMPLOYEES[0].code);if(!code)return;
+    const rows=rehRows(code);
+    downloadXlsx('Training-Hours-'+code+'.xlsx',['Training','Batch','Dates','Status','Attendance %','Hours'],
+      rows.map(r=>[r.t.title,r.t.batch||'—',r.t.dates,r.t.status,r.pct,r.hrs]),'Hours');},
+  4:()=>exportTab('exp'),
+  5:()=>{const mand=TRAININGS.filter(t=>t.mand==='Mandatory'&&t.code!=='TRG-101'&&t.code!=='TRG-099');
     downloadXlsx('Mandatory-Compliance.xlsx',['Employee',...mand.map(t=>t.title)],
       EMPLOYEES.filter(e=>e.status==='Active').map(e=>[e.name,...mand.map(t=>{const done=t.part.includes(e.code)&&t.status==='Completed';return done?'Done':t.part.includes(e.code)?'Booked':'Due';})]),'Compliance');},
 };
@@ -2005,6 +2064,7 @@ const RPT_XL={
     const r=REPORTS[+b.dataset.rpt];
     $('rptTitle').textContent=r.name;
     $('rptBody').innerHTML=r.gen();
+    if(r.after)r.after();
     rptDlg.showModal();
   });
 })();
@@ -2021,6 +2081,27 @@ function rptAttendance(){
   <table class="tight" style="width:100%"><tr><th>Participant</th>${t.days.map(d=>`<th>${d}</th>`).join('')}<th class="num">%</th></tr>
   ${Object.entries(data).map(([c,m])=>`<tr><td>${empName(c)}</td>${m.map(v=>`<td><span class="chip ${v==='P'?'good':v==='H'?'warn':v==='A'?'crit':'neutral'}">${v}</span></td>`).join('')}<td class="num mono">${attPct(m)}%</td></tr>`).join('')}
   </table>`;
+}
+function rehRows(code){
+  return empHistory(code).map(t=>{
+    const m=ATT[t.code]&&ATT[t.code][code];
+    const pct=m?attPct(m):(t.status==='Completed'?100:0);
+    return {t,pct,hrs:Math.round((t.hours||0)*pct)/100};
+  });
+}
+function rptEmpHours(){
+  const opts=EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>`<option value="${e.code}">${e.name} (${e.code})</option>`).join('');
+  return `<div class="hstack" style="margin:0 0 12px"><span class="flabel">Employee</span><select class="select" id="rehSel" onchange="rehFill()">${opts}</select></div><div id="rehBody"></div>`;
+}
+function rehFill(){
+  const code=$('rehSel').value;
+  const rows=rehRows(code);
+  const tot=rows.reduce((s,r)=>s+r.hrs,0);
+  $('rehBody').innerHTML=rows.length?`<table class="tight" style="width:100%"><tr><th>Training</th><th>Dates</th><th>Status</th><th class="num">Attendance</th><th class="num">Hours</th></tr>
+    ${rows.map(r=>`<tr><td>${r.t.title}${r.t.batch?' — '+r.t.batch:''}</td><td class="mono">${r.t.dates}</td><td><span class="chip ${r.t.status==='Completed'?'good':'acc'}">${r.t.status}</span></td><td class="num mono">${r.pct}%</td><td class="num mono">${r.hrs.toFixed(1)}</td></tr>`).join('')}
+    <tr style="font-weight:700"><td colspan="4">Total training hours</td><td class="num mono">${tot.toFixed(1)}</td></tr></table>
+    <p style="font-size:12px;color:var(--ink2)">Hours = training hours × attendance percentage; completed trainings without attendance marks count in full.</p>`
+   :'<p style="color:var(--ink2)">No trainings on record for this employee yet.</p>';
 }
 function rptManhours(){
   return `<table class="tight" style="width:100%"><tr><th>Employee</th><th>Entity</th><th class="num">Hours FY</th><th style="width:34%">vs 16 h target</th></tr>
