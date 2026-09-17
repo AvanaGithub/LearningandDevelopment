@@ -263,18 +263,21 @@ body[data-role="manager"] .no-mgr{display:none!important}
 
 <!-- ================= DASHBOARD ================= -->
 <section class="page on" id="page-dash">
-  <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div></div>
-  <div class="card pad" style="margin-bottom:16px">
+  <div class="toolbar"><div><h1>Dashboard</h1></div><div class="grow"></div>
+    <button class="btn" id="dashFilterBtn" onclick="toggleDashFilters()">▼ Filters</button>
+  </div>
+  <div class="card pad" id="dashFilterPanel" hidden style="margin-bottom:16px">
     <div class="hstack">
-      <label><span class="select-label">Employee</span><select class="select" id="dfEmp"></select></label>
-      <label><span class="select-label">Training</span><select class="select" id="dfTrn"></select></label>
-      <label><span class="select-label">Division</span><select class="select" id="dfDiv"></select></label>
-      <label><span class="select-label">Department</span><select class="select" id="dfDept"></select></label>
-      <label><span class="select-label">Team</span><select class="select" id="dfMgr"></select></label>
+      <div class="msel" id="dfEmp"></div>
+      <div class="msel" id="dfTrn"></div>
+      <div class="msel" id="dfDiv"></div>
+      <div class="msel" id="dfDept"></div>
+      <div class="msel" id="dfMgr"></div>
       <label><span class="select-label">From</span><input type="date" id="dfFrom" class="select"></label>
       <label><span class="select-label">To</span><input type="date" id="dfTo" class="select"></label>
-      <button class="btn small" onclick="clearDashFilters()">✕ Clear</button>
+      <button class="btn small" onclick="clearDashFilters()">✕ Clear all</button>
     </div>
+    <p style="font-size:11.5px;color:var(--ink2);margin:8px 0 0">Tick any combination — several employees, several trainings, divisions, departments and teams at once. Every tile and list below recomputes for the selection.</p>
   </div>
   <div class="tiles">
     <div class="tile"><div class="lbl">Training coverage</div><div class="val" id="dashCov">–</div><div class="delta up" id="dashCovSub"></div></div>
@@ -759,7 +762,7 @@ function makeMsel(el,label,getItems,onChange){
   }
   function fill(){
     const items=getItems();
-    menu.innerHTML='<label><input type="checkbox" data-all'+(state.sel.size===0?' checked':'')+'> All trainings</label><hr>'+
+    menu.innerHTML='<label><input type="checkbox" data-all'+(state.sel.size===0?' checked':'')+'> All</label><hr>'+
       items.map(i=>'<label><input type="checkbox" value="'+i.v+'"'+(state.sel.has(i.v)?' checked':'')+'> '+i.t+'</label>').join('');
     menu.querySelector('[data-all]').addEventListener('change',()=>{state.sel.clear();fill();lbl();onChange();});
     menu.querySelectorAll('input[value]').forEach(c=>c.addEventListener('change',()=>{
@@ -1193,37 +1196,49 @@ function exportTab(tab){
   }
 }
 
-/* ---------- dashboard: computed live from the data, with filters ---------- */
-function fillDashSel(id,pairs){
-  const s=$(id);if(!s)return;const cur=s.value;
-  s.innerHTML='<option value="">All</option>'+pairs.map(p=>`<option value="${p[0]}">${p[1]}</option>`).join('');
-  if([...s.options].some(o=>o.value===cur))s.value=cur;
+/* ---------- dashboard: computed live from the data, with multi-choice filters ---------- */
+const dashMs={};
+function initDashFilters(){
+  if(dashMs.emp||!$('dfEmp'))return;
+  dashMs.emp=makeMsel($('dfEmp'),'Employees',()=>EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>({v:e.code,t:e.name})),renderDash);
+  dashMs.trn=makeMsel($('dfTrn'),'Trainings',()=>TRAININGS.map(t=>({v:t.code,t:t.title+(t.batch?' — '+t.batch:'')})),renderDash);
+  dashMs.div=makeMsel($('dfDiv'),'Divisions',()=>[...new Set(EMPLOYEES.map(e=>e.div))].sort().map(v=>({v:v,t:v})),renderDash);
+  dashMs.dept=makeMsel($('dfDept'),'Departments',()=>[...new Set(EMPLOYEES.map(e=>e.dept))].sort().map(v=>({v:v,t:v})),renderDash);
+  dashMs.mgr=makeMsel($('dfMgr'),'Teams',()=>[...new Set(EMPLOYEES.map(e=>e.mgr.replace(/^Mentor: /,'')))].sort().map(v=>({v:v,t:v})),renderDash);
+  $('dfFrom').addEventListener('change',renderDash);
+  $('dfTo').addEventListener('change',renderDash);
 }
-function populateDashFilters(){
-  fillDashSel('dfEmp',EMPLOYEES.filter(e=>e.status!=='Exited').map(e=>[e.code,e.name]));
-  fillDashSel('dfTrn',TRAININGS.map(t=>[t.code,t.title+(t.batch?' — '+t.batch:'')]));
-  fillDashSel('dfDiv',[...new Set(EMPLOYEES.map(e=>e.div))].sort().map(v=>[v,v]));
-  fillDashSel('dfDept',[...new Set(EMPLOYEES.map(e=>e.dept))].sort().map(v=>[v,v]));
-  fillDashSel('dfMgr',[...new Set(EMPLOYEES.map(e=>e.mgr.replace(/^Mentor: /,'')))].sort().map(v=>[v,v]));
+function toggleDashFilters(){
+  const p=$('dashFilterPanel');p.hidden=!p.hidden;
+  dashFilterBtnLabel();
 }
-function clearDashFilters(){['dfEmp','dfTrn','dfDiv','dfDept','dfMgr','dfFrom','dfTo'].forEach(id=>{if($(id))$(id).value='';});renderDash();}
-['dfEmp','dfTrn','dfDiv','dfDept','dfMgr','dfFrom','dfTo'].forEach(id=>{const el=$(id);if(el)el.addEventListener('change',renderDash);});
+function dashFilterBtnLabel(){
+  let n=0;Object.values(dashMs).forEach(m=>{if(m.sel.size)n++;});
+  if($('dfFrom').value)n++;if($('dfTo').value)n++;
+  $('dashFilterBtn').textContent=($('dashFilterPanel').hidden?'▼':'▲')+' Filters'+(n?' · '+n+' active':'');
+}
+function clearDashFilters(){
+  Object.values(dashMs).forEach(m=>{m.sel.clear();m.refresh();});
+  $('dfFrom').value='';$('dfTo').value='';
+  renderDash();
+}
 function renderDash(){
-  populateDashFilters();
-  const F={emp:$('dfEmp').value,trn:$('dfTrn').value,div:$('dfDiv').value,dept:$('dfDept').value,mgr:$('dfMgr').value,from:$('dfFrom').value,to:$('dfTo').value};
+  initDashFilters();
+  Object.values(dashMs).forEach(m=>m.refresh());
+  const S={emp:dashMs.emp.sel,trn:dashMs.trn.sel,div:dashMs.div.sel,dept:dashMs.dept.sel,mgr:dashMs.mgr.sel,from:$('dfFrom').value,to:$('dfTo').value};
   const emps=EMPLOYEES.filter(e=>e.status!=='Exited'
-    &&(!F.emp||e.code===F.emp)
-    &&(!F.div||e.div===F.div)
-    &&(!F.dept||e.dept===F.dept)
-    &&(!F.mgr||e.mgr.replace(/^Mentor: /,'')===F.mgr));
+    &&(!S.emp.size||S.emp.has(e.code))
+    &&(!S.div.size||S.div.has(e.div))
+    &&(!S.dept.size||S.dept.has(e.dept))
+    &&(!S.mgr.size||S.mgr.has(e.mgr.replace(/^Mentor: /,''))));
   const empCodes=new Set(emps.map(e=>e.code));
   const trns=TRAININGS.filter(t=>{
-    if(F.trn&&t.code!==F.trn)return false;
-    if(F.from||F.to){
+    if(S.trn.size&&!S.trn.has(t.code))return false;
+    if(S.from||S.to){
       if(!t.days.length)return false;
       const d=new Date(dayToIso(t.days[0])+'T00:00:00');
-      if(F.from&&d<new Date(F.from+'T00:00:00'))return false;
-      if(F.to&&d>new Date(F.to+'T00:00:00'))return false;
+      if(S.from&&d<new Date(S.from+'T00:00:00'))return false;
+      if(S.to&&d>new Date(S.to+'T00:00:00'))return false;
     }
     return true;
   });
@@ -1243,7 +1258,7 @@ function renderDash(){
   },0);
   $('dashHours').textContent=emps.length?(emps.reduce((s,e)=>s+hoursOf(e),0)/emps.length).toFixed(1):'0';
   const titles=new Set(trns.map(t=>t.title));
-  const recs=(F.trn||F.from||F.to)?EXPREC.filter(r=>titles.has(r.trn)):EXPREC;
+  const recs=(S.trn.size||S.from||S.to)?EXPREC.filter(r=>titles.has(r.trn)):EXPREC;
   const used=recs.reduce((s,r)=>s+r.actual,0);
   $('dashBudget').textContent='₹'+inr(used);
   $('dashBudgetSub').textContent='of ₹14,00,000 annual budget ('+Math.round(used/1400000*100)+'% used)';
@@ -1256,6 +1271,7 @@ function renderDash(){
   $('attnFbk').textContent=trns.reduce((s,t)=>{const f=FBFORMS[t.code];return s+(f?Math.max(0,(+f.total||0)-(+f.resp||0)):0);},0);
   $('attnSheets').textContent=trns.filter(t=>t.status==='Completed'&&t.mode==='Classroom').length;
   $('attnExp').textContent=recs.filter(r=>r.appr==='Pending').length;
+  dashFilterBtnLabel();
 }
 
 /* ---------- employees ---------- */
