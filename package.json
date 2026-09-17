@@ -1,0 +1,16 @@
+{
+  "name": "avana-learning-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Avana Group Learning & Development internal application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

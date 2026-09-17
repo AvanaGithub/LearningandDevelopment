@@ -217,14 +217,16 @@ body[data-role="manager"] .no-mgr{display:none!important}
     <h1 style="margin:14px 0 2px">Learning Hub</h1>
     <p style="color:var(--ink2);font-size:12.5px;margin:0 0 18px">Learning &amp; Development · Internal</p>
     <form id="loginForm" style="text-align:left">
-      <label class="flabel" for="loginMail">Zoho e-mail ID</label>
-      <input id="loginMail" type="email" required placeholder="name@avanasurgical.com" style="width:100%;margin:4px 0 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:13.5px 'Arimo',sans-serif;color:var(--ink)">
+      <div id="loginMailWrap">
+        <label class="flabel" for="loginMail">Zoho e-mail ID</label>
+        <input id="loginMail" type="email" required placeholder="name@avanasurgical.com" style="width:100%;margin:4px 0 10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:13.5px 'Arimo',sans-serif;color:var(--ink)">
+      </div>
       <button class="btn primary" type="submit" style="width:100%">Sign in with Zoho</button>
       <p id="loginErr" style="color:var(--crit);font-size:12.5px;min-height:18px;margin:8px 0 0"></p>
     </form>
-    <p style="font-size:11.5px;color:var(--ink2);margin:6px 0 10px">Prototype: simulated Zoho SSO — the e-mail is checked against Users &amp; Access, no password needed. The real build redirects to the actual Zoho sign-in.</p>
-    <p class="mono" style="font-size:10.5px;color:var(--ink2);margin:0 0 10px">Build 33 · 17 Sep 2026</p>
-    <div class="hstack" style="justify-content:center;gap:6px">
+    <p id="loginHint" style="font-size:11.5px;color:var(--ink2);margin:6px 0 10px">Prototype: simulated Zoho SSO — the e-mail is checked against Users &amp; Access, no password needed. The real build redirects to the actual Zoho sign-in.</p>
+    <p class="mono" style="font-size:10.5px;color:var(--ink2);margin:0 0 10px">Build 34 · 17 Sep 2026</p>
+    <div class="hstack" id="loginTryRow" style="justify-content:center;gap:6px">
       <span style="font-size:11px;color:var(--ink2)">Try:</span>
       <button type="button" class="btn small" onclick="fillLogin('lokshni@avanasurgical.com')">Super admin</button>
       <button type="button" class="btn small" onclick="fillLogin('vivek@avanasurgical.com')">Admin</button>
@@ -2167,8 +2169,10 @@ function applyLogin(u){
   const cur=document.querySelector('.rail .nav[aria-current="true"]');
   if(cur&&getComputedStyle(cur).display==='none')navBtns[0].click();
 }
+let SSO_MODE=false;
 $('loginForm').addEventListener('submit',ev=>{
   ev.preventDefault();
+  if(SSO_MODE){location.href='/auth/zoho';return;} // real Zoho sign-in on the server build
   const mail=$('loginMail').value.trim().toLowerCase();
   const u=USERS.find(x=>x.mail.toLowerCase()===mail);
   if(!u){$('loginErr').textContent='No access for this e-mail — the administrator must add it in Users & Access first.';return;}
@@ -2177,10 +2181,43 @@ $('loginForm').addEventListener('submit',ev=>{
   applyLogin(u);
   toast('Signed in as '+u.name+' ('+u.type+' · '+u.acc+') via simulated Zoho SSO.');
 });
-function signOut(){try{sessionStorage.removeItem('avana-lh-user');}catch(e){}location.reload();}
-(function(){
+function signOut(){
+  try{sessionStorage.removeItem('avana-lh-user');}catch(e){}
+  if(SSO_MODE){location.href='/auth/logout';return;}
+  location.reload();
+}
+(async function(){
   if(location.hash.match(/^#(att|fb)\//)){$('loginView').hidden=true;return;} // participant QR pages need no sign-in
-  const as=location.hash.match(/^#as\/(.+)$/); // direct test link: #as/<email> signs straight in
+  /* Served by the Node server? Then real Zoho SSO takes over the sign-in screen. */
+  if(/^https?:$/.test(location.protocol)){
+    try{
+      const r=await fetch('/api/me',{headers:{Accept:'application/json'}});
+      if(r.ok&&(r.headers.get('content-type')||'').includes('json')){
+        const d=await r.json();
+        if(d&&d.sso===true){
+          SSO_MODE=true;
+          $('loginMailWrap').hidden=true;$('loginMail').required=false;
+          $('loginTryRow').hidden=true;
+          $('loginHint').textContent=d.configured
+            ?'You will be redirected to Zoho and sign in with your usual Zoho account (AMD & ATS via Zoho People, ASSP via Zoho One). Access follows the Users & Access list.'
+            :'Zoho SSO server is running but not configured yet — the administrator must set the Zoho credentials on the server.';
+          const err=new URLSearchParams(location.search).get('sso_error');
+          if(err)$('loginErr').textContent='Zoho sign-in did not complete ('+err+') — please try again.';
+          if(d.email){
+            const u=USERS.find(x=>String(x.mail).toLowerCase()===String(d.email).toLowerCase());
+            if(u&&u.status==='Active'){
+              applyLogin(u);
+              toast('Signed in via Zoho SSO as '+u.name+' ('+u.type+' · '+u.acc+').');
+              return;
+            }
+            $('loginErr').innerHTML='Zoho verified <strong>'+d.email+'</strong>, but this e-mail is '+(u?'disabled':'not in Users & Access')+'. <a href="/auth/logout">Try a different Zoho account</a> or ask the administrator to add it.';
+          }
+          return; // stay on the sign-in screen; the button now goes to Zoho
+        }
+      }
+    }catch(e){/* static hosting — keep the simulated sign-in */}
+  }
+  const as=location.hash.match(/^#as\/(.+)$/); // direct test link: #as/<email> signs straight in (simulated mode only)
   if(as){
     const u=USERS.find(x=>x.mail.toLowerCase()===decodeURIComponent(as[1]).trim().toLowerCase());
     if(u&&u.status==='Active'){
