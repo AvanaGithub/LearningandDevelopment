@@ -3,6 +3,7 @@ import { api, fmtDay, fmtRange } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
+import MSel from '../components/MSel.jsx';
 
 const CYCLE = { '': 'P', P: 'A', A: 'H', H: '' };
 
@@ -100,20 +101,8 @@ export default function Attendance() {
         – not marked · P present · A absent · H half-day. {isAdmin ? 'Click a cell to cycle, or use Edit for a correction with a recorded reason.' : 'View-only for your role.'} Eligibility assumes minimum 75% attendance.
       </p>
       <div className="toolbar">
-        <details className="msel">
-          <summary>Trainings: {selIds.length ? selIds.length + ' selected' : 'All'} ▾</summary>
-          <div className="menu">
-            <label><input type="checkbox" checked={!selIds.length} onChange={() => setSelIds([])} /> All</label>
-            <hr style={{ border: 0, borderTop: '1px solid var(--line)' }} />
-            {(list || []).map((t) => (
-              <label key={t.id}>
-                <input type="checkbox" checked={selIds.includes(t.id)}
-                  onChange={(e) => setSelIds((s) => e.target.checked ? [...s, t.id] : s.filter((x) => x !== t.id))} />
-                {t.title}{t.batch ? ' — ' + t.batch : ''} ({fmtRange(t.days)})
-              </label>
-            ))}
-          </div>
-        </details>
+        <MSel label="Trainings" sel={selIds} onChange={setSelIds}
+          options={(list || []).map((t) => ({ v: t.id, t: `${t.title}${t.batch ? ' — ' + t.batch : ''} (${fmtRange(t.days)})` }))} />
         <span style={{ flex: 1 }} />
         {isAdmin && <button className="btn" onClick={doExport}>⬇ Export</button>}
       </div>

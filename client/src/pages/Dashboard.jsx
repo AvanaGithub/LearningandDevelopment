@@ -2,28 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, fmtDay, inr } from '../api.js';
 import { useAuth } from '../App.jsx';
-
-// Multi-choice dropdown (same pattern as the Attendance filter).
-function MSel({ label, options, sel, onChange }) {
-  const n = sel.length;
-  const one = n === 1 && options.find((o) => o.v === sel[0]);
-  return (
-    <details className="msel">
-      <summary>{n === 0 ? `${label}: All` : n === 1 ? (one ? one.t : '1 selected') : `${label}: ${n} selected`} ▾</summary>
-      <div className="menu">
-        <label><input type="checkbox" checked={!n} onChange={() => onChange([])} /> All</label>
-        <hr style={{ border: 0, borderTop: '1px solid var(--line)' }} />
-        {options.map((o) => (
-          <label key={o.v}>
-            <input type="checkbox" checked={sel.includes(o.v)}
-              onChange={(e) => onChange(e.target.checked ? [...sel, o.v] : sel.filter((x) => x !== o.v))} />
-            {o.t}
-          </label>
-        ))}
-      </div>
-    </details>
-  );
-}
+import MSel from '../components/MSel.jsx';
 
 export default function Dashboard() {
   const nav = useNavigate();
