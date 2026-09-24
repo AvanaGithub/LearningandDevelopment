@@ -1,0 +1,19 @@
+{
+  "name": "learning-hub-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Avana Learning Hub API server (Express + PostgreSQL + Zoho SSO)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "migrate": "node src/db.js migrate",
+    "seed": "node src/seed.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}
