@@ -24,6 +24,16 @@ export const api = {
   del: (url) => call('DELETE', url),
 };
 
+// Upload one or more files; resolves to [{id, name}] for attaching to records.
+export async function apiUpload(fileList) {
+  const fd = new FormData();
+  [...fileList].forEach((f) => fd.append('files', f));
+  const res = await fetch('/api/files', { method: 'POST', body: fd, credentials: 'same-origin' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+  return data;
+}
+
 export const ENTITIES = ['AMD', 'ASS', 'ATS'];
 export const ENTITY_NAMES = {
   AMD: 'Avana Medical Devices',

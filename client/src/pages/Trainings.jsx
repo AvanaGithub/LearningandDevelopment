@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
-import { useAuth, useToast } from '../App.jsx';
+import { api, apiUpload, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
+import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
 import QrModal from '../components/QrModal.jsx';
@@ -33,13 +33,34 @@ const EMPTY = {
   title: '', batch: '', category: 'Product', mode: 'Classroom',
   trainer_type: 'internal', trainer_name: '', agency: '',
   numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
-  mandatory: false, status: 'planned', reason: '',
+  mandatory: false, status: 'planned', validity_months: '',
+  agenda_file: null, agenda_name: '', reason: '',
 };
 
 export default function Trainings() {
   const { user: me } = useAuth();
+  const { settings } = useSettings();
   const toast = useToast();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+  const categories = settings?.trn_categories || TRN_CATEGORIES;
+
+  const uploadAgenda = async (files) => {
+    try {
+      const [f] = await apiUpload(files);
+      setForm((fm) => ({ ...fm, agenda_file: f.id, agenda_name: f.name }));
+      toast('Agenda attached — it will show on the training and the calendar.');
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const deleteTrn = async (t) => {
+    const reason = window.prompt(`Delete ${t.code} permanently? Allowed only when nothing is recorded on it — otherwise set the status to Cancelled.\n\nReason (required, audit trail):`);
+    if (!reason?.trim()) return;
+    try {
+      await api.del(`/api/trainings/${t.id}?reason=` + encodeURIComponent(reason.trim()));
+      toast(`${t.code} deleted — reason recorded in the audit trail.`);
+      setSel(null); load();
+    } catch (e2) { setErr(e2.message); }
+  };
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
@@ -148,7 +169,8 @@ export default function Trainings() {
       agency: t.agency || '', numDays: days.length || 1,
       from: days[0] ? days[0].slice(0, 10) : '', to: days.length ? days[days.length - 1].slice(0, 10) : '',
       hours_per_day: Number(t.hours_per_day), seats: t.seats, mandatory: t.mandatory,
-      status: t.status, reason: '',
+      status: t.status, validity_months: t.validity_months || '',
+      agenda_file: t.agenda_file || null, agenda_name: t.agenda_file ? 'Current agenda' : '', reason: '',
     });
     setErr(null);
   };
@@ -212,7 +234,7 @@ export default function Trainings() {
             {F('Batch (optional)', 'batch', { placeholder: 'e.g. Batch 2' })}
             <div><label>Category</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {TRN_CATEGORIES.map((x) => <option key={x}>{x}</option>)}
+                {categories.map((x) => <option key={x}>{x}</option>)}
               </select></div>
             <div><label>Mode</label>
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
@@ -250,6 +272,15 @@ export default function Trainings() {
                 <option value="no">Optional</option>
                 <option value="yes">Mandatory</option>
               </select></div>
+            {F('Re-training validity (months, optional)', 'validity_months', { type: 'number', min: 1, placeholder: 'e.g. 12 — drives re-training due reports' })}
+            <div><label>Training agenda (optional)</label>
+              {form.agenda_file
+                ? <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, paddingTop: 6 }}>
+                    <span>📄 {form.agenda_name || 'Attached'}</span>
+                    <button type="button" className="btn link" onClick={() => setForm({ ...form, agenda_file: null, agenda_name: '' })}>✕</button>
+                  </div>
+                : <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xlsx" onChange={(e) => e.target.files.length && uploadAgenda(e.target.files)} />}
+            </div>
             {form.id && F('Reason for this correction', 'reason', { placeholder: 'Goes to the audit trail (optional)' })}
           </div>
           {form.numDays > 1 && form.from && form.to &&
@@ -304,8 +335,9 @@ export default function Trainings() {
               <dt>Dates</dt><dd>{fmtRange(sel.days)}</dd>
               <dt>Hours</dt><dd>{(sel.days?.length || 0) * Number(sel.hours_per_day)} h · {sel.hours_per_day} h/day</dd>
               <dt>Seats</dt><dd>{sel.participants.length}/{sel.seats} filled</dd>
-              <dt>Mandatory</dt><dd>{sel.mandatory ? 'Yes' : 'No'}</dd>
+              <dt>Mandatory</dt><dd>{sel.mandatory ? `Yes${sel.validity_months ? ` · re-training every ${sel.validity_months} months` : ''}` : 'No'}</dd>
               <dt>Status</dt><dd><span className={'pill ' + statusPill(sel.status)}>{TRN_STATUSES[sel.status]}</span></dd>
+              {sel.agenda_file && <><dt>Agenda</dt><dd><a href={'/api/files/' + sel.agenda_file} target="_blank" rel="noreferrer">📄 View / download agenda</a></dd></>}
             </dl>
 
             <h3 style={{ fontSize: 14, margin: '16px 0 8px' }}>Participants ({sel.participants.length})</h3>
@@ -352,6 +384,9 @@ export default function Trainings() {
                   url: `${location.origin}/p/fb/${sel.public_token}`,
                   desc: 'Scan or share the link — responses tag to this training\'s feedback form automatically.',
                 })}>▦ Feedback QR</button>
+              )}
+              {isAdmin && sel.participants.length === 0 && (
+                <button className="btn" style={{ color: 'var(--crit)' }} onClick={() => deleteTrn(sel)}>Delete</button>
               )}
               <button className="btn" onClick={() => setSel(null)}>Close</button>
             </div>

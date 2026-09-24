@@ -25,7 +25,11 @@ router.get('/', async (req, res, next) => {
     }
     const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
     const { rows } = await query(
-      `SELECT * FROM employees ${where} ORDER BY name LIMIT 500`, params);
+      `SELECT e.*,
+         coalesce((SELECT round(sum(t.hours_per_day * CASE a.mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::numeric, 1)
+                   FROM attendance a JOIN trainings t ON t.id = a.training_id
+                   WHERE a.employee_id = e.id), 0) AS hours_fy
+       FROM employees e ${where} ORDER BY name LIMIT 500`, params);
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -85,6 +89,28 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     if (e.code === '23505') return res.status(409).json({ error: 'An employee with this e-mail already exists' });
     next(e);
   }
+});
+
+// Hard delete is allowed ONLY for a record with no history (a mistaken
+// entry): no training participation, attendance, batch membership or
+// feedback. Anything with history must be deactivated instead (ISO 13485).
+router.delete('/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const reason = String(req.query.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A reason is required to delete a record' });
+    const { rows: hist } = await query(
+      `SELECT (SELECT count(*) FROM training_participants WHERE employee_id=$1)
+            + (SELECT count(*) FROM attendance WHERE employee_id=$1)
+            + (SELECT count(*) FROM mav_members WHERE employee_id=$1) AS n`, [id]);
+    if (Number(hist[0].n) > 0) {
+      return res.status(409).json({ error: 'This employee has training history — deactivate instead of deleting (ISO 13485).' });
+    }
+    const { rows } = await query('DELETE FROM employees WHERE id=$1 RETURNING name', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await audit(req.user.id, 'employee.delete', 'employee', id, { name: rows[0].name }, reason);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

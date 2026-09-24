@@ -118,3 +118,8 @@ details.msel label{display:flex;gap:8px;align-items:center;padding:4px 0;font-si
 .cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
 @media(max-width:900px){.cols2{grid-template-columns:1fr}}
 .pill.neutral{background:var(--panel2);color:var(--ink2)}
+
+/* ---- budget bars ---- */
+.bar{height:8px;border-radius:99px;background:var(--panel2);overflow:hidden;min-width:90px;flex:1}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.bar.hot i{background:var(--crit)}

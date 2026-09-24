@@ -11,6 +11,19 @@ export const toXlsx = (name, header, rows, sheet = 'Data') => {
   XLSX.writeFile(wb, name);
 };
 
+// Multi-sheet workbook (used by the audit evidence pack).
+export const toWorkbook = (name, sheets) => {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(({ sheet, header, rows }) => {
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws['!cols'] = header.map((h, i) => ({
+      wch: Math.min(42, Math.max(String(h).length, ...rows.slice(0, 200).map((r) => String(r[i] ?? '').length), 8) + 2),
+    }));
+    XLSX.utils.book_append_sheet(wb, ws, sheet.slice(0, 31));
+  });
+  XLSX.writeFile(wb, name);
+};
+
 // First sheet of an uploaded .xlsx/.csv as an array-of-arrays (formatted strings).
 export const readSheet = (file) => new Promise((resolve, reject) => {
   const r = new FileReader();

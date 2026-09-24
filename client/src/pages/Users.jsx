@@ -9,10 +9,17 @@ export default function Users() {
   const toast = useToast();
   const [rows, setRows] = useState(null);
   const [form, setForm] = useState(null); // null = closed, EMPTY-shaped = add form
+  const [emps, setEmps] = useState([]);
   const [err, setErr] = useState(null);
 
   const load = () => api.get('/api/users').then(setRows).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); api.get('/api/employees?active=true').then(setEmps).catch(() => {}); }, []);
+
+  const pickEmployee = (id) => {
+    const e = emps.find((x) => x.id === Number(id));
+    if (e) setForm({ ...form, email: e.email || '', name: e.name, entity: e.entity, _emp: id });
+    else setForm({ ...form, _emp: id });
+  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -47,6 +54,13 @@ export default function Users() {
       {form && (
         <form className="card" onSubmit={save}>
           <div className="form-grid">
+            <div style={{ gridColumn: '1/-1' }}><label>Pick from employees (auto-fills the details)</label>
+              <select value={form._emp || ''} onChange={(e) => pickEmployee(e.target.value)}>
+                <option value="">— type the details manually below —</option>
+                {emps.filter((e) => e.email).map((e) => (
+                  <option key={e.id} value={e.id}>{e.name} — {e.email} ({e.entity})</option>
+                ))}
+              </select></div>
             <div><label>Zoho e-mail ID</label>
               <input required type="email" value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}

@@ -32,9 +32,13 @@ export default function Shell() {
         <NavLink to="/feedback" className={link}>Feedback</NavLink>
         {isAdmin && <NavLink to="/expenses" className={link}>Expenses</NavLink>}
         <NavLink to="/reports" className={link}>Reports</NavLink>
+        <div className="sect">Programmes</div>
+        <NavLink to="/mavericks" className={link}>Mavericks</NavLink>
+        <NavLink to="/joiners" className={link}>New Joiners</NavLink>
         {isAdmin && (<>
           <div className="sect">Administration</div>
           <NavLink to="/users" className={link}>Users &amp; Access</NavLink>
+          <NavLink to="/settings" className={link}>Settings</NavLink>
         </>)}
         <div className="sect">Phase 2 · Planned</div>
         <div className="locked">Nominations</div>

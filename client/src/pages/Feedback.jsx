@@ -160,7 +160,8 @@ export default function Feedback() {
                   <th key={i} title={q} style={{ textAlign: 'right' }}>Q{i + 1}</th>)}<th>Comment</th></tr></thead>
                 <tbody>
                   {results.responses.map((r, ri) => (
-                    <tr key={ri}><td>{r.respondent}</td>
+                    <tr key={ri}><td>{r.respondent}
+                      <div className="muted" style={{ fontSize: 10 }}>{new Date(r.created_at).toLocaleString('en-IN')}</div></td>
                       {results.questions.map((q, i) => <td key={i} style={{ textAlign: 'right' }}>{r.scores[i] || '—'}</td>)}
                       <td className="muted mini">{r.comment}</td></tr>
                   ))}

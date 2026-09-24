@@ -70,7 +70,7 @@ export default function Calendar() {
       </div>
       <div className="card" style={{ padding: 0 }}>
         <table>
-          <thead><tr><th>Dates</th><th>Training</th><th>Mode</th><th>Trainer</th><th>Status</th></tr></thead>
+          <thead><tr><th>Dates</th><th>Training</th><th>Mode</th><th>Trainer</th><th>Agenda</th><th>Status</th></tr></thead>
           <tbody>
             {(rows || []).map((t) => (
               <tr key={t.id} className="rowlink" onClick={() => nav('/trainings?open=' + t.id)}>
@@ -79,10 +79,13 @@ export default function Calendar() {
                   {t.mandatory && <span className="pill warn mini" style={{ marginLeft: 6 }}>Mandatory</span>}</td>
                 <td>{t.mode}</td>
                 <td>{t.trainer_type === 'external' ? (t.agency || t.trainer_name) : t.trainer_name}</td>
+                <td>{t.agenda_file
+                  ? <a href={'/api/files/' + t.agenda_file} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>📄 Agenda</a>
+                  : <span className="muted">—</span>}</td>
                 <td><span className={'pill ' + statusPill(t.status)}>{TRN_STATUSES[t.status]}</span></td>
               </tr>
             ))}
-            {rows && !rows.length && <tr><td colSpan={5} className="muted">No trainings planned this month.</td></tr>}
+            {rows && !rows.length && <tr><td colSpan={6} className="muted">No trainings planned this month.</td></tr>}
           </tbody>
         </table>
       </div>

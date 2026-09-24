@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, EMP_TYPES } from '../api.js';
-import { useAuth, useToast } from '../App.jsx';
+import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
 
@@ -40,8 +40,14 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-di
 
 export default function Employees() {
   const { user: me } = useAuth();
+  const { settings } = useSettings();
   const toast = useToast();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+  const divisions = settings?.divisions || DIVISIONS;
+  const departments = settings?.departments || DEPARTMENTS;
+  const empTypes = settings?.emp_types || EMP_TYPES;
+  const reqFields = settings?.required_employee_fields || [];
+  const isReq = (k) => reqFields.includes(k);
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [entity, setEntity] = useState('');
@@ -107,8 +113,18 @@ export default function Employees() {
       designation: r.designation || '', manager: r.manager || '',
       employment_type: r.employment_type || 'Permanent', mobile: r.mobile || '',
       location: r.location || '', date_joined: r.date_joined ? r.date_joined.slice(0, 10) : '',
-      reason: '',
+      active: r.active, reason: '',
     });
+  };
+
+  const deleteEmp = async (r) => {
+    const reason = window.prompt(`Delete ${r.name} permanently? Allowed only for records with no training history — otherwise use Deactivate.\n\nReason (required, audit trail):`);
+    if (!reason?.trim()) return;
+    try {
+      await api.del(`/api/employees/${r.id}?reason=` + encodeURIComponent(reason.trim()));
+      toast(`${r.name} deleted — reason recorded in the audit trail.`);
+      setSel(null); load();
+    } catch (e2) { setErr(e2.message); }
   };
 
   const setActive = async (r, active, reason) => {
@@ -166,22 +182,31 @@ export default function Employees() {
           <div className="form-grid">
             {form.id
               ? <div><label>Zoho employee ID (locked)</label><input value={form.zoho_emp_id} readOnly style={{ background: 'var(--panel2)' }} /></div>
-              : F('Zoho employee ID', 'zoho_emp_id', { placeholder: 'ZH-1234' })}
+              : F(`Zoho employee ID${isReq('zoho_emp_id') ? ' *' : ''}`, 'zoho_emp_id', { placeholder: 'ZH-1234', required: isReq('zoho_emp_id') })}
             {F('Full name *', 'name', { required: true })}
             <div><label>Entity *</label>
               <select value={form.entity} onChange={(e) => setForm({ ...form, entity: e.target.value })}>
                 {ENTITIES.map((x) => <option key={x} value={x}>{ENTITY_NAMES[x]}</option>)}
               </select></div>
-            {Sel('Division', 'division', DIVISIONS, true)}
-            {Sel('Department', 'department', DEPARTMENTS, true)}
-            {F('Designation', 'designation', { placeholder: 'e.g. Sales Executive' })}
-            {F('Reporting manager', 'manager', { placeholder: 'Manager name' })}
-            {Sel('Employment type', 'employment_type', EMP_TYPES, false)}
-            {F('Official e-mail', 'email', { type: 'email', placeholder: 'name@avanasurgical.com' })}
-            {F('Mobile', 'mobile', { placeholder: '+91 …' })}
-            {F('Date of joining', 'date_joined', { type: 'date' })}
-            {F('Location / territory', 'location', { placeholder: 'e.g. Chennai' })}
-            {form.id && F('Reason for this correction', 'reason', { placeholder: 'Goes to the audit trail (optional)' })}
+            {Sel(`Division${isReq('division') ? ' *' : ''}`, 'division', divisions, !isReq('division'))}
+            {Sel(`Department${isReq('department') ? ' *' : ''}`, 'department', departments, !isReq('department'))}
+            {F(`Designation${isReq('designation') ? ' *' : ''}`, 'designation', { placeholder: 'e.g. Sales Executive', required: isReq('designation') })}
+            {F(`Reporting manager${isReq('manager') ? ' *' : ''}`, 'manager', { placeholder: 'Manager name', required: isReq('manager') })}
+            {Sel('Employment type', 'employment_type', empTypes, false)}
+            {F(`Official e-mail${isReq('email') ? ' *' : ''}`, 'email', { type: 'email', placeholder: 'name@avanasurgical.com', required: isReq('email') })}
+            {F(`Mobile${isReq('mobile') ? ' *' : ''}`, 'mobile', { placeholder: '+91 …', required: isReq('mobile') })}
+            {F(`Date of joining${isReq('date_joined') ? ' *' : ''}`, 'date_joined', { type: 'date', required: isReq('date_joined') })}
+            {F(`Location / territory${isReq('location') ? ' *' : ''}`, 'location', { placeholder: 'e.g. Chennai', required: isReq('location') })}
+            {form.id && (
+              <div><label>Status</label>
+                <select value={form.active === false ? 'inactive' : 'active'}
+                  onChange={(e) => setForm({ ...form, active: e.target.value === 'active' })}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select></div>
+            )}
+            {form.id && F(`Reason for this correction${form.active === false ? ' *' : ''}`, 'reason',
+              { placeholder: 'Goes to the audit trail', required: form.active === false })}
           </div>
           {err && <p className="err">{err}</p>}
           <div className="form-actions">
@@ -195,7 +220,7 @@ export default function Employees() {
         <div className="card" style={{ padding: 0 }}>
           <table>
             <thead><tr>
-              <th>Code</th><th>Name</th><th>Entity</th><th>Division</th><th>Department</th><th>Designation</th><th>Manager</th><th>Status</th>
+              <th>Code</th><th>Name</th><th>Entity</th><th>Division</th><th>Department</th><th>Designation</th><th>Manager</th><th style={{ textAlign: 'right' }}>Hours FY</th><th>Status</th>
             </tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -207,10 +232,11 @@ export default function Employees() {
                   <td>{r.department}</td>
                   <td>{r.designation}</td>
                   <td>{r.manager}</td>
+                  <td style={{ textAlign: 'right' }}>{Number(r.hours_fy) || 0}</td>
                   <td><span className={'pill ' + (r.active ? 'good' : 'crit')}>{r.active ? 'Active' : 'Inactive'}</span></td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={8} className="muted">No employees match — add one, or bulk Excel import arrives with a coming build.</td></tr>}
+              {!rows.length && <tr><td colSpan={9} className="muted">No employees match — add one, or use ⬆ Import (Excel).</td></tr>}
             </tbody>
           </table>
         </div>
@@ -237,11 +263,12 @@ export default function Employees() {
             </p>
             {err && <p className="err">{err}</p>}
             {isAdmin && deactReason === null && (
-              <div className="form-actions">
+              <div className="form-actions" style={{ flexWrap: 'wrap' }}>
                 <button className="btn gold" onClick={() => edit(sel)}>Edit</button>
                 {sel.active
                   ? <button className="btn" onClick={() => setDeactReason('')}>Deactivate…</button>
                   : <button className="btn" onClick={() => setActive(sel, true, 'Reactivated')}>Reactivate</button>}
+                <button className="btn" style={{ color: 'var(--crit)' }} onClick={() => deleteEmp(sel)}>Delete</button>
                 <button className="btn" onClick={() => setSel(null)}>Close</button>
               </div>
             )}

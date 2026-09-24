@@ -27,6 +27,10 @@ app.use('/api/feedback', require('./routes/feedback'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/settings', require('./routes/settings').router);
+app.use('/api/files', require('./routes/files'));
+app.use('/api/mavericks', require('./routes/mavericks'));
+app.use('/api/joiners', require('./routes/joiners'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {

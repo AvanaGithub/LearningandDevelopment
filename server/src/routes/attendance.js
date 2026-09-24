@@ -9,7 +9,10 @@ const MARKS = ['P', 'A', 'H'];
 router.get('/:trainingId', async (req, res, next) => {
   try {
     const { rows } = await query(
-      'SELECT employee_id, day, mark FROM attendance WHERE training_id=$1', [Number(req.params.trainingId)]);
+      `SELECT a.employee_id, a.day, a.mark, a.updated_at,
+              coalesce(u.name, 'QR self check-in') AS marked_by
+       FROM attendance a LEFT JOIN users u ON u.id = a.marked_by
+       WHERE a.training_id=$1`, [Number(req.params.trainingId)]);
     res.json(rows);
   } catch (e) { next(e); }
 });

@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { api, ENTITIES, ENTITY_NAMES, EXP_CATEGORIES, fmtRange, inr } from '../api.js';
-import { useToast } from '../App.jsx';
+import { api, apiUpload, ENTITIES, ENTITY_NAMES, EXP_CATEGORIES, fmtRange, inr } from '../api.js';
+import { useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 
 const paidOf = (r) => (r.payments || []).reduce((a, p) => a + Number(p.amt), 0);
+// Manual override (payment_status) wins; otherwise computed from payments.
 const payStatus = (r) => {
+  if (r.payment_status === 'paid') return ['Paid', 'good'];
+  if (r.payment_status === 'partial') return ['Partially paid', 'warn'];
+  if (r.payment_status === 'unpaid') return ['Not paid', 'crit'];
   const paid = paidOf(r);
   if (Number(r.actual) > 0 && paid >= Number(r.actual)) return ['Paid', 'good'];
   if (paid > 0) return ['Partially paid', 'warn'];
@@ -12,15 +16,23 @@ const payStatus = (r) => {
 };
 const APPR = { pending: ['Pending', 'warn'], approved: ['Approved', 'good'], rejected: ['Rejected', 'crit'] };
 
+// Indian financial year label, Apr–Mar (e.g. "2026–27").
+const fyLabel = () => {
+  const now = new Date();
+  const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${y}–${String(y + 1).slice(2)}`;
+};
+
 const EMPTY = {
   training_id: '', training_label: '', dates: '', location: '', participants: '',
   entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], training_type: 'Internal',
-  vendor: '', description: '', budget: '', actual: '', payments: [{ date: '', amt: '' }],
-  invoices: '', approval: 'pending', remark: '', reason: '',
+  vendor: '', description: '', budget: '', actual: '', payments: [{ date: '', amt: '', invoices: [] }],
+  invoices: '', approval: 'pending', payment_status: '', remark: '', reason: '',
 };
 
 export default function Expenses() {
   const toast = useToast();
+  const { settings } = useSettings();
   const [rows, setRows] = useState(null);
   const [trainings, setTrainings] = useState([]);
   const [form, setForm] = useState(null);
@@ -37,9 +49,23 @@ export default function Expenses() {
     participants: Number(f.participants) || 0,
     entity_split: ENTITIES.filter((e) => Number(f.entity_split[e]) > 0).map((e) => ({ ent: e, n: Number(f.entity_split[e]) })),
     budget: Number(f.budget), actual: Number(f.actual),
-    payments: f.payments.filter((p) => p.date && Number(p.amt) > 0).map((p) => ({ date: p.date, amt: Number(p.amt) })),
+    payments: f.payments.filter((p) => p.date && Number(p.amt) > 0)
+      .map((p) => ({ date: p.date, amt: Number(p.amt), invoices: p.invoices || [] })),
     invoices: f.invoices.split(',').map((s) => s.trim()).filter(Boolean),
+    payment_status: f.payment_status || null,
   });
+
+  const attachInvoices = async (i, files) => {
+    try {
+      const up = await apiUpload(files);
+      setForm((f) => {
+        const ps = [...f.payments];
+        ps[i] = { ...ps[i], invoices: [...(ps[i].invoices || []), ...up] };
+        return { ...f, payments: ps };
+      });
+      toast(up.length + ' invoice file(s) attached to this payment.');
+    } catch (e2) { setErr(e2.message); }
+  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -66,8 +92,9 @@ export default function Expenses() {
       entity_split: split, category: r.category || EXP_CATEGORIES[0],
       training_type: r.training_type || 'Internal', vendor: r.vendor || '',
       description: r.description || '', budget: r.budget, actual: r.actual,
-      payments: (r.payments || []).length ? r.payments.map((p) => ({ ...p })) : [{ date: '', amt: '' }],
-      invoices: (r.invoices || []).join(', '), approval: r.approval, remark: r.remark || '', reason: '',
+      payments: (r.payments || []).length ? r.payments.map((p) => ({ invoices: [], ...p })) : [{ date: '', amt: '', invoices: [] }],
+      invoices: (r.invoices || []).join(', '), approval: r.approval,
+      payment_status: r.payment_status || '', remark: r.remark || '', reason: '',
     });
     setErr(null);
   };
@@ -150,6 +177,13 @@ export default function Expenses() {
               <select value={form.approval} onChange={(e) => setForm({ ...form, approval: e.target.value })}>
                 <option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
               </select></div>
+            <div><label>Payment status</label>
+              <select value={form.payment_status} onChange={(e) => setForm({ ...form, payment_status: e.target.value })}>
+                <option value="">Auto (from payment rows)</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partially paid</option>
+                <option value="unpaid">Not paid</option>
+              </select></div>
           </div>
 
           <p className="muted mini" style={{ margin: '12px 0 4px' }}>Entities covered — participant count per entity; cost splits pro-rata by headcount:</p>
@@ -165,17 +199,36 @@ export default function Expenses() {
 
           <p className="muted mini" style={{ margin: '12px 0 4px' }}>Payment dates &amp; amounts — one row per part-payment; pending and status compute automatically:</p>
           {form.payments.map((p, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-              <input type="date" value={p.date} onChange={(e) => {
-                const ps = [...form.payments]; ps[i] = { ...p, date: e.target.value }; setForm({ ...form, payments: ps });
-              }} />
-              <input type="number" min="0" placeholder="Amount ₹" value={p.amt} onChange={(e) => {
-                const ps = [...form.payments]; ps[i] = { ...p, amt: e.target.value }; setForm({ ...form, payments: ps });
-              }} />
-              <button className="btn" type="button" onClick={() => setForm({ ...form, payments: form.payments.filter((_, j) => j !== i) })}>✕</button>
+            <div key={i} style={{ marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="date" value={p.date} onChange={(e) => {
+                  const ps = [...form.payments]; ps[i] = { ...p, date: e.target.value }; setForm({ ...form, payments: ps });
+                }} />
+                <input type="number" min="0" placeholder="Amount ₹" value={p.amt} onChange={(e) => {
+                  const ps = [...form.payments]; ps[i] = { ...p, amt: e.target.value }; setForm({ ...form, payments: ps });
+                }} />
+                <label className="btn" style={{ cursor: 'pointer' }}>📎 Invoices
+                  <input type="file" multiple hidden accept=".pdf,.jpg,.jpeg,.png,.xlsx,.doc,.docx"
+                    onChange={(e) => e.target.files.length && attachInvoices(i, e.target.files)} />
+                </label>
+                <button className="btn" type="button" onClick={() => setForm({ ...form, payments: form.payments.filter((_, j) => j !== i) })}>✕</button>
+              </div>
+              {(p.invoices || []).length > 0 && (
+                <div style={{ fontSize: 12, marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {p.invoices.map((inv, k) => (
+                    <span key={inv.id} className="pill soft">📄 {inv.name}
+                      <button type="button" className="btn link" style={{ padding: '0 2px' }} onClick={() => {
+                        const ps = [...form.payments];
+                        ps[i] = { ...p, invoices: p.invoices.filter((_, j) => j !== k) };
+                        setForm({ ...form, payments: ps });
+                      }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
-          <button className="btn" type="button" onClick={() => setForm({ ...form, payments: [...form.payments, { date: '', amt: '' }] })}>+ Add payment row</button>
+          <button className="btn" type="button" onClick={() => setForm({ ...form, payments: [...form.payments, { date: '', amt: '', invoices: [] }] })}>+ Add payment row</button>
 
           <div className="form-grid" style={{ marginTop: 12 }}>
             <div><label>Description</label>
@@ -235,6 +288,40 @@ export default function Expenses() {
         </div>
       )}
 
+      {rows && (
+        <div className="card">
+          <h3 style={{ fontSize: 15, marginBottom: 10 }}>Budget vs actual — FY {fyLabel()}</h3>
+          <table><tbody>
+            {ENTITIES.map((e) => {
+              const budget = Number(settings?.entity_budgets?.[e]) || 0;
+              const actual = rows.reduce((s, r) => {
+                const split = r.entity_split || [];
+                const tot = split.reduce((a, x) => a + x.n, 0) || 1;
+                const mine = split.find((x) => x.ent === e);
+                return s + (mine ? Number(r.actual) * mine.n / tot : 0);
+              }, 0);
+              const pct = budget ? Math.min(100, Math.round(actual / budget * 100)) : 0;
+              return (
+                <tr key={e}>
+                  <td style={{ width: 220 }}>{ENTITY_NAMES[e]}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹{inr(budget)}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹{inr(actual)}</td>
+                  <td style={{ width: '32%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div className={'bar' + (pct > 85 ? ' hot' : '')}><i style={{ width: pct + '%' }} /></div>
+                      <span className="muted mini">{pct}%</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody></table>
+          <p className="muted mini" style={{ marginTop: 8 }}>
+            Actuals are the entity's pro-rata share of every active record above. Budgets are set under Settings → Annual training budgets.
+          </p>
+        </div>
+      )}
+
       {sel && (
         <div className="modal-backdrop" onClick={() => setSel(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -268,7 +355,10 @@ export default function Expenses() {
             <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>Payments</h3>
             {(sel.payments || []).length ? (
               <table><tbody>{sel.payments.map((p, i) => (
-                <tr key={i}><td className="muted">{p.date}</td><td style={{ textAlign: 'right' }}>₹{inr(p.amt)}</td></tr>))}</tbody></table>
+                <tr key={i}><td className="muted">{p.date}</td><td style={{ textAlign: 'right' }}>₹{inr(p.amt)}</td>
+                  <td>{(p.invoices || []).map((inv) => (
+                    <a key={inv.id} href={'/api/files/' + inv.id} target="_blank" rel="noreferrer" style={{ marginRight: 8, fontSize: 12 }}>📄 {inv.name}</a>
+                  ))}</td></tr>))}</tbody></table>
             ) : <p className="muted mini">No payments recorded yet.</p>}
             {(sel.invoices || []).length > 0 && (
               <p className="muted mini" style={{ marginTop: 10 }}>Invoices: {sel.invoices.join(' · ')}</p>

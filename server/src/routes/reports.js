@@ -61,4 +61,53 @@ router.get('/passport/:employeeId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Feedback summary: per training, response count and average score across
+// every question (scores are JSONB objects keyed by question index).
+router.get('/feedback-summary', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT t.id, t.code, t.title, t.batch, t.trainer_type, t.trainer_name, t.agency, t.status,
+              count(r.id)::int AS responses,
+              round(avg((v.value)::numeric), 2) AS avg_score,
+              (SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id) AS participant_count
+       FROM trainings t
+       LEFT JOIN feedback_responses r ON r.training_id = t.id
+       LEFT JOIN LATERAL jsonb_each_text(r.scores) v ON TRUE
+       WHERE t.status <> 'cancelled'
+       GROUP BY t.id ORDER BY t.id`);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
+// Everything an ISO 13485 auditor asks for, in one payload — the client
+// turns it into a multi-sheet Excel evidence pack. Admin only.
+router.get('/evidence', async (req, res, next) => {
+  try {
+    if (req.user.role === 'manager') return res.status(403).json({ error: 'Insufficient permissions' });
+    const [trainings, participants, attendance, feedback, expensesR, auditR] = await Promise.all([
+      query(`SELECT t.code, t.title, t.batch, t.category, t.mode, t.trainer_type, t.trainer_name, t.agency,
+                    t.hours_per_day, t.seats, t.mandatory, t.status, t.validity_months,
+                    (SELECT string_agg(d.day::text, ', ' ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
+             FROM trainings t ORDER BY t.id`),
+      query(`SELECT t.code, t.title, e.name, e.zoho_emp_id, e.entity, e.division, e.department
+             FROM training_participants p JOIN trainings t ON t.id=p.training_id JOIN employees e ON e.id=p.employee_id
+             ORDER BY t.id, e.name`),
+      query(`SELECT t.code, e.name, a.day, a.mark, a.updated_at,
+                    coalesce(u.name, 'QR self check-in') AS marked_by
+             FROM attendance a JOIN trainings t ON t.id=a.training_id JOIN employees e ON e.id=a.employee_id
+             LEFT JOIN users u ON u.id=a.marked_by ORDER BY t.id, a.day, e.name`),
+      query(`SELECT t.code, r.respondent, r.scores, r.comment, r.created_at
+             FROM feedback_responses r JOIN trainings t ON t.id=r.training_id ORDER BY t.id, r.created_at`),
+      query(`SELECT training_label, dates, category, training_type, vendor, budget, actual, approval, remark
+             FROM expenses WHERE active ORDER BY id`),
+      query(`SELECT a.created_at, coalesce(u.name,'system/QR') AS who, a.action, a.record_type, a.record_id, a.reason
+             FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 2000`),
+    ]);
+    res.json({
+      trainings: trainings.rows, participants: participants.rows, attendance: attendance.rows,
+      feedback: feedback.rows, expenses: expensesR.rows, audit: auditR.rows,
+    });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

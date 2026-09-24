@@ -68,6 +68,8 @@ const pickFields = (b) => ({
   seats: Number(b.seats) > 0 ? Math.floor(Number(b.seats)) : 20,
   mandatory: Boolean(b.mandatory),
   status: STATUSES.includes(b.status) ? b.status : 'planned',
+  validity_months: Number(b.validity_months) > 0 ? Math.floor(Number(b.validity_months)) : null,
+  agenda_file: b.agenda_file || null,
 });
 
 const validDays = (days) =>
@@ -86,10 +88,10 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const token = require('crypto').randomBytes(12).toString('hex');
     const { rows } = await query(
       `INSERT INTO trainings (code, title, batch, category, mode, trainer_type, trainer_name, agency,
-         hours_per_day, seats, mandatory, status, created_by, public_token)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+         hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [code[0].code, f.title, f.batch, f.category, f.mode, f.trainer_type, f.trainer_name, f.agency,
-       f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token]);
+       f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
     res.status(201).json({ ...rows[0], days });
@@ -106,10 +108,11 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     if (!f.title) return res.status(400).json({ error: 'Title is required' });
     const { rows } = await query(
       `UPDATE trainings SET title=$2, batch=$3, category=$4, mode=$5, trainer_type=$6, trainer_name=$7,
-         agency=$8, hours_per_day=$9, seats=$10, mandatory=$11, status=$12, updated_at=now()
+         agency=$8, hours_per_day=$9, seats=$10, mandatory=$11, status=$12,
+         validity_months=$13, agenda_file=$14, updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, f.title, f.batch, f.category, f.mode, f.trainer_type, f.trainer_name, f.agency,
-       f.hours_per_day, f.seats, f.mandatory, f.status]);
+       f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file]);
     if (b.days !== undefined) {
       const days = [...new Set(b.days)].sort();
       if (!validDays(days)) return res.status(400).json({ error: 'Pick between 1 and 60 training dates' });
@@ -149,6 +152,27 @@ router.delete('/:id/participants/:empId', requireRole('admin'), async (req, res,
     await query('DELETE FROM training_participants WHERE training_id=$1 AND employee_id=$2', [id, empId]);
     await query('DELETE FROM attendance WHERE training_id=$1 AND employee_id=$2', [id, empId]);
     await audit(req.user.id, 'training.participant_remove', 'training', id, { employee_id: empId }, reason);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Hard delete only for a training nobody touched (no participants,
+// attendance or feedback) — anything with history is cancelled instead.
+router.delete('/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const reason = String(req.query.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A reason is required to delete a training' });
+    const { rows: hist } = await query(
+      `SELECT (SELECT count(*) FROM training_participants WHERE training_id=$1)
+            + (SELECT count(*) FROM attendance WHERE training_id=$1)
+            + (SELECT count(*) FROM feedback_responses WHERE training_id=$1) AS n`, [id]);
+    if (Number(hist[0].n) > 0) {
+      return res.status(409).json({ error: 'This training has participants or records — set its status to Cancelled instead (ISO 13485).' });
+    }
+    const { rows } = await query('DELETE FROM trainings WHERE id=$1 RETURNING code, title', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await audit(req.user.id, 'training.delete', 'training', id, rows[0], reason);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

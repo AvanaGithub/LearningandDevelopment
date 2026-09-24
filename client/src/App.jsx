@@ -13,6 +13,9 @@ import Expenses from './pages/Expenses.jsx';
 import Reports from './pages/Reports.jsx';
 import PublicCheckin from './pages/PublicCheckin.jsx';
 import PublicFeedback from './pages/PublicFeedback.jsx';
+import Mavericks from './pages/Mavericks.jsx';
+import NewJoiners from './pages/NewJoiners.jsx';
+import Settings from './pages/Settings.jsx';
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -20,9 +23,19 @@ export const useAuth = () => useContext(AuthCtx);
 const ToastCtx = createContext(null);
 export const useToast = () => useContext(ToastCtx);
 
+const SettingsCtx = createContext({ settings: null, reloadSettings: () => {} });
+export const useSettings = () => useContext(SettingsCtx);
+
 export default function App() {
   const [auth, setAuth] = useState({ loading: true, user: null, ssoConfigured: false, devLogin: false });
   const [toast, setToast] = useState(null);
+  const [settings, setSettings] = useState(null);
+
+  const reloadSettings = useCallback(() => {
+    fetch('/api/settings', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null)).then(setSettings).catch(() => {});
+  }, []);
+  useEffect(() => { if (auth.user) reloadSettings(); }, [auth.user, reloadSettings]);
 
   const refresh = useCallback(async () => {
     try {
@@ -45,6 +58,7 @@ export default function App() {
 
   return (
     <AuthCtx.Provider value={{ ...auth, refresh }}>
+      <SettingsCtx.Provider value={{ settings, reloadSettings }}>
       <ToastCtx.Provider value={showToast}>
         <Routes>
           <Route path="/p/att/:token" element={<PublicCheckin />} />
@@ -59,12 +73,16 @@ export default function App() {
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/expenses" element={<RequireAdmin><Expenses /></RequireAdmin>} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/mavericks" element={<Mavericks />} />
+            <Route path="/joiners" element={<NewJoiners />} />
             <Route path="/users" element={<RequireAdmin><Users /></RequireAdmin>} />
+            <Route path="/settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
         {toast && <div className="toast">{toast}</div>}
       </ToastCtx.Provider>
+      </SettingsCtx.Provider>
     </AuthCtx.Provider>
   );
 }

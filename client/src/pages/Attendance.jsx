@@ -47,9 +47,13 @@ export default function Attendance() {
       api.get('/api/trainings/' + id),
       api.get('/api/attendance/' + id),
     ]);
-    const m = {};
-    marks.forEach((r) => { m[r.employee_id + '|' + r.day.slice(0, 10)] = r.mark; });
-    setData((d) => ({ ...d, [id]: { detail, marks: m } }));
+    const m = {}; const meta = {};
+    marks.forEach((r) => {
+      const k = r.employee_id + '|' + r.day.slice(0, 10);
+      m[k] = r.mark;
+      meta[k] = `${r.mark} · ${new Date(r.updated_at).toLocaleString('en-IN')} · ${r.marked_by}`;
+    });
+    setData((d) => ({ ...d, [id]: { detail, marks: m, meta } }));
   };
   useEffect(() => { shown.forEach((t) => { if (!data[t.id]) loadOne(t.id).catch((e) => setErr(e.message)); }); }, [list, selIds]);
 
@@ -144,7 +148,8 @@ export default function Attendance() {
                           {days.map((day) => {
                             const m = d.marks[p.id + '|' + day] || '–';
                             return <td key={day}>
-                              <button className={'attcell ' + (m === '–' ? '' : m)} disabled={!isAdmin && false}
+                              <button className={'attcell ' + (m === '–' ? '' : m)}
+                                title={d.meta?.[p.id + '|' + day] || 'Not marked'}
                                 onClick={() => cycle(t.id, p.id, day)}>{m}</button>
                             </td>;
                           })}
