@@ -77,3 +77,12 @@ tr:hover td{background:var(--panel2)}
   .sidebar.open{left:0}
   .main{padding:76px 16px 40px}
 }
+
+/* ---- modal (employee detail etc.) ---- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(33,27,16,.45);z-index:40;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:600px;width:100%;max-height:86vh;overflow:auto;padding:22px}
+.modal h3{font-size:16px;margin-bottom:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13px;margin:0}
+.kv dt{color:var(--ink2)}
+.kv dd{margin:0}
+tr.rowlink{cursor:pointer}

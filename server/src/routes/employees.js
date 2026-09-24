@@ -38,6 +38,9 @@ const pickFields = (b) => ({
   division: b.division?.trim() || null,
   department: b.department?.trim() || null,
   designation: b.designation?.trim() || null,
+  manager: b.manager?.trim() || null,
+  employment_type: b.employment_type?.trim() || null,
+  mobile: b.mobile?.trim() || null,
   location: b.location?.trim() || null,
   date_joined: b.date_joined || null,
 });
@@ -49,9 +52,9 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
       return res.status(400).json({ error: 'name and entity (AMD/ASS/ATS) are required' });
     }
     const { rows } = await query(
-      `INSERT INTO employees (zoho_emp_id, name, email, entity, division, department, designation, location, date_joined)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [f.zoho_emp_id, f.name, f.email, f.entity, f.division, f.department, f.designation, f.location, f.date_joined]);
+      `INSERT INTO employees (zoho_emp_id, name, email, entity, division, department, designation, manager, employment_type, mobile, location, date_joined)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [f.zoho_emp_id, f.name, f.email, f.entity, f.division, f.department, f.designation, f.manager, f.employment_type, f.mobile, f.location, f.date_joined]);
     await audit(req.user.id, 'employee.create', 'employee', rows[0].id, { name: f.name, entity: f.entity });
     res.status(201).json(rows[0]);
   } catch (e) {
@@ -71,9 +74,11 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     const active = b.active === undefined ? cur[0].active : Boolean(b.active);
     const { rows } = await query(
       `UPDATE employees SET zoho_emp_id=$2, name=$3, email=$4, entity=$5, division=$6,
-         department=$7, designation=$8, location=$9, date_joined=$10, active=$11, updated_at=now()
+         department=$7, designation=$8, manager=$9, employment_type=$10, mobile=$11,
+         location=$12, date_joined=$13, active=$14, updated_at=now()
        WHERE id=$1 RETURNING *`,
-      [id, f.zoho_emp_id, f.name, f.email, f.entity, f.division, f.department, f.designation, f.location, f.date_joined, active]);
+      [id, f.zoho_emp_id, f.name, f.email, f.entity, f.division, f.department, f.designation,
+       f.manager, f.employment_type, f.mobile, f.location, f.date_joined, active]);
     await audit(req.user.id, 'employee.update', 'employee', id, { changes: b }, b.reason);
     res.json(rows[0]);
   } catch (e) {

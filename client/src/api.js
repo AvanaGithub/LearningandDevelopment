@@ -29,3 +29,9 @@ export const ENTITY_NAMES = {
   ATS: 'Avana Technology Services',
 };
 export const ROLES = { super_admin: 'Super admin', admin: 'Admin', manager: 'Manager' };
+
+// Canonical lists from the prototype spec — one source for forms and filters.
+export const DIVISIONS = ['Sports Medicine', 'Dex & Bio', 'Endospine', 'Orthotics', 'Business Support'];
+export const DEPARTMENTS = ['Accounts', 'Administration', 'Clinical Support', 'Commercial', 'Graphic Design',
+  'Human Resource', 'IT', 'Marketing', 'Medical Education', 'Operations', 'Quality', 'Sales', 'SCM', 'Service'];
+export const EMP_TYPES = ['Permanent', 'Trainee', 'Intern', 'Contract', 'Consultant'];
