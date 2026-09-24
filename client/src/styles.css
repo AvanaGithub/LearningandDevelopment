@@ -123,3 +123,14 @@ details.msel label{display:flex;gap:8px;align-items:center;padding:4px 0;font-si
 .bar{height:8px;border-radius:99px;background:var(--panel2);overflow:hidden;min-width:90px;flex:1}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 .bar.hot i{background:var(--crit)}
+
+/* ---- settings chips ---- */
+.tagchip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent-ink);border-radius:99px;padding:5px 6px 5px 12px;font-size:12.5px;font-weight:600}
+.tagchip button{border:0;background:rgba(0,0,0,.06);color:inherit;border-radius:99px;width:18px;height:18px;line-height:1;font-size:11px;cursor:pointer;padding:0}
+.tagchip button:hover{background:var(--crit-soft);color:var(--crit)}
+.togglechip{border:1px solid var(--line);background:var(--panel);color:var(--ink2);border-radius:99px;padding:6px 14px;font-size:12.5px;font-weight:600;cursor:pointer}
+.togglechip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chiprow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.addrow{display:flex;gap:8px;margin-top:6px}
+.addrow input{flex:1;border-radius:99px;padding:8px 14px}
+.addrow .btn{border-radius:99px}

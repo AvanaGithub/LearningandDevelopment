@@ -40,8 +40,13 @@ export default function Expenses() {
   const [cancelReason, setCancelReason] = useState(null);
   const [err, setErr] = useState(null);
 
+  const [batches, setBatches] = useState([]);
   const load = () => api.get('/api/expenses').then(setRows).catch((e) => setErr(e.message));
-  useEffect(() => { load(); api.get('/api/trainings').then(setTrainings).catch(() => {}); }, []);
+  useEffect(() => {
+    load();
+    api.get('/api/trainings').then(setTrainings).catch(() => {});
+    api.get('/api/mavericks').then(setBatches).catch(() => {});
+  }, []);
 
   const toBody = (f) => ({
     ...f,
@@ -108,6 +113,18 @@ export default function Expenses() {
   };
 
   const pickTraining = (id) => {
+    if (String(id).startsWith('mav-')) {
+      const b = batches.find((x) => 'mav-' + x.id === id);
+      if (b) {
+        return setForm({
+          ...form, training_id: '',
+          training_label: 'Mavericks — ' + b.name,
+          dates: b.start_date ? 'from ' + b.start_date.slice(0, 10) : '',
+          participants: b.member_count || form.participants,
+          training_type: 'Internal',
+        });
+      }
+    }
     const t = trainings.find((x) => x.id === Number(id));
     if (!t) return setForm({ ...form, training_id: id });
     setForm({
@@ -147,10 +164,15 @@ export default function Expenses() {
         <form className="card" onSubmit={save}>
           <h3 style={{ fontSize: 15, marginBottom: 12 }}>{form.id ? 'Edit expense record' : 'New expense record'}</h3>
           <div className="form-grid">
-            <div><label>Training</label>
+            <div><label>Training / programme</label>
               <select value={form.training_id} onChange={(e) => pickTraining(e.target.value)}>
                 <option value="">— pick or type the label —</option>
-                {trainings.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.title}{t.batch ? ' — ' + t.batch : ''}</option>)}
+                <optgroup label="Trainings">
+                  {trainings.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.title}{t.batch ? ' — ' + t.batch : ''}</option>)}
+                </optgroup>
+                <optgroup label="Mavericks batches">
+                  {batches.map((b) => <option key={'mav-' + b.id} value={'mav-' + b.id}>Mavericks — {b.name}</option>)}
+                </optgroup>
               </select></div>
             <div><label>Training name (label) *</label>
               <input required value={form.training_label} onChange={(e) => setForm({ ...form, training_label: e.target.value })} /></div>

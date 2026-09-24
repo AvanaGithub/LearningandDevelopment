@@ -44,11 +44,16 @@ export default function Mavericks() {
   const saveBatch = async (e) => {
     e.preventDefault();
     try {
-      if (form.id) await api.patch('/api/mavericks/' + form.id, form);
-      else await api.post('/api/mavericks', form);
-      toast('Batch saved.');
+      if (form.id) {
+        await api.patch('/api/mavericks/' + form.id, form);
+        toast('Batch updated.');
+        if (sel && form.id === sel.id) open(sel.id);
+      } else {
+        const b = await api.post('/api/mavericks', form);
+        toast('Batch created — add trainees, then use the Classroom / Field attendance and Assessments tabs.');
+        open(b.id); // straight into the batch workspace
+      }
       setForm(null); loadList();
-      if (sel && form.id === sel.id) open(sel.id);
     } catch (e2) { setErr(e2.message); }
   };
 
@@ -136,21 +141,28 @@ export default function Mavericks() {
       )}
 
       {!sel && (batches ? (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead><tr><th>Batch</th><th>Mentor</th><th>Start</th><th style={{ textAlign: 'right' }}>Trainees</th><th>Status</th></tr></thead>
-            <tbody>
-              {batches.map((b) => (
-                <tr key={b.id} className="rowlink" onClick={() => open(b.id)}>
-                  <td>{b.name}</td><td>{b.mentor}</td><td className="muted">{fmtDate(b.start_date)}</td>
-                  <td style={{ textAlign: 'right' }}>{b.member_count}</td>
-                  <td><span className={'pill ' + (b.status === 'active' ? 'good' : b.status === 'completed' ? 'soft' : 'neutral')}>{b.status}</span></td>
-                </tr>
-              ))}
-              {!batches.length && <tr><td colSpan={5} className="muted">No batches yet — create the first one.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+            Open a batch to manage its trainees, mark <b>Classroom</b> and <b>Field</b> attendance
+            (separate tabs), and run per-division <b>Assessments</b> with score entry.
+          </p>
+          <div className="card" style={{ padding: 0 }}>
+            <table>
+              <thead><tr><th>Batch</th><th>Mentor</th><th>Start</th><th style={{ textAlign: 'right' }}>Trainees</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                {batches.map((b) => (
+                  <tr key={b.id} className="rowlink" onClick={() => open(b.id)}>
+                    <td>{b.name}</td><td>{b.mentor}</td><td className="muted">{fmtDate(b.start_date)}</td>
+                    <td style={{ textAlign: 'right' }}>{b.member_count}</td>
+                    <td><span className={'pill ' + (b.status === 'active' ? 'good' : b.status === 'completed' ? 'soft' : 'neutral')}>{b.status}</span></td>
+                    <td><button className="btn gold" onClick={(e) => { e.stopPropagation(); open(b.id); }}>Open →</button></td>
+                  </tr>
+                ))}
+                {!batches.length && <tr><td colSpan={6} className="muted">No batches yet — create the first one.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : <p className="muted">Loading…</p>)}
 
       {sel && (

@@ -6,18 +6,23 @@ const zoho = require('../zoho');
 const { createSession, destroySession, setSessionCookie, requireAuth, audit } = require('../auth');
 
 const router = express.Router();
-const pendingStates = new Map(); // state -> expiry (OAuth CSRF protection)
+const pendingStates = new Map(); // state -> {exp, ret} (CSRF + participant return path)
 
 setInterval(() => {
   const now = Date.now();
-  for (const [s, exp] of pendingStates) if (exp < now) pendingStates.delete(s);
+  for (const [s, v] of pendingStates) if (v.exp < now) pendingStates.delete(s);
 }, 60000).unref();
 
-// Step 1: send the user to Zoho.
+const sha256 = (t) => crypto.createHash('sha256').update(t).digest('hex');
+// Only QR participant pages are valid return targets for the participant flow.
+const validRet = (r) => (typeof r === 'string' && /^\/p\/(att|fb)\/[\w-]{6,64}$/.test(r) ? r : null);
+
+// Step 1: send the user to Zoho. With ?ret=/p/att/<token> this is the
+// PARTICIPANT flow: Zoho proves who is scanning; no portal session is made.
 router.get('/zoho', (req, res) => {
   if (!config.zoho.configured) return res.status(503).send('Zoho SSO is not configured on this server.');
   const state = crypto.randomBytes(16).toString('base64url');
-  pendingStates.set(state, Date.now() + 10 * 60000);
+  pendingStates.set(state, { exp: Date.now() + 10 * 60000, ret: validRet(req.query.ret) });
   res.redirect(zoho.buildAuthUrl(state));
 });
 
@@ -27,11 +32,30 @@ router.get('/zoho/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
     if (error) return res.redirect('/login?error=' + encodeURIComponent(String(error)));
-    if (!code || !state || !pendingStates.has(state)) return res.redirect('/login?error=state_mismatch');
+    const st = pendingStates.get(state);
+    if (!code || !state || !st) return res.redirect('/login?error=state_mismatch');
     pendingStates.delete(state);
 
     const tokens = await zoho.exchangeCode(String(code));
     const who = await zoho.fetchIdentity(tokens);
+
+    if (st.ret) {
+      // Participant flow: match the verified e-mail to an EMPLOYEE and set a
+      // participant cookie, then bounce back to the QR page.
+      const { rows: emp } = await query(
+        'SELECT id, name FROM employees WHERE email=$1 AND active=TRUE', [who.email]);
+      if (!emp.length) return res.redirect(st.ret + '?denied=' + encodeURIComponent(who.email));
+      const ptoken = crypto.randomBytes(32).toString('base64url');
+      const exp = new Date(Date.now() + 12 * 3600 * 1000);
+      await query('INSERT INTO participant_sessions (token_hash, employee_id, expires_at) VALUES ($1,$2,$3)',
+        [sha256(ptoken), emp[0].id, exp]);
+      res.cookie('psession', ptoken, {
+        httpOnly: true, sameSite: 'lax',
+        secure: config.baseUrl.startsWith('https'), expires: exp, path: '/',
+      });
+      await audit(null, 'participant.login', 'employee', emp[0].id, { email: who.email });
+      return res.redirect(st.ret);
+    }
 
     const { rows } = await query('SELECT * FROM users WHERE email=$1', [who.email]);
     if (!rows.length || !rows[0].active) {

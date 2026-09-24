@@ -48,19 +48,30 @@ export default function Settings() {
       <div className="cols2">
         {LISTS.map((l) => (
           <div key={l.key} className="card" style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15 }}>{l.label}</h3>
-            <p className="muted mini" style={{ margin: '4px 0 10px' }}>{l.hint}</p>
-            {(settings[l.key] || []).map((item) => (
-              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 13, borderBottom: '1px dashed var(--line)' }}>
-                <span style={{ flex: 1 }}>{item}</span>
-                <button className="btn link" title="Remove"
-                  onClick={() => save(l.key, settings[l.key].filter((x) => x !== item), `"${item}" removed from ${l.label}. Existing records keep their old value.`)}>✕</button>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input style={{ flex: 1 }} placeholder={`Add to ${l.label.toLowerCase()}…`} value={newItem[l.key] || ''}
-                onChange={(e) => setNewItem({ ...newItem, [l.key]: e.target.value })} />
-              <button className="btn" disabled={!(newItem[l.key] || '').trim()}
+            <h3 style={{ fontSize: 15 }}>{l.label} <span className="pill soft mini">{(settings[l.key] || []).length}</span></h3>
+            <p className="muted mini" style={{ margin: '4px 0 0' }}>{l.hint}</p>
+            <div className="chiprow">
+              {(settings[l.key] || []).map((item) => (
+                <span key={item} className="tagchip">{item}
+                  <button title={`Remove "${item}"`}
+                    onClick={() => save(l.key, settings[l.key].filter((x) => x !== item), `"${item}" removed from ${l.label}. Existing records keep their old value.`)}>✕</button>
+                </span>
+              ))}
+              {!(settings[l.key] || []).length && <span className="muted mini">Empty — add the first item below.</span>}
+            </div>
+            <div className="addrow">
+              <input placeholder={`Add to ${l.label.toLowerCase()}…`} value={newItem[l.key] || ''}
+                onChange={(e) => setNewItem({ ...newItem, [l.key]: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const v = (newItem[l.key] || '').trim();
+                  if (!v) return;
+                  if ((settings[l.key] || []).includes(v)) return setErr(`"${v}" is already in ${l.label}.`);
+                  save(l.key, [...(settings[l.key] || []), v], `"${v}" added to ${l.label}.`);
+                  setNewItem({ ...newItem, [l.key]: '' });
+                }} />
+              <button className="btn gold" disabled={!(newItem[l.key] || '').trim()}
                 onClick={() => {
                   const v = newItem[l.key].trim();
                   if ((settings[l.key] || []).includes(v)) return setErr(`"${v}" is already in ${l.label}.`);
@@ -73,18 +84,19 @@ export default function Settings() {
 
         <div className="card" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 15 }}>Mandatory employee fields</h3>
-          <p className="muted mini" style={{ margin: '4px 0 10px' }}>
-            Name and entity are always required; tick anything else that must be filled before an employee can be saved.
+          <p className="muted mini" style={{ margin: '4px 0 0' }}>
+            Name and entity are always required. Tap a chip to make that field mandatory (gold = mandatory).
           </p>
-          {EMP_FIELDS.map(([key, label]) => (
-            <label key={key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" checked={req.includes(key)}
-                onChange={(e) => save('required_employee_fields',
-                  e.target.checked ? [...req, key] : req.filter((x) => x !== key),
-                  `"${label}" is ${e.target.checked ? 'now mandatory' : 'optional again'} on the employee form.`)} />
-              {label}
-            </label>
-          ))}
+          <div className="chiprow">
+            {EMP_FIELDS.map(([key, label]) => (
+              <button key={key} className={'togglechip' + (req.includes(key) ? ' on' : '')}
+                onClick={() => save('required_employee_fields',
+                  req.includes(key) ? req.filter((x) => x !== key) : [...req, key],
+                  `"${label}" is ${req.includes(key) ? 'optional again' : 'now mandatory'} on the employee form.`)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>

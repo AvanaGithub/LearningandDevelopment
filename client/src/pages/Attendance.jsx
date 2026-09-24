@@ -51,7 +51,7 @@ export default function Attendance() {
     marks.forEach((r) => {
       const k = r.employee_id + '|' + r.day.slice(0, 10);
       m[k] = r.mark;
-      meta[k] = `${r.mark} · ${new Date(r.updated_at).toLocaleString('en-IN')} · ${r.marked_by}`;
+      meta[k] = { label: `${r.mark} · ${new Date(r.updated_at).toLocaleString('en-IN')} · ${r.marked_by}`, ts: r.updated_at, by: r.marked_by };
     });
     setData((d) => ({ ...d, [id]: { detail, marks: m, meta } }));
   };
@@ -137,7 +137,7 @@ export default function Attendance() {
                   <thead><tr>
                     <th>Participant</th>
                     {days.map((day) => <th key={day}>{fmtDay(day)}</th>)}
-                    <th style={{ textAlign: 'right' }}>%</th><th>Eligible</th>{isAdmin && <th></th>}
+                    <th style={{ textAlign: 'right' }}>%</th><th>Eligible</th><th>Last marked</th>{isAdmin && <th></th>}
                   </tr></thead>
                   <tbody>
                     {d.detail.participants.map((p) => {
@@ -149,7 +149,7 @@ export default function Attendance() {
                             const m = d.marks[p.id + '|' + day] || '–';
                             return <td key={day}>
                               <button className={'attcell ' + (m === '–' ? '' : m)}
-                                title={d.meta?.[p.id + '|' + day] || 'Not marked'}
+                                title={d.meta?.[p.id + '|' + day]?.label || 'Not marked'}
                                 onClick={() => cycle(t.id, p.id, day)}>{m}</button>
                             </td>;
                           })}
@@ -157,6 +157,12 @@ export default function Attendance() {
                           <td>{pc === null ? <span className="pill soft mini">Not marked</span>
                             : pc >= 75 ? <span className="pill good mini">Eligible</span>
                               : <span className="pill crit mini">Below 75%</span>}</td>
+                          <td className="muted" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{(() => {
+                            const metas = days.map((day) => d.meta?.[p.id + '|' + day]).filter(Boolean);
+                            if (!metas.length) return '—';
+                            const last = metas.reduce((a, b) => (a.ts > b.ts ? a : b));
+                            return `${new Date(last.ts).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${last.by}`;
+                          })()}</td>
                           {isAdmin && <td><button className="btn link" onClick={() => {
                             const orig = {};
                             days.forEach((day) => { orig[day] = d.marks[p.id + '|' + day] || ''; });

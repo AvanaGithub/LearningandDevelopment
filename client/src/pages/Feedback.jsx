@@ -157,20 +157,20 @@ export default function Feedback() {
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead><tr><th>Respondent</th>{results.questions.map((q, i) =>
-                  <th key={i} title={q} style={{ textAlign: 'right' }}>Q{i + 1}</th>)}<th>Comment</th></tr></thead>
+                  <th key={i} title={q} style={{ textAlign: 'right' }}>Q{i + 1}</th>)}<th>Submitted at</th><th>Comment</th></tr></thead>
                 <tbody>
                   {results.responses.map((r, ri) => (
-                    <tr key={ri}><td>{r.respondent}
-                      <div className="muted" style={{ fontSize: 10 }}>{new Date(r.created_at).toLocaleString('en-IN')}</div></td>
+                    <tr key={ri}><td>{r.respondent}</td>
                       {results.questions.map((q, i) => <td key={i} style={{ textAlign: 'right' }}>{r.scores[i] || '—'}</td>)}
+                      <td className="muted" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleString('en-IN')}</td>
                       <td className="muted mini">{r.comment}</td></tr>
                   ))}
                   {results.responses.length > 0 && (
                     <tr style={{ fontWeight: 700 }}><td>Average</td>
                       {results.questions.map((q, i) => <td key={i} style={{ textAlign: 'right' }}>{avg(results.responses, i)}</td>)}
-                      <td /></tr>
+                      <td /><td /></tr>
                   )}
-                  {!results.responses.length && <tr><td colSpan={results.questions.length + 2} className="muted">No responses yet.</td></tr>}
+                  {!results.responses.length && <tr><td colSpan={results.questions.length + 3} className="muted">No responses yet.</td></tr>}
                 </tbody>
               </table>
             </div>
