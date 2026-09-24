@@ -113,3 +113,8 @@ details.msel label{display:flex;gap:8px;align-items:center;padding:4px 0;font-si
 
 .pill.warn{background:#F7EDD8;color:#A8720E}
 .mini{font-size:11px}
+
+/* ---- dashboard two-column cards + neutral pill ---- */
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.cols2{grid-template-columns:1fr}}
+.pill.neutral{background:var(--panel2);color:var(--ink2)}

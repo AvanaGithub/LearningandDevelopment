@@ -77,8 +77,9 @@ export default function Dashboard() {
     const fbPending = trns.reduce((s, t) => s + Math.max(0, partOf(t).length - t.response_count), 0);
     const done = trns.filter((t) => t.status === 'completed').length;
     const running = trns.filter((t) => ['planned', 'confirmed', 'in_progress'].includes(t.status)).length;
+    const sheetsPending = trns.filter((t) => t.status === 'completed' && t.mode === 'Classroom').length;
 
-    return { emps, trns, trained, gaps, compPct, avgHours, spend, pendingExp, upcoming, fbPending, done, running };
+    return { emps, trns, trained, gaps, compPct, avgHours, spend, pendingExp, upcoming, fbPending, done, running, sheetsPending };
   }, [data, f]);
 
   if (err) return <p className="err">{err}</p>;
@@ -116,51 +117,93 @@ export default function Dashboard() {
         <div className="tile">
           <div className="lbl">Training coverage</div>
           <div className="val">{calc.emps.length ? Math.round(calc.trained.length / calc.emps.length * 100) : 0}%</div>
-          <div className="sub">{calc.trained.length} of {calc.emps.length} employee(s) on ≥1 training in scope</div>
+          <div className="sub" style={{ color: 'var(--good)' }}>{calc.trained.length} of {calc.emps.length} employee(s) on at least one training in scope</div>
         </div>
         <div className="tile">
           <div className="lbl">Mandatory compliance</div>
           <div className="val">{calc.compPct}%</div>
-          <div className="sub">{calc.gaps} enrolment(s) still missing</div>
+          <div className="sub" style={{ color: calc.gaps ? 'var(--crit)' : 'var(--good)' }}>{calc.gaps} employee-enrolments still missing</div>
         </div>
         <div className="tile">
           <div className="lbl">Avg hours / employee</div>
           <div className="val">{calc.avgHours.toFixed(1)}</div>
-          <div className="sub">attendance-weighted · target 16 h/yr</div>
+          <div className="sub" style={{ color: 'var(--good)' }}>Target 16 h per year</div>
         </div>
         {isAdmin && calc.spend !== null && (
           <div className="tile">
-            <div className="lbl">Actual spend</div>
+            <div className="lbl">Actual spend (FY)</div>
             <div className="val">₹{inr(calc.spend)}</div>
-            <div className="sub">{calc.pendingExp} cost sheet(s) awaiting approval</div>
+            <div className="sub" style={{ color: 'var(--good)' }}>
+              of ₹{inr(ANNUAL_BUDGET)} annual budget ({Math.round(calc.spend / ANNUAL_BUDGET * 100)}% used)
+            </div>
           </div>
         )}
         <div className="tile">
-          <div className="lbl">Trainings</div>
+          <div className="lbl">Trainings planned</div>
           <div className="val">{calc.trns.length}</div>
-          <div className="sub">{calc.done} completed · {calc.running} upcoming / running</div>
-        </div>
-        <div className="tile">
-          <div className="lbl">Feedback pending</div>
-          <div className="val">{calc.fbPending}</div>
-          <div className="sub">responses still expected</div>
+          <div className="sub">{calc.done} done · {calc.running} upcoming / running</div>
         </div>
       </div>
 
-      <div className="card">
-        <h3 style={{ fontSize: 15, marginBottom: 8 }}>Upcoming trainings</h3>
-        {calc.upcoming.length ? (
+      <div className="cols2">
+        <div className="card" style={{ marginBottom: 0 }}>
+          <h3 style={{ fontSize: 16, marginBottom: 10 }}>Needs your attention</h3>
           <table><tbody>
-            {calc.upcoming.map((t) => (
-              <tr key={t.id} className="rowlink" onClick={() => nav('/trainings?open=' + t.id)}>
-                <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtDay(t.days[0])}</td>
-                <td>{t.title}{t.batch ? ' — ' + t.batch : ''}</td>
-                <td><span className={'pill mini ' + (t.trainer_type === 'external' ? 'crit' : 'soft')}>{t.mode || t.trainer_type}</span></td>
+            <tr>
+              <td style={{ width: 96 }}><span className="pill warn">Mandatory</span></td>
+              <td>Missing enrolments on mandatory trainings</td>
+              <td style={{ textAlign: 'right' }}>{calc.gaps}</td>
+            </tr>
+            <tr>
+              <td><span className="pill warn">Feedback</span></td>
+              <td>Feedback forms pending from participants</td>
+              <td style={{ textAlign: 'right' }}>{calc.fbPending}</td>
+            </tr>
+            <tr>
+              <td><span className="pill neutral">Evidence</span></td>
+              <td>Signed attendance sheets pending upload</td>
+              <td style={{ textAlign: 'right' }}>{calc.sheetsPending}</td>
+            </tr>
+            {isAdmin && (
+              <tr>
+                <td><span className="pill crit">Expense</span></td>
+                <td>Cost sheets awaiting approval</td>
+                <td style={{ textAlign: 'right' }}>{calc.pendingExp}</td>
               </tr>
-            ))}
+            )}
           </tbody></table>
-        ) : <p className="muted" style={{ margin: 0 }}>Nothing scheduled in scope — plan trainings under the Trainings tab.</p>}
+        </div>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <h3 style={{ fontSize: 16, marginBottom: 10 }}>Upcoming trainings</h3>
+          {calc.upcoming.length ? (
+            <table><tbody>
+              {calc.upcoming.map((t) => (
+                <tr key={t.id} className="rowlink" onClick={() => nav('/trainings?open=' + t.id)}>
+                  <td className="muted" style={{ whiteSpace: 'nowrap', width: 90 }}>{dayRange(t.days)}</td>
+                  <td>{t.title}{t.batch ? ' — ' + t.batch : ''}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span className={'pill ' + (t.trainer_type === 'external' ? 'warn' : 'soft')}>{t.mode || (t.trainer_type === 'external' ? 'External' : 'Internal')}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody></table>
+          ) : <p className="muted" style={{ margin: 0 }}>Nothing scheduled in scope — plan trainings under the Trainings tab.</p>}
+        </div>
       </div>
     </>
   );
+}
+
+// Annual training budget (checklist A6 — final figure pending sign-off).
+const ANNUAL_BUDGET = 1400000;
+
+// "15–16 Sep" for a same-month block, else "29 Sep → 02 Oct".
+function dayRange(days) {
+  if (!days || !days.length) return '—';
+  const a = new Date(days[0]); const b = new Date(days[days.length - 1]);
+  if (days.length === 1) return fmtDay(days[0]);
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) {
+    return `${String(a.getDate()).padStart(2, '0')}–${String(b.getDate()).padStart(2, '0')} ${a.toLocaleDateString('en-IN', { month: 'short' })}`;
+  }
+  return `${fmtDay(days[0])} → ${fmtDay(days[days.length - 1])}`;
 }
