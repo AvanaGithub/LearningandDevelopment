@@ -1,6 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, EMP_TYPES } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
+import { toXlsx } from '../xlsx.js';
+import ImportDialog from '../components/ImportDialog.jsx';
+
+const IMPORT_FIELDS = [
+  { key: 'zoho_emp_id', label: 'Zoho employee ID', syn: ['zoho', 'emp id', 'employee id', 'code', 'id'] },
+  { key: 'name', label: 'Full name', req: true, syn: ['name', 'full name', 'employee name'] },
+  { key: 'entity', label: 'Entity', syn: ['entity', 'company', 'organisation'] },
+  { key: 'division', label: 'Division', syn: ['division', 'div'] },
+  { key: 'department', label: 'Department', syn: ['department', 'dept'] },
+  { key: 'designation', label: 'Designation', syn: ['designation', 'title', 'role'] },
+  { key: 'manager', label: 'Reporting manager', syn: ['manager', 'reporting manager', 'supervisor'] },
+  { key: 'employment_type', label: 'Employment type', syn: ['employment type', 'type'] },
+  { key: 'email', label: 'Official e-mail', syn: ['email', 'e-mail', 'mail', 'email id'] },
+  { key: 'mobile', label: 'Mobile', syn: ['mobile', 'phone', 'contact'] },
+  { key: 'date_joined', label: 'Date of joining', syn: ['doj', 'date of joining', 'joining', 'joined'] },
+  { key: 'location', label: 'Location / territory', syn: ['location', 'territory', 'city', 'place'] },
+];
+const normEntity = (v) => {
+  v = String(v || '').toLowerCase();
+  if (v.includes('surgical') || v.trim() === 'ass') return 'ASS';
+  if (v.includes('tech') || v.trim() === 'ats') return 'ATS';
+  return 'AMD';
+};
+const normDate = (v) => {
+  if (!v) return null;
+  const t = Date.parse(v);
+  return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+};
 
 const EMPTY = {
   zoho_emp_id: '', name: '', email: '', entity: 'AMD',
@@ -20,7 +48,29 @@ export default function Employees() {
   const [form, setForm] = useState(null);     // add/edit form state ({id} present = edit)
   const [sel, setSel] = useState(null);       // employee open in the detail modal
   const [deactReason, setDeactReason] = useState(null); // null = closed
+  const [importing, setImporting] = useState(false);
   const [err, setErr] = useState(null);
+
+  const doImport = async (objs) => {
+    let ok = 0, fail = 0, firstErr = null;
+    for (const o of objs) {
+      try {
+        await api.post('/api/employees', {
+          ...o, entity: normEntity(o.entity), date_joined: normDate(o.date_joined),
+        });
+        ok++;
+      } catch (e2) { fail++; if (!firstErr) firstErr = e2.message; }
+    }
+    load();
+    return `${ok} employee(s) imported${fail ? ` · ${fail} skipped (${firstErr})` : ''}.`;
+  };
+
+  const doExport = () => toXlsx('Employees.xlsx',
+    ['Zoho ID', 'Name', 'Entity', 'Division', 'Department', 'Designation', 'Manager', 'Type', 'E-mail', 'Mobile', 'DOJ', 'Location', 'Status'],
+    (rows || []).map((r) => [r.zoho_emp_id || '', r.name, r.entity, r.division || '', r.department || '', r.designation || '',
+      r.manager || '', r.employment_type || '', r.email || '', r.mobile || '',
+      r.date_joined ? r.date_joined.slice(0, 10) : '', r.location || '', r.active ? 'Active' : 'Inactive']),
+    'Employees');
 
   const load = () => {
     const p = new URLSearchParams();
@@ -89,8 +139,16 @@ export default function Employees() {
     <>
       <div className="page-head">
         <h2>Employees</h2>
-        {isAdmin && <button className="btn gold" onClick={() => { setForm({ ...EMPTY }); setErr(null); }}>Add employee</button>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isAdmin && <button className="btn" onClick={() => setImporting(true)}>⬆ Import (Excel)</button>}
+          {isAdmin && <button className="btn" onClick={doExport}>⬇ Export</button>}
+          {isAdmin && <button className="btn gold" onClick={() => { setForm({ ...EMPTY }); setErr(null); }}>Add employee</button>}
+        </div>
       </div>
+      {importing && (
+        <ImportDialog title="Import employees — map your columns" fields={IMPORT_FIELDS}
+          onImport={doImport} onClose={(summary) => { setImporting(false); if (summary) toast(summary); }} />
+      )}
       <div className="toolbar">
         <input placeholder="Search name / e-mail / Zoho ID" value={q}
           onChange={(e) => setQ(e.target.value)}

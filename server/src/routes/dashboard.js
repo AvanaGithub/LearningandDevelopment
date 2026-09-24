@@ -32,4 +32,29 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Everything the filterable dashboard needs in one call; the client slices it
+// by entity/employee/training/division/department/team/date exactly like the
+// prototype. Expense figures are included for admins only (checklist K6).
+router.get('/full', async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+    const [emps, trns, att, exp] = await Promise.all([
+      query(`SELECT id, name, entity, division, department, manager FROM employees WHERE active ORDER BY name`),
+      query(`SELECT t.id, t.code, t.title, t.batch, t.status, t.mandatory, t.trainer_type, t.mode,
+               t.hours_per_day, t.seats,
+               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days,
+               (SELECT json_agg(p.employee_id) FROM training_participants p WHERE p.training_id=t.id) AS participant_ids,
+               (SELECT count(*)::int FROM feedback_responses f WHERE f.training_id=t.id) AS response_count
+             FROM trainings t ORDER BY t.id`),
+      query(`SELECT training_id, employee_id,
+               sum(CASE mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::float AS units
+             FROM attendance GROUP BY training_id, employee_id`),
+      isAdmin
+        ? query(`SELECT training_id, training_label, entity_split, budget, actual, approval FROM expenses WHERE active`)
+        : Promise.resolve({ rows: null }),
+    ]);
+    res.json({ employees: emps.rows, trainings: trns.rows, attendance: att.rows, expenses: exp.rows });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

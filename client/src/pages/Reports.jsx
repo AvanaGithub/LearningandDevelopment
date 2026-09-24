@@ -1,17 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { api, fmtRange, inr, TRN_STATUSES } from '../api.js';
 import { useAuth } from '../App.jsx';
-
-const toXlsx = (name, header, rows, sheet = 'Data') => {
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  ws['!cols'] = header.map((h, i) => ({
-    wch: Math.min(40, Math.max(String(h).length, ...rows.map((r) => String(r[i] ?? '').length), 8) + 2),
-  }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheet);
-  XLSX.writeFile(wb, name);
-};
+import { toXlsx } from '../xlsx.js';
 
 export default function Reports() {
   const { user: me } = useAuth();

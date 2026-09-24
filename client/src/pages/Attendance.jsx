@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtDay, fmtRange } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
+import { toXlsx } from '../xlsx.js';
+import QrModal from '../components/QrModal.jsx';
 
 const CYCLE = { '': 'P', P: 'A', A: 'H', H: '' };
 
@@ -12,7 +14,24 @@ export default function Attendance() {
   const [selIds, setSelIds] = useState([]);       // filter: empty = all
   const [data, setData] = useState({});           // id -> {detail, marks:{empId|day:mark}}
   const [editing, setEditing] = useState(null);   // {tid, emp, marks:{day:m}, reason}
+  const [qr, setQr] = useState(null);
   const [err, setErr] = useState(null);
+
+  const doExport = () => {
+    const out = [];
+    shown.forEach((t) => {
+      const d = data[t.id];
+      if (!d) return;
+      const days = (t.days || []).map((x) => x.slice(0, 10));
+      d.detail.participants.forEach((p) => {
+        const pc = pct(t.id, p.id, days);
+        out.push([t.title, t.batch || '', fmtRange(t.days), p.name,
+          days.map((day) => `${fmtDay(day)}: ${d.marks[p.id + '|' + day] || '–'}`).join(' | '),
+          pc === null ? '—' : pc + '%']);
+      });
+    });
+    toXlsx('Attendance.xlsx', ['Training', 'Batch', 'Dates', 'Participant', 'Day-wise marks', 'Percent'], out, 'Attendance');
+  };
 
   useEffect(() => {
     api.get('/api/trainings').then((rows) =>
@@ -95,7 +114,10 @@ export default function Attendance() {
             ))}
           </div>
         </details>
+        <span style={{ flex: 1 }} />
+        {isAdmin && <button className="btn" onClick={doExport}>⬇ Export</button>}
       </div>
+      {qr && <QrModal {...qr} onClose={() => setQr(null)} />}
       {err && <p className="err">{err}</p>}
       {!list ? <p className="muted">Loading…</p> :
         !shown.length ? <p className="muted">No trainings with participants yet — plan a training and add participants first.</p> :
@@ -109,6 +131,13 @@ export default function Attendance() {
                   <b style={{ fontFamily: 'Fira Sans' }}>{t.title}{t.batch ? ' — ' + t.batch : ''}</b>
                   <span className="pill soft mini">{fmtRange(t.days)}</span>
                   <span style={{ flex: 1 }} />
+                  {isAdmin && t.public_token && (
+                    <button className="btn" onClick={() => setQr({
+                      title: 'QR check-in — ' + t.title,
+                      url: `${location.origin}/p/att/${t.public_token}`,
+                      desc: 'Display this at the venue. A participant scans it, picks their name and is marked Present — tagged to this training automatically.',
+                    })}>▦ QR check-in</button>
+                  )}
                   {isAdmin && <button className="btn" onClick={() => markAll(t.id)}>✓ Mark all present</button>}
                 </div>
                 <table style={{ minWidth: 480 }}>

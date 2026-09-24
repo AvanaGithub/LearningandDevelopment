@@ -2,6 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
+import { toXlsx } from '../xlsx.js';
+import ImportDialog from '../components/ImportDialog.jsx';
+import QrModal from '../components/QrModal.jsx';
+
+const IMPORT_FIELDS = [
+  { key: 'title', label: 'Training title', req: true, syn: ['title', 'training title', 'training name', 'training', 'name'] },
+  { key: 'batch', label: 'Batch', syn: ['batch'] },
+  { key: 'category', label: 'Category', syn: ['category'] },
+  { key: 'mode', label: 'Mode', syn: ['mode', 'delivery'] },
+  { key: 'trainer_type', label: 'Trainer type (internal/external)', syn: ['trainer type', 'internal/external'] },
+  { key: 'trainer_name', label: 'Trainer name', syn: ['trainer', 'faculty'] },
+  { key: 'agency', label: 'Agency', syn: ['agency', 'vendor'] },
+  { key: 'dates', label: 'Dates (comma-separated)', req: true, syn: ['dates', 'date', 'schedule', 'days'] },
+  { key: 'hours_per_day', label: 'Hours per day', syn: ['hours per day', 'hours/day', 'hours'] },
+  { key: 'seats', label: 'Seats', syn: ['seats', 'capacity', 'max seats'] },
+  { key: 'mandatory', label: 'Mandatory (yes/no)', syn: ['mandatory', 'compulsory'] },
+];
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const addDays = (isoDate, n) => {
@@ -31,7 +48,43 @@ export default function Trainings() {
   const [emps, setEmps] = useState([]);
   const [addEmp, setAddEmp] = useState('');
   const [removing, setRemoving] = useState(null); // {empId, reason}
+  const [importing, setImporting] = useState(false);
+  const [qr, setQr] = useState(null);             // {title, url, desc}
   const [err, setErr] = useState(null);
+
+  const doImport = async (objs) => {
+    let ok = 0, fail = 0, firstErr = null;
+    for (const o of objs) {
+      try {
+        const days = String(o.dates || '').split(/[,;|]/).map((s) => {
+          const t = Date.parse(s.trim());
+          return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+        }).filter(Boolean);
+        if (!days.length) throw new Error('No valid dates in "' + o.dates + '"');
+        const external = /ext/i.test(o.trainer_type || '');
+        await api.post('/api/trainings', {
+          title: o.title, batch: o.batch, category: o.category || 'Product', mode: o.mode || 'Classroom',
+          trainer_type: external ? 'external' : 'internal',
+          trainer_name: o.trainer_name || (external ? '' : 'To be assigned'),
+          agency: o.agency, days,
+          hours_per_day: Number(o.hours_per_day) || 8, seats: Number(o.seats) || 20,
+          mandatory: /yes|true|1|mand/i.test(o.mandatory || ''), status: 'planned',
+        });
+        ok++;
+      } catch (e2) { fail++; if (!firstErr) firstErr = e2.message; }
+    }
+    load();
+    return `${ok} training(s) imported${fail ? ` · ${fail} skipped (${firstErr})` : ''}.`;
+  };
+
+  const doExport = () => toXlsx('Trainings.xlsx',
+    ['Code', 'Title', 'Batch', 'Category', 'Mode', 'Trainer type', 'Trainer/Agency', 'Dates', 'Hours', 'Seats', 'Participants', 'Mandatory', 'Status'],
+    (rows || []).map((t) => [t.code, t.title, t.batch || '', t.category || '', t.mode || '', t.trainer_type,
+      t.trainer_type === 'external' ? (t.agency || t.trainer_name || '') : (t.trainer_name || ''),
+      (t.days || []).map((d) => d.slice(0, 10)).join(', '),
+      (t.days?.length || 0) * Number(t.hours_per_day), t.seats, t.participant_count,
+      t.mandatory ? 'Yes' : 'No', TRN_STATUSES[t.status]]),
+    'Trainings');
   const [params, setParams] = useSearchParams();
 
   const load = () => {
@@ -130,8 +183,17 @@ export default function Trainings() {
     <>
       <div className="page-head">
         <h2>Trainings</h2>
-        {isAdmin && <button className="btn gold" onClick={() => { setForm({ ...EMPTY }); setErr(null); }}>Plan training</button>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {isAdmin && <button className="btn" onClick={() => setImporting(true)}>⬆ Import (Excel)</button>}
+          {isAdmin && <button className="btn" onClick={doExport}>⬇ Export</button>}
+          {isAdmin && <button className="btn gold" onClick={() => { setForm({ ...EMPTY }); setErr(null); }}>Plan training</button>}
+        </div>
       </div>
+      {importing && (
+        <ImportDialog title="Import trainings — map your columns" fields={IMPORT_FIELDS}
+          onImport={doImport} onClose={(summary) => { setImporting(false); if (summary) toast(summary); }} />
+      )}
+      {qr && <QrModal {...qr} onClose={() => setQr(null)} />}
       <div className="toolbar">
         <input placeholder="Search title / code / batch" value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && load()} style={{ minWidth: 220 }} />
@@ -275,8 +337,22 @@ export default function Trainings() {
               </div>
             )}
             {err && <p className="err">{err}</p>}
-            <div className="form-actions">
+            <div className="form-actions" style={{ flexWrap: 'wrap' }}>
               {isAdmin && <button className="btn gold" onClick={() => edit(sel)}>Edit</button>}
+              {isAdmin && sel.public_token && (
+                <button className="btn" onClick={() => setQr({
+                  title: 'Attendance QR — ' + sel.title,
+                  url: `${location.origin}/p/att/${sel.public_token}`,
+                  desc: 'Display this at the venue. A participant scans it on their phone, picks their name, and is marked Present for the day — tagged to ' + sel.code + ' automatically.',
+                })}>▦ Attendance QR</button>
+              )}
+              {isAdmin && sel.public_token && (
+                <button className="btn" onClick={() => setQr({
+                  title: 'Feedback QR — ' + sel.title,
+                  url: `${location.origin}/p/fb/${sel.public_token}`,
+                  desc: 'Scan or share the link — responses tag to this training\'s feedback form automatically.',
+                })}>▦ Feedback QR</button>
+              )}
               <button className="btn" onClick={() => setSel(null)}>Close</button>
             </div>
           </div>

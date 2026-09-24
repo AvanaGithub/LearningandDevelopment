@@ -12,8 +12,10 @@ app.use(cookieParser());
 
 app.get('/healthz', (req, res) => res.send('ok'));
 
-// Auth (login/logout/me) — the only API surface reachable without a session.
+// Auth (login/logout/me) — reachable without a session.
 app.use('/auth', require('./routes/auth'));
+// QR participant pages (self check-in, feedback) — token-guarded, no session.
+app.use('/api/public', require('./routes/public'));
 
 // Everything else under /api requires a valid session of an active user.
 app.use('/api', requireAuth);

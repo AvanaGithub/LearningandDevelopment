@@ -11,6 +11,8 @@ import Attendance from './pages/Attendance.jsx';
 import Feedback from './pages/Feedback.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Reports from './pages/Reports.jsx';
+import PublicCheckin from './pages/PublicCheckin.jsx';
+import PublicFeedback from './pages/PublicFeedback.jsx';
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -45,6 +47,8 @@ export default function App() {
     <AuthCtx.Provider value={{ ...auth, refresh }}>
       <ToastCtx.Provider value={showToast}>
         <Routes>
+          <Route path="/p/att/:token" element={<PublicCheckin />} />
+          <Route path="/p/fb/:token" element={<PublicFeedback />} />
           <Route path="/login" element={auth.user ? <Navigate to="/" replace /> : <Login />} />
           <Route element={<RequireUser user={auth.user}><Shell /></RequireUser>}>
             <Route path="/" element={<Dashboard />} />

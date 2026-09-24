@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, ENTITIES, ENTITY_NAMES, EXP_CATEGORIES, fmtRange, inr } from '../api.js';
 import { useToast } from '../App.jsx';
+import { toXlsx } from '../xlsx.js';
 
 const paidOf = (r) => (r.payments || []).reduce((a, p) => a + Number(p.amt), 0);
 const payStatus = (r) => {
@@ -98,7 +99,21 @@ export default function Expenses() {
     <>
       <div className="page-head">
         <h2>Expenses</h2>
-        <button className="btn gold" onClick={() => { setForm(JSON.parse(JSON.stringify(EMPTY))); setErr(null); }}>New expense record</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => toXlsx('Expense-Records.xlsx',
+            ['Training', 'Dates', 'Location', 'Participants', 'Entities', 'Category', 'Type', 'Vendor', 'Description',
+              'Budget', 'Actual', 'Paid', 'Pending', 'Variance', 'Approval', 'Payment status', 'Payments', 'Invoices', 'Remark'],
+            (rows || []).map((r) => {
+              const paid = paidOf(r);
+              return [r.training_label, r.dates || '', r.location || '', r.participants,
+                (r.entity_split || []).map((s) => `${s.ent} ${s.n}`).join(' | '), r.category || '', r.training_type || '',
+                r.vendor || '', r.description || '', Number(r.budget), Number(r.actual), paid,
+                Number(r.actual) - paid, Number(r.budget) - Number(r.actual), r.approval, payStatus(r)[0],
+                (r.payments || []).map((p) => `${p.date} ₹${p.amt}`).join(' | '),
+                (r.invoices || []).join(' | '), r.remark || ''];
+            }), 'Expenses')}>⬇ Export</button>
+          <button className="btn gold" onClick={() => { setForm(JSON.parse(JSON.stringify(EMPTY))); setErr(null); }}>New expense record</button>
+        </div>
       </div>
 
       {form && (

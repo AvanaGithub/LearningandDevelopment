@@ -36,6 +36,8 @@ router.get('/', async (req, res, next) => {
     }
     const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
     const { rows } = await query(`${listSelect} ${where} ORDER BY t.id DESC LIMIT 500`, params);
+    // The QR token is an admin credential — managers browse without it.
+    if (req.user.role === 'manager') rows.forEach((r) => delete r.public_token);
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -49,6 +51,7 @@ router.get('/:id', async (req, res, next) => {
       `SELECT e.id, e.name, e.zoho_emp_id, e.entity, e.division, e.department
        FROM training_participants p JOIN employees e ON e.id = p.employee_id
        WHERE p.training_id = $1 ORDER BY e.name`, [id]);
+    if (req.user.role === 'manager') delete rows[0].public_token;
     res.json({ ...rows[0], participants: parts });
   } catch (e) { next(e); }
 });
@@ -80,12 +83,13 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     if (f.trainer_type === 'external' && !f.agency) return res.status(400).json({ error: 'External agency name is required' });
     if (f.trainer_type === 'internal' && !f.trainer_name) return res.status(400).json({ error: 'Trainer name is required' });
     const { rows: code } = await query(`SELECT 'TRG-' || nextval('training_code_seq') AS code`);
+    const token = require('crypto').randomBytes(12).toString('hex');
     const { rows } = await query(
       `INSERT INTO trainings (code, title, batch, category, mode, trainer_type, trainer_name, agency,
-         hours_per_day, seats, mandatory, status, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+         hours_per_day, seats, mandatory, status, created_by, public_token)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [code[0].code, f.title, f.batch, f.category, f.mode, f.trainer_type, f.trainer_name, f.agency,
-       f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id]);
+       f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
     res.status(201).json({ ...rows[0], days });

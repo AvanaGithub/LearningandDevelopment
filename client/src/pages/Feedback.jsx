@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtRange } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
+import { toXlsx } from '../xlsx.js';
+import QrModal from '../components/QrModal.jsx';
 
 const STD_QS = [
   'Relevance of content to my job', "Trainer's subject knowledge", "Trainer's delivery and clarity",
@@ -16,7 +18,14 @@ export default function Feedback() {
   const [respond, setRespond] = useState(null);   // {t, questions, scores, comment}
   const [results, setResults] = useState(null);   // {t, questions, responses}
   const [builder, setBuilder] = useState(null);   // {t, checked:Set(labels), custom:[], newQ}
+  const [qr, setQr] = useState(null);
   const [err, setErr] = useState(null);
+
+  const exportResults = (r) => toXlsx(
+    ('Feedback-' + r.t.code + '.xlsx').replace(/[^\w.-]+/g, '-'),
+    ['Respondent', ...r.questions.map((q, i) => `Q${i + 1} ${q}`), 'Comment'],
+    r.responses.map((x) => [x.respondent, ...r.questions.map((q, i) => x.scores[i] ?? ''), x.comment || '']),
+    'Feedback');
 
   const load = () => api.get('/api/trainings')
     .then((rows) => setList(rows.filter((t) => t.status !== 'cancelled')))
@@ -76,6 +85,7 @@ export default function Feedback() {
   return (
     <>
       <div className="page-head"><h2>Feedback</h2></div>
+      {qr && <QrModal {...qr} onClose={() => setQr(null)} />}
       {err && <p className="err">{err}</p>}
       {!list ? <p className="muted">Loading…</p> : (
         <div className="card" style={{ padding: 0 }}>
@@ -91,6 +101,13 @@ export default function Feedback() {
                     <button className="btn link" onClick={() => openRespond(t)}>Respond</button>
                     <button className="btn link" onClick={() => openResults(t)}>Results</button>
                     {isAdmin && <button className="btn link" onClick={() => openBuilder(t)}>Edit form</button>}
+                    {isAdmin && t.public_token && (
+                      <button className="btn link" onClick={() => setQr({
+                        title: 'Feedback QR — ' + t.title,
+                        url: `${location.origin}/p/fb/${t.public_token}`,
+                        desc: 'Scan or share the link — responses tag to this training automatically, no sign-in needed.',
+                      })}>▦ QR / Link</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -159,7 +176,10 @@ export default function Feedback() {
             <p className="muted mini" style={{ marginTop: 8 }}>
               {results.questions.map((q, i) => `Q${i + 1}: ${q}`).join(' · ')}
             </p>
-            <div className="form-actions"><button className="btn" onClick={() => setResults(null)}>Close</button></div>
+            <div className="form-actions">
+              {isAdmin && <button className="btn gold" onClick={() => exportResults(results)}>⬇ Excel</button>}
+              <button className="btn" onClick={() => setResults(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}
