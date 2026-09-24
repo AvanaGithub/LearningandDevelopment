@@ -5,7 +5,12 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Employees from './pages/Employees.jsx';
 import Users from './pages/Users.jsx';
-import Locked from './pages/Locked.jsx';
+import Trainings from './pages/Trainings.jsx';
+import Calendar from './pages/Calendar.jsx';
+import Attendance from './pages/Attendance.jsx';
+import Feedback from './pages/Feedback.jsx';
+import Expenses from './pages/Expenses.jsx';
+import Reports from './pages/Reports.jsx';
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -43,13 +48,14 @@ export default function App() {
           <Route path="/login" element={auth.user ? <Navigate to="/" replace /> : <Login />} />
           <Route element={<RequireUser user={auth.user}><Shell /></RequireUser>}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/calendar" element={<Calendar />} />
             <Route path="/employees" element={<Employees />} />
+            <Route path="/trainings" element={<Trainings />} />
+            <Route path="/attendance" element={<Attendance />} />
+            <Route path="/feedback" element={<Feedback />} />
+            <Route path="/expenses" element={<RequireAdmin><Expenses /></RequireAdmin>} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/users" element={<RequireAdmin><Users /></RequireAdmin>} />
-            <Route path="/trainings" element={<Locked title="Trainings" note="Next module to be built on the new platform. The prototype remains the reference." />} />
-            <Route path="/attendance" element={<Locked title="Attendance" />} />
-            <Route path="/feedback" element={<Locked title="Feedback" />} />
-            <Route path="/expenses" element={<Locked title="Expenses" />} />
-            <Route path="/reports" element={<Locked title="Reports" />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

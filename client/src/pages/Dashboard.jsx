@@ -33,14 +33,36 @@ export default function Dashboard() {
           <div className="val">{data.activeUsers}</div>
           <div className="sub">with active access</div>
         </div>
+        <div className="tile">
+          <div className="lbl">Trainings</div>
+          <div className="val">{data.trainings?.total ?? 0}</div>
+          <div className="sub">
+            {data.trainings?.byStatus?.completed || 0} completed ·{' '}
+            {(data.trainings?.byStatus?.planned || 0) + (data.trainings?.byStatus?.confirmed || 0) + (data.trainings?.byStatus?.in_progress || 0)} upcoming / running
+          </div>
+        </div>
       </div>
       <div className="card">
-        <h3 style={{ fontSize: 15, marginBottom: 8 }}>Being rebuilt as a full application</h3>
-        <p className="muted" style={{ margin: 0 }}>
-          Training coverage, compliance, hours and budget tiles return as each
-          module (Trainings, Attendance, Feedback, Expenses, Reports) moves from
-          the prototype onto this platform with real, shared data.
-        </p>
+        <h3 style={{ fontSize: 15, marginBottom: 8 }}>Upcoming trainings</h3>
+        {data.trainings?.upcoming?.length ? (
+          <table>
+            <tbody>
+              {data.trainings.upcoming.map((t) => (
+                <tr key={t.code}>
+                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                    {new Date(t.first_day).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </td>
+                  <td>{t.title}{t.batch ? ' — ' + t.batch : ''}</td>
+                  <td><span className={'pill mini ' + (t.trainer_type === 'external' ? 'crit' : 'soft')}>{t.mode || (t.trainer_type === 'external' ? 'External' : 'Internal')}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            Nothing scheduled from today onwards — plan trainings under the Trainings tab and they appear here and on the Training Calendar.
+          </p>
+        )}
       </div>
     </>
   );

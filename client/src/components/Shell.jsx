@@ -24,12 +24,13 @@ export default function Shell() {
       </div>
       <nav className="sidebar">
         <NavLink to="/" end className={link}>Dashboard</NavLink>
+        <NavLink to="/calendar" className={link}>Training Calendar</NavLink>
         <div className="sect">Phase 1</div>
         <NavLink to="/employees" className={link}>Employees</NavLink>
         <NavLink to="/trainings" className={link}>Trainings</NavLink>
         <NavLink to="/attendance" className={link}>Attendance</NavLink>
         <NavLink to="/feedback" className={link}>Feedback</NavLink>
-        <NavLink to="/expenses" className={link}>Expenses</NavLink>
+        {isAdmin && <NavLink to="/expenses" className={link}>Expenses</NavLink>}
         <NavLink to="/reports" className={link}>Reports</NavLink>
         {isAdmin && (<>
           <div className="sect">Administration</div>

@@ -19,6 +19,11 @@ app.use('/auth', require('./routes/auth'));
 app.use('/api', requireAuth);
 app.use('/api/users', require('./routes/users'));
 app.use('/api/employees', require('./routes/employees'));
+app.use('/api/trainings', require('./routes/trainings'));
+app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/feedback', require('./routes/feedback'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/reports', require('./routes/reports'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));

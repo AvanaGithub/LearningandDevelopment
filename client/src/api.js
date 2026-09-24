@@ -20,6 +20,8 @@ export const api = {
   get: (url) => call('GET', url),
   post: (url, body) => call('POST', url, body),
   patch: (url, body) => call('PATCH', url, body),
+  put: (url, body) => call('PUT', url, body),
+  del: (url) => call('DELETE', url),
 };
 
 export const ENTITIES = ['AMD', 'ASS', 'ATS'];
@@ -35,3 +37,23 @@ export const DIVISIONS = ['Sports Medicine', 'Dex & Bio', 'Endospine', 'Orthotic
 export const DEPARTMENTS = ['Accounts', 'Administration', 'Clinical Support', 'Commercial', 'Graphic Design',
   'Human Resource', 'IT', 'Marketing', 'Medical Education', 'Operations', 'Quality', 'Sales', 'SCM', 'Service'];
 export const EMP_TYPES = ['Permanent', 'Trainee', 'Intern', 'Contract', 'Consultant'];
+export const TRN_CATEGORIES = ['Induction', 'Product', 'Soft skill', 'Technical', 'Compliance', 'Safety', 'On-the-job'];
+export const TRN_MODES = ['Classroom', 'Online', 'On-the-job', 'Field', 'External seminar'];
+export const TRN_STATUSES = {
+  planned: 'Planned', confirmed: 'Confirmed', in_progress: 'In progress',
+  completed: 'Completed', postponed: 'Postponed', cancelled: 'Cancelled',
+};
+export const EXP_CATEGORIES = ['Food / Catering', 'Flight', 'Venue / Conference room', 'Accommodation',
+  'Local Transportation', 'Train', 'Training materials', 'Printing', 'Others'];
+
+// Formatting helpers (IST conventions from the checklist).
+export const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+export const fmtDay = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '');
+export const fmtRange = (days) => {
+  if (!days || !days.length) return '—';
+  if (days.length === 1) return fmtDate(days[0]);
+  if (days.length > 3) return `${fmtDay(days[0])} → ${fmtDay(days[days.length - 1])} (${days.length} days)`;
+  return days.map(fmtDay).join(', ');
+};
+export const inr = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+export const statusPill = (s) => (s === 'completed' ? 'good' : s === 'cancelled' || s === 'postponed' ? 'crit' : 'soft');
