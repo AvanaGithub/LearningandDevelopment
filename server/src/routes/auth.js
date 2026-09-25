@@ -89,6 +89,22 @@ router.post('/dev-login', express.json(), async (req, res) => {
   res.json({ ok: true });
 });
 
+// "View as" preview: a real super admin lowers this session's effective
+// role to manager/admin for testing; null returns to super admin. It can
+// never raise privileges, and every switch is audited.
+router.post('/view-as', requireAuth, express.json(), async (req, res) => {
+  if (req.user.real_role !== 'super_admin') {
+    return res.status(403).json({ error: 'Only a super admin can preview another role' });
+  }
+  const role = req.body?.role ?? null;
+  if (role !== null && !['manager', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'role must be manager, admin or null' });
+  }
+  await query('UPDATE sessions SET act_role=$2 WHERE token_hash=$1', [sha256(req.sessionToken), role]);
+  await audit(req.user.id, 'auth.view_as', 'user', req.user.id, { role: role || 'super_admin (exit preview)' });
+  res.json({ ok: true });
+});
+
 router.post('/logout', requireAuth, async (req, res) => {
   await destroySession(req.sessionToken);
   res.clearCookie('session');
@@ -104,10 +120,18 @@ router.get('/me', async (req, res) => {
   const crypto2 = require('crypto');
   const hash = crypto2.createHash('sha256').update(token).digest('hex');
   const { rows } = await query(
-    `SELECT u.id, u.email, u.name, u.role, u.entity FROM sessions s
+    `SELECT u.id, u.email, u.name, u.role, u.entity, s.act_role FROM sessions s
      JOIN users u ON u.id=s.user_id
      WHERE s.token_hash=$1 AND s.expires_at > now() AND u.active=TRUE`, [hash]);
-  res.json({ ...base, user: rows[0] || null });
+  let user = rows[0] || null;
+  if (user) {
+    user = { ...user, real_role: user.role };
+    if (user.act_role && user.role === 'super_admin' && ['manager', 'admin'].includes(user.act_role)) {
+      user.role = user.act_role;
+    }
+    delete user.act_role;
+  }
+  res.json({ ...base, user });
 });
 
 module.exports = router;

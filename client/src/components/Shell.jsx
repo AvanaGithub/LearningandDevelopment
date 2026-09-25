@@ -8,9 +8,19 @@ const link = ({ isActive }) => (isActive ? 'active' : undefined);
 export default function Shell() {
   const { user, refresh } = useAuth();
   const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+  const previewing = user.real_role === 'super_admin' && user.role !== 'super_admin';
 
   const logout = async () => {
     await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    refresh();
+  };
+
+  const viewAs = async (role) => {
+    await fetch('/auth/view-as', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: role || null }),
+    });
     refresh();
   };
 
@@ -19,9 +29,29 @@ export default function Shell() {
       <div className="topbar">
         <div className="brand">Learning Hub<small>LEARNING &amp; DEVELOPMENT · AVANA GROUP</small></div>
         <div className="spacer" />
+        {user.real_role === 'super_admin' && (
+          <select value={previewing ? user.role : ''} onChange={(e) => viewAs(e.target.value)}
+            title="Preview the app exactly as another role sees it — server permissions follow."
+            style={{ marginRight: 10, fontSize: 12 }}>
+            <option value="">👁 View as: Super admin</option>
+            <option value="admin">👁 View as: Admin</option>
+            <option value="manager">👁 View as: Manager</option>
+          </select>
+        )}
         <div className="who"><b>{user.name}</b> · {ROLES[user.role]} · {user.entity}</div>
         <button className="btn-ghost" onClick={logout}>Sign out</button>
       </div>
+      {previewing && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40,
+          background: 'var(--gold, #c8930a)', color: '#fff', padding: '8px 16px',
+          fontSize: 13, display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 -4px 12px rgba(0,0,0,.15)' }}>
+          <span>👁 Previewing as <b>{ROLES[user.role]}</b> — your super admin rights are suspended until you exit
+            (the server enforces this view too).</span>
+          <button className="btn" style={{ marginLeft: 'auto', padding: '2px 10px' }}
+            onClick={() => viewAs(null)}>Exit preview</button>
+        </div>
+      )}
       <nav className="sidebar">
         <NavLink to="/" end className={link}>Dashboard</NavLink>
         <NavLink to="/calendar" className={link}>Training Calendar</NavLink>

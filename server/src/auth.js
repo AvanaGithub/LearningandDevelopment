@@ -37,11 +37,18 @@ async function requireAuth(req, res, next) {
     const token = req.cookies.session;
     if (!token) return res.status(401).json({ error: 'Not signed in' });
     const { rows } = await query(
-      `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.*, s.act_role FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.expires_at > now() AND u.active = TRUE`,
       [hash(token)]);
     if (!rows.length) return res.status(401).json({ error: 'Session expired or access revoked' });
     req.user = rows[0];
+    // "View as" preview: only a real super admin can carry an override, and
+    // it can only LOWER the effective role — every server check then sees it.
+    req.user.real_role = req.user.role;
+    if (req.user.act_role && req.user.role === 'super_admin' &&
+        ['manager', 'admin'].includes(req.user.act_role)) {
+      req.user.role = req.user.act_role;
+    }
     req.sessionToken = token;
     next();
   } catch (e) { next(e); }
