@@ -5,8 +5,10 @@ const { requireRole, audit } = require('../auth');
 // MedTech Mavericks trainee batches: members with status/comments, separate
 // classroom and field attendance, and per-division assessments with scores.
 const router = express.Router();
-const MEMBER_STATUS = ['in_training', 'completed', 'dropped', 'extended'];
+const MEMBER_STATUS = ['classroom', 'field', 'completed', 'dropped', 'in_training', 'extended'];
 const BATCH_STATUS = ['active', 'completed', 'closed'];
+const ASSESS_TYPES = ['Written Assessment', 'Presentation', 'Teach Back', 'Product Demonstration',
+  'Viva', 'Final Assessment', 'Reassessment'];
 
 router.get('/', async (req, res, next) => {
   try {
@@ -63,9 +65,13 @@ router.get('/:id', async (req, res, next) => {
     const { rows: batch } = await query('SELECT * FROM mav_batches WHERE id=$1', [id]);
     if (!batch.length) return res.status(404).json({ error: 'Not found' });
     const { rows: members } = await query(
-      `SELECT m.employee_id, m.status, m.comment, e.name, e.zoho_emp_id, e.entity, e.division,
-              e.department, e.designation, e.date_joined, e.email, e.mobile
-       FROM mav_members m JOIN employees e ON e.id = m.employee_id
+      `SELECT m.employee_id, m.status, m.comment, m.mentor_employee_id,
+              e.name, e.zoho_emp_id, e.entity, e.division, e.department, e.designation,
+              e.location, e.date_joined, e.email, e.mobile,
+              mt.name AS mentor_name, mt.department AS mentor_department, mt.location AS mentor_location
+       FROM mav_members m
+       JOIN employees e ON e.id = m.employee_id
+       LEFT JOIN employees mt ON mt.id = m.mentor_employee_id
        WHERE m.batch_id=$1 ORDER BY e.name`, [id]);
     const { rows: assessments } = await query(
       `SELECT a.*, (SELECT json_agg(json_build_object('employee_id', s.employee_id, 'score', s.score))
@@ -93,9 +99,11 @@ router.patch('/:id/members/:empId', requireRole('admin'), express.json(), async 
     const status = MEMBER_STATUS.includes(b.status) ? b.status : undefined;
     const { rows } = await query(
       `UPDATE mav_members SET status = coalesce($3, status),
-              comment = CASE WHEN $4::boolean THEN $5 ELSE comment END
+              comment = CASE WHEN $4::boolean THEN $5 ELSE comment END,
+              mentor_employee_id = CASE WHEN $6::boolean THEN $7 ELSE mentor_employee_id END
        WHERE batch_id=$1 AND employee_id=$2 RETURNING *`,
-      [id, empId, status, b.comment !== undefined, b.comment?.trim() || null]);
+      [id, empId, status, b.comment !== undefined, b.comment?.trim() || null,
+       b.mentor_employee_id !== undefined, b.mentor_employee_id ? Number(b.mentor_employee_id) : null]);
     if (!rows.length) return res.status(404).json({ error: 'Not a member of this batch' });
     await audit(req.user.id, 'mav.member_update', 'mav_batch', id, { employee_id: empId, changes: b });
     res.json(rows[0]);
@@ -152,13 +160,14 @@ router.post('/:id/assessments', requireRole('admin'), express.json(), async (req
   try {
     const id = Number(req.params.id);
     const b = req.body || {};
-    if (!b.name?.trim() || !b.division?.trim()) {
-      return res.status(400).json({ error: 'Assessment name and division are required' });
+    if (!ASSESS_TYPES.includes(b.atype)) {
+      return res.status(400).json({ error: 'Assessment type must be one of: ' + ASSESS_TYPES.join(', ') });
     }
+    const name = b.name?.trim() || b.atype;
     const { rows } = await query(
-      'INSERT INTO mav_assessments (batch_id, division, name, max_marks, assess_date) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [id, b.division.trim(), b.name.trim(), Number(b.max_marks) > 0 ? Number(b.max_marks) : 100, b.assess_date || null]);
-    await audit(req.user.id, 'mav.assessment_create', 'mav_batch', id, { name: b.name, division: b.division });
+      'INSERT INTO mav_assessments (batch_id, division, name, atype, max_marks, assess_date) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [id, b.division?.trim() || null, name, b.atype, Number(b.max_marks) > 0 ? Number(b.max_marks) : 100, b.assess_date || null]);
+    await audit(req.user.id, 'mav.assessment_create', 'mav_batch', id, { name, atype: b.atype, division: b.division || 'all' });
     res.status(201).json(rows[0]);
   } catch (e) { next(e); }
 });

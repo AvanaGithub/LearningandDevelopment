@@ -58,17 +58,30 @@ export default function Employees() {
   const [err, setErr] = useState(null);
 
   const doImport = async (objs) => {
-    let ok = 0, fail = 0, firstErr = null;
+    // Never create duplicates: rows matching an existing Zoho ID, e-mail or
+    // (when both are absent) exact name are skipped, originals untouched.
+    const existing = await api.get('/api/employees').catch(() => rows || []);
+    const byId = new Set(existing.map((e) => (e.zoho_emp_id || '').toLowerCase()).filter(Boolean));
+    const byEmail = new Set(existing.map((e) => (e.email || '').toLowerCase()).filter(Boolean));
+    const byName = new Set(existing.map((e) => e.name.toLowerCase()));
+    let ok = 0, dup = 0, fail = 0, firstErr = null;
     for (const o of objs) {
+      const id = String(o.zoho_emp_id || '').trim().toLowerCase();
+      const em = String(o.email || '').trim().toLowerCase();
+      const nm = String(o.name || '').trim().toLowerCase();
+      if ((id && byId.has(id)) || (em && byEmail.has(em)) || (!id && !em && nm && byName.has(nm))) { dup++; continue; }
       try {
         await api.post('/api/employees', {
           ...o, entity: normEntity(o.entity), date_joined: normDate(o.date_joined),
         });
         ok++;
+        if (id) byId.add(id);
+        if (em) byEmail.add(em);
+        if (nm) byName.add(nm);
       } catch (e2) { fail++; if (!firstErr) firstErr = e2.message; }
     }
     load();
-    return `${ok} employee(s) imported${fail ? ` · ${fail} skipped (${firstErr})` : ''}.`;
+    return `${ok} employee(s) imported${dup ? ` · ${dup} duplicate(s) skipped (already exist)` : ''}${fail ? ` · ${fail} failed (${firstErr})` : ''}.`;
   };
 
   const doExport = () => toXlsx('Employees.xlsx',

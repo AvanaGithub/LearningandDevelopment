@@ -38,7 +38,7 @@ router.get('/', async (req, res, next) => {
 router.get('/full', async (req, res, next) => {
   try {
     const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
-    const [emps, trns, att, exp] = await Promise.all([
+    const [emps, trns, att, exp, mav] = await Promise.all([
       query(`SELECT id, name, entity, division, department, manager FROM employees WHERE active ORDER BY name`),
       query(`SELECT t.id, t.code, t.title, t.batch, t.status, t.mandatory, t.trainer_type, t.mode,
                t.hours_per_day, t.seats,
@@ -52,8 +52,23 @@ router.get('/full', async (req, res, next) => {
       isAdmin
         ? query(`SELECT training_id, training_label, entity_split, budget, actual, approval FROM expenses WHERE active`)
         : Promise.resolve({ rows: null }),
+      query(`SELECT
+          (SELECT count(*)::int FROM mav_members m JOIN mav_batches b ON b.id=m.batch_id WHERE b.active) AS trainees,
+          (SELECT count(*)::int FROM mav_members m JOIN mav_batches b ON b.id=m.batch_id WHERE b.active AND m.status='completed') AS completed,
+          (SELECT round(avg(CASE mark WHEN 'P' THEN 100 WHEN 'H' THEN 50 ELSE 0 END)::numeric, 0) FROM mav_attendance) AS att_pct,
+          (SELECT round(avg(s.score / a.max_marks * 100)::numeric, 1)
+             FROM mav_scores s JOIN mav_assessments a ON a.id=s.assessment_id) AS avg_score`),
     ]);
-    res.json({ employees: emps.rows, trainings: trns.rows, attendance: att.rows, expenses: exp.rows });
+    const m = mav.rows[0];
+    res.json({
+      employees: emps.rows, trainings: trns.rows, attendance: att.rows, expenses: exp.rows,
+      mavericks: {
+        trainees: m.trainees,
+        att_pct: m.att_pct === null ? null : Number(m.att_pct),
+        avg_score: m.avg_score === null ? null : Number(m.avg_score),
+        completion_pct: m.trainees ? Math.round(m.completed / m.trainees * 100) : null,
+      },
+    });
   } catch (e) { next(e); }
 });
 

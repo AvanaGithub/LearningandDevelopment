@@ -145,6 +145,36 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {data.mavericks && data.mavericks.trainees > 0 && (
+        <>
+          <h3 style={{ fontSize: 15, margin: '4px 0 10px' }} className="rowlink" onClick={() => nav('/mavericks')}>
+            MedTech Mavericks →
+          </h3>
+          <div className="tiles">
+            <div className="tile">
+              <div className="lbl">Total Trainees</div>
+              <div className="val">{data.mavericks.trainees}</div>
+              <div className="sub">across active batches</div>
+            </div>
+            <div className="tile">
+              <div className="lbl">Attendance %</div>
+              <div className="val">{data.mavericks.att_pct === null ? '—' : data.mavericks.att_pct + '%'}</div>
+              <div className="sub">classroom + field, all marked days</div>
+            </div>
+            <div className="tile">
+              <div className="lbl">Average Assessment Score</div>
+              <div className="val">{data.mavericks.avg_score === null ? '—' : data.mavericks.avg_score}</div>
+              <div className="sub">normalised to /100 · pass mark 80</div>
+            </div>
+            <div className="tile">
+              <div className="lbl">Training Completion %</div>
+              <div className="val">{data.mavericks.completion_pct === null ? '—' : data.mavericks.completion_pct + '%'}</div>
+              <div className="sub">trainees who completed the programme</div>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="cols2">
         <div className="card" style={{ marginBottom: 0 }}>
           <h3 style={{ fontSize: 16, marginBottom: 10 }}>Needs your attention</h3>
