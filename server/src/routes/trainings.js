@@ -156,23 +156,29 @@ router.delete('/:id/participants/:empId', requireRole('admin'), async (req, res,
   } catch (e) { next(e); }
 });
 
-// Hard delete only for a training nobody touched (no participants,
-// attendance or feedback) — anything with history is cancelled instead.
+// Hard delete for test entries and wrong records only: a roster alone does
+// not block it (nothing was conducted), but any REAL record — attendance,
+// feedback or an expense sheet — does, and those must be cancelled instead.
 router.delete('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const reason = String(req.query.reason || '').trim();
     if (!reason) return res.status(400).json({ error: 'A reason is required to delete a training' });
     const { rows: hist } = await query(
-      `SELECT (SELECT count(*) FROM training_participants WHERE training_id=$1)
-            + (SELECT count(*) FROM attendance WHERE training_id=$1)
-            + (SELECT count(*) FROM feedback_responses WHERE training_id=$1) AS n`, [id]);
-    if (Number(hist[0].n) > 0) {
-      return res.status(409).json({ error: 'This training has participants or records — set its status to Cancelled instead (ISO 13485).' });
+      `SELECT (SELECT count(*) FROM attendance WHERE training_id=$1)::int AS att,
+              (SELECT count(*) FROM feedback_responses WHERE training_id=$1)::int AS fb,
+              (SELECT count(*) FROM expenses WHERE training_id=$1)::int AS exp,
+              (SELECT count(*) FROM training_participants WHERE training_id=$1)::int AS parts`, [id]);
+    const h = hist[0];
+    if (h.att + h.fb + h.exp > 0) {
+      const what = [h.att && `${h.att} attendance mark(s)`, h.fb && `${h.fb} feedback response(s)`,
+        h.exp && `${h.exp} expense sheet(s)`].filter(Boolean).join(', ');
+      return res.status(409).json({ error: `This training has real records (${what}) — set its status to Cancelled instead (ISO 13485).` });
     }
+    await query('DELETE FROM training_participants WHERE training_id=$1', [id]);
     const { rows } = await query('DELETE FROM trainings WHERE id=$1 RETURNING code, title', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    await audit(req.user.id, 'training.delete', 'training', id, rows[0], reason);
+    await audit(req.user.id, 'training.delete', 'training', id, { ...rows[0], participants_removed: h.parts }, reason);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

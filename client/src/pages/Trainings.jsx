@@ -53,7 +53,7 @@ export default function Trainings() {
   };
 
   const deleteTrn = async (t) => {
-    const reason = window.prompt(`Delete ${t.code} permanently? Allowed only when nothing is recorded on it — otherwise set the status to Cancelled.\n\nReason (required, audit trail):`);
+    const reason = window.prompt(`Delete ${t.code} permanently? For test entries and wrong records only — a training with attendance, feedback or expenses must be set to Cancelled instead. Its participant roster (if any) is removed with it.\n\nReason (required, audit trail):`);
     if (!reason?.trim()) return;
     try {
       await api.del(`/api/trainings/${t.id}?reason=` + encodeURIComponent(reason.trim()));
@@ -385,8 +385,8 @@ export default function Trainings() {
                   desc: 'Scan or share the link — responses tag to this training\'s feedback form automatically.',
                 })}>▦ Feedback QR</button>
               )}
-              {isAdmin && sel.participants.length === 0 && (
-                <button className="btn" style={{ color: 'var(--crit)' }} onClick={() => deleteTrn(sel)}>Delete</button>
+              {isAdmin && (
+                <button className="btn" style={{ color: 'var(--crit)' }} onClick={() => deleteTrn(sel)}>Delete…</button>
               )}
               <button className="btn" onClick={() => setSel(null)}>Close</button>
             </div>

@@ -55,7 +55,8 @@ router.get('/passport/:employeeId', async (req, res, next) => {
        LEFT JOIN attendance a ON a.training_id = t.id AND a.employee_id = $1 AND a.day = d2.day
        GROUP BY t.id ORDER BY min(d2.day) NULLS LAST`, [empId]);
     res.json(rows.map((r) => {
-      const attPct = r.day_count ? Math.round((r.present_units / r.day_count) * 100) : null;
+      // No marks at all (e.g. an upcoming training) reads "—", not 0%.
+      const attPct = r.day_count && r.marked ? Math.round((r.present_units / r.day_count) * 100) : null;
       return { ...r, att_pct: attPct, hours: Math.round(r.present_units * r.hours_per_day * 10) / 10 };
     }));
   } catch (e) { next(e); }
@@ -67,7 +68,7 @@ router.get('/feedback-summary', async (req, res, next) => {
   try {
     const { rows } = await query(
       `SELECT t.id, t.code, t.title, t.batch, t.trainer_type, t.trainer_name, t.agency, t.status,
-              count(r.id)::int AS responses,
+              count(DISTINCT r.id)::int AS responses,
               round(avg((v.value)::numeric), 2) AS avg_score,
               (SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id) AS participant_count
        FROM trainings t

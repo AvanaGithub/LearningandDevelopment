@@ -1,23 +1,64 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtRange, inr, TRN_STATUSES } from '../api.js';
 import { useAuth } from '../App.jsx';
 import { toXlsx, toWorkbook } from '../xlsx.js';
 
-// Type-ahead picker that scales past 100 entries (datalist, not a dropdown).
+// Searchable multi-select: type to filter, tick one or many, Open runs the
+// report for the whole selection. Scales past 100 entries.
 function Picker({ label, options, onPick }) {
   const [txt, setTxt] = useState('');
-  const listId = 'dl-' + label.replace(/\W/g, '');
-  const resolve = () => {
-    const t = txt.trim().toLowerCase();
-    if (!t) return null;
-    return options.find((o) => o.t.toLowerCase() === t) ||
-      options.find((o) => o.t.toLowerCase().includes(t)) || null;
+  const [openDD, setOpenDD] = useState(false);
+  const [sel, setSel] = useState([]);           // array of option values
+  const boxRef = useRef(null);
+  useEffect(() => {
+    const close = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpenDD(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, []);
+  const t = txt.trim().toLowerCase();
+  const filtered = (t ? options.filter((o) => o.t.toLowerCase().includes(t)) : options).slice(0, 40);
+  const toggle = (v) => setSel((s) => (s.includes(v) ? s.filter((x) => x !== v) : [...s, v]));
+  const chosen = options.filter((o) => sel.includes(o.v));
+  const run = () => {
+    const picks = chosen.length ? chosen : (filtered.length === 1 ? [filtered[0]] : []);
+    if (picks.length) { onPick(picks); setOpenDD(false); }
   };
   return (
-    <div style={{ display: 'flex', gap: 8, margin: '8px 0' }}>
-      <input list={listId} placeholder={label} value={txt} onChange={(e) => setTxt(e.target.value)} style={{ flex: 1 }} />
-      <datalist id={listId}>{options.map((o) => <option key={o.v} value={o.t} />)}</datalist>
-      <button className="btn gold" disabled={!resolve()} onClick={() => onPick(resolve())}>Open</button>
+    <div ref={boxRef} style={{ margin: '8px 0', position: 'relative' }}>
+      {chosen.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+          {chosen.map((o) => (
+            <span key={o.v} className="pill soft mini" style={{ cursor: 'pointer' }} onClick={() => toggle(o.v)}
+              title="Click to remove">{o.t} ✕</span>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input placeholder={label} value={txt} style={{ flex: 1 }}
+          onFocus={() => setOpenDD(true)}
+          onChange={(e) => { setTxt(e.target.value); setOpenDD(true); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (filtered.length === 1) toggle(filtered[0].v); else run(); } }} />
+        <button className="btn gold" disabled={!chosen.length && filtered.length !== 1} onClick={run}>
+          Open{chosen.length > 1 ? ` (${chosen.length})` : ''}
+        </button>
+      </div>
+      {openDD && (
+        <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, right: 0, marginTop: 4,
+          background: 'var(--card, #fff)', border: '1px solid var(--line)', borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,.12)', maxHeight: 240, overflowY: 'auto', textAlign: 'left' }}>
+          {filtered.map((o) => (
+            <label key={o.v} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 10px',
+              cursor: 'pointer', fontSize: 13, borderBottom: '1px dashed var(--line)' }}>
+              <input type="checkbox" checked={sel.includes(o.v)} onChange={() => toggle(o.v)} />
+              <span>{o.t}</span>
+            </label>
+          ))}
+          {!filtered.length && <div className="muted mini" style={{ padding: '8px 10px' }}>No match for “{txt}”.</div>}
+          {options.length > 40 && filtered.length === 40 && (
+            <div className="muted mini" style={{ padding: '6px 10px' }}>Showing the first 40 — keep typing to narrow down.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -40,31 +81,62 @@ export default function Reports() {
 
   /* ---------- live reports ---------- */
 
-  const passport = guard(async (emp) => {
-    const r = await api.get('/api/reports/passport/' + emp.v);
-    show(`Training passport — ${emp.t}`,
-      ['Code', 'Training', 'Dates', 'Status', 'Attendance %', 'Hours'],
-      r.map((x) => [x.code, x.title + (x.batch ? ' — ' + x.batch : ''),
+  const passport = guard(async (picks) => {
+    const results = await Promise.all(picks.map((emp) =>
+      api.get('/api/reports/passport/' + emp.v).then((r) => ({ emp, r }))));
+    const multi = picks.length > 1;
+    const rows = results.flatMap(({ emp, r }) =>
+      r.map((x) => [...(multi ? [emp.t] : []), x.code, x.title + (x.batch ? ' — ' + x.batch : ''),
         x.first_day ? `${x.first_day.slice(0, 10)} → ${x.last_day.slice(0, 10)}` : '—',
-        TRN_STATUSES[x.status], x.att_pct === null ? '—' : x.att_pct + '%', x.hours]),
-      r.length ? `Total training hours: ${r.reduce((a, x) => a + Number(x.hours), 0).toFixed(1)}` : 'No trainings on record yet.');
+        TRN_STATUSES[x.status], x.att_pct === null ? '—' : x.att_pct + '%', x.hours]));
+    const totals = results
+      .map(({ emp, r }) => `${emp.t}: ${r.reduce((a, x) => a + Number(x.hours), 0).toFixed(1)} h`)
+      .join(' · ');
+    show(multi ? `Training passport — ${picks.length} employees` : `Training passport — ${picks[0].t}`,
+      [...(multi ? ['Employee'] : []), 'Code', 'Training', 'Dates', 'Status', 'Attendance %', 'Hours'],
+      rows,
+      rows.length ? `Total training hours — ${totals}` : 'No trainings on record yet.');
   });
 
-  const byTraining = guard(async (t) => {
-    const [detail, marks] = await Promise.all([
-      api.get('/api/trainings/' + t.v), api.get('/api/attendance/' + t.v)]);
-    const days = (detail.days || []).map((d) => d.slice(0, 10));
-    const m = {};
-    marks.forEach((r) => { m[r.employee_id + '|' + r.day.slice(0, 10)] = r.mark; });
-    show(`Training report — ${detail.code} ${detail.title}`,
-      ['Participant', 'Zoho ID', 'Entity', ...days.map((d) => fmtDate(d)), 'Attendance %', 'Hours'],
-      detail.participants.map((p) => {
+  const byTraining = guard(async (picks) => {
+    if (picks.length === 1) {
+      // Single training: full day-wise grid.
+      const t = picks[0];
+      const [detail, marks] = await Promise.all([
+        api.get('/api/trainings/' + t.v), api.get('/api/attendance/' + t.v)]);
+      const days = (detail.days || []).map((d) => d.slice(0, 10));
+      const m = {};
+      marks.forEach((r) => { m[r.employee_id + '|' + r.day.slice(0, 10)] = r.mark; });
+      return show(`Training report — ${detail.code} ${detail.title}`,
+        ['Participant', 'Zoho ID', 'Entity', ...days.map((d) => fmtDate(d)), 'Attendance %', 'Hours'],
+        detail.participants.map((p) => {
+          const ms = days.map((d) => m[p.id + '|' + d] || '–');
+          const units = ms.reduce((s, x) => s + (x === 'P' ? 1 : x === 'H' ? 0.5 : 0), 0);
+          const pct = days.length && ms.some((x) => x !== '–') ? Math.round(units / days.length * 100) + '%' : '—';
+          return [p.name, p.zoho_emp_id || '', p.entity, ...ms, pct, (units * Number(detail.hours_per_day)).toFixed(1)];
+        }),
+        `${TRN_STATUSES[detail.status]} · ${fmtRange(detail.days)} · trainer ${detail.trainer_type === 'external' ? detail.agency : detail.trainer_name}`);
+    }
+    // Several trainings: one combined summary (dates differ per training).
+    const results = await Promise.all(picks.map((t) =>
+      Promise.all([api.get('/api/trainings/' + t.v), api.get('/api/attendance/' + t.v)])));
+    const rows = results.flatMap(([detail, marks]) => {
+      const days = (detail.days || []).map((d) => d.slice(0, 10));
+      const m = {};
+      marks.forEach((r) => { m[r.employee_id + '|' + r.day.slice(0, 10)] = r.mark; });
+      return detail.participants.map((p) => {
         const ms = days.map((d) => m[p.id + '|' + d] || '–');
         const units = ms.reduce((s, x) => s + (x === 'P' ? 1 : x === 'H' ? 0.5 : 0), 0);
         const pct = days.length && ms.some((x) => x !== '–') ? Math.round(units / days.length * 100) + '%' : '—';
-        return [p.name, p.zoho_emp_id || '', p.entity, ...ms, pct, (units * Number(detail.hours_per_day)).toFixed(1)];
-      }),
-      `${TRN_STATUSES[detail.status]} · ${fmtRange(detail.days)} · trainer ${detail.trainer_type === 'external' ? detail.agency : detail.trainer_name}`);
+        return [detail.code + ' ' + detail.title + (detail.batch ? ' — ' + detail.batch : ''),
+          p.name, p.zoho_emp_id || '', p.entity, `${units}/${days.length}`, pct,
+          (units * Number(detail.hours_per_day)).toFixed(1)];
+      });
+    });
+    show(`Training report — ${picks.length} trainings`,
+      ['Training', 'Participant', 'Zoho ID', 'Entity', 'Days attended', 'Attendance %', 'Hours'],
+      rows,
+      'Combined summary — open a single training for its day-wise grid.');
   });
 
   const manhours = guard(async () => {
@@ -182,8 +254,8 @@ export default function Reports() {
   });
 
   const CARDS = [
-    { name: 'Individual employee training hours (passport)', desc: 'Type any employee\'s name — full history with attendance-weighted hours.', picker: { options: emps.map((e) => ({ v: e.id, t: e.name })), onPick: passport } },
-    { name: 'Report by training', desc: 'Type a training — its participants, day-wise marks, percentages and hours.', picker: { options: trns.map((t) => ({ v: t.id, t: `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}` })), onPick: byTraining } },
+    { name: 'Individual employee training hours (passport)', desc: 'Type to search, tick one or several employees — full history with attendance-weighted hours.', picker: { options: emps.map((e) => ({ v: e.id, t: e.name })), onPick: passport } },
+    { name: 'Report by training', desc: 'Tick one training for its day-wise grid, or several for a combined summary.', picker: { options: trns.map((t) => ({ v: t.id, t: `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}` })), onPick: byTraining } },
     { name: 'Training man-hours per employee', desc: 'Hours per person across all trainings, from real attendance.', run: manhours },
     { name: 'Mandatory training compliance', desc: 'Done / booked / due per active employee.', run: compliance },
     { name: 'Feedback summary — training & trainer', desc: 'Average scores per training and per trainer, response-weighted.', run: feedbackSummary },
