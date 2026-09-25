@@ -9,7 +9,7 @@ const DEFAULTS = {
   divisions: ['Sports Medicine', 'Dex & Bio', 'Endospine', 'Orthotics', 'Business Support'],
   departments: ['Accounts', 'Administration', 'Clinical Support', 'Commercial', 'Graphic Design',
     'Human Resource', 'IT', 'Marketing', 'Medical Education', 'Operations', 'Quality', 'Sales', 'SCM', 'Service'],
-  emp_types: ['Permanent', 'Trainee', 'Intern', 'Contract', 'Consultant'],
+  emp_types: ['Permanent', 'Trainee', 'Probation', 'TalentPro'],
   trn_categories: ['Induction', 'Product', 'Soft skill', 'Technical', 'Compliance', 'Safety', 'On-the-job', 'Mavericks'],
   exp_categories: ['Food / Catering', 'Flight', 'Venue / Conference room', 'Accommodation',
     'Local Transportation', 'Train', 'Training materials', 'Printing', 'Others'],

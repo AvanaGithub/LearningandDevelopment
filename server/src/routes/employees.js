@@ -5,6 +5,20 @@ const { requireRole, audit } = require('../auth');
 const router = express.Router();
 const ENTITIES = ['AMD', 'ASS', 'ATS'];
 
+const FIELD_LABELS = {
+  zoho_emp_id: 'Zoho employee ID', email: 'Official e-mail', mobile: 'Mobile',
+  division: 'Division', department: 'Department', designation: 'Designation',
+  manager: 'Reporting manager', date_joined: 'Date of joining', location: 'Location',
+};
+
+// The Settings screen decides which optional fields are mandatory — enforced
+// here so the rule holds regardless of client.
+async function missingRequired(f) {
+  const { rows } = await query(`SELECT value FROM settings WHERE key='required_employee_fields'`);
+  const req = rows.length ? rows[0].value : [];
+  return req.filter((k) => FIELD_LABELS[k] && !f[k]).map((k) => FIELD_LABELS[k]);
+}
+
 // Any signed-in role can view; adding/editing needs admin.
 router.get('/', async (req, res, next) => {
   try {
@@ -55,6 +69,8 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     if (!f.name || !ENTITIES.includes(f.entity)) {
       return res.status(400).json({ error: 'name and entity (AMD/ASS/ATS) are required' });
     }
+    const missing = await missingRequired(f);
+    if (missing.length) return res.status(400).json({ error: 'Mandatory field(s) missing: ' + missing.join(', ') });
     const { rows } = await query(
       `INSERT INTO employees (zoho_emp_id, name, email, entity, division, department, designation, manager, employment_type, mobile, location, date_joined)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
@@ -75,6 +91,8 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     const b = req.body || {};
     if (b.entity !== undefined && !ENTITIES.includes(b.entity)) return res.status(400).json({ error: 'Invalid entity' });
     const f = { ...cur[0], ...pickFields({ ...cur[0], ...b }) };
+    const missing = await missingRequired(f);
+    if (missing.length) return res.status(400).json({ error: 'Mandatory field(s) missing: ' + missing.join(', ') });
     const active = b.active === undefined ? cur[0].active : Boolean(b.active);
     const { rows } = await query(
       `UPDATE employees SET zoho_emp_id=$2, name=$3, email=$4, entity=$5, division=$6,

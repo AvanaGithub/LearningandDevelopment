@@ -238,12 +238,14 @@ export default function Mavericks() {
                   <span className="muted mini">Click a cell to cycle – → P → A → H. Timestamps show on hover.</span>
                 </div>
               )}
-              <table style={{ minWidth: 480 }}>
-                <thead><tr><th>Trainee</th>{days[kind].map((d) => <th key={d}>{fmtDay(d)}</th>)}<th style={{ textAlign: 'right' }}>%</th></tr></thead>
+              <table style={{ minWidth: 640 }}>
+                <thead><tr><th>Trainee</th><th>Emp ID</th><th>E-mail</th>{days[kind].map((d) => <th key={d}>{fmtDay(d)}</th>)}<th style={{ textAlign: 'right' }}>%</th></tr></thead>
                 <tbody>
                   {sel.members.map((m) => (
                     <tr key={m.employee_id}>
                       <td>{m.name}</td>
+                      <td className="muted">{m.zoho_emp_id || '—'}</td>
+                      <td className="muted" style={{ fontSize: 12 }}>{m.email || '—'}</td>
                       {days[kind].map((d) => {
                         const cell = att[kind]?.[m.employee_id + '|' + d];
                         return <td key={d}>
@@ -308,14 +310,20 @@ export default function Mavericks() {
                             <td style={{ textAlign: 'right' }}>
                               {isAdmin && <button className="btn link" onClick={() => setScoresFor({
                                 ...a,
-                                entries: sel.members.filter((m) => m.division === a.division)
-                                  .map((m) => ({ employee_id: m.employee_id, name: m.name, score: (sc.find((x) => x.employee_id === m.employee_id) || {}).score ?? '' })),
+                                // Every trainee of the batch — division-matching ones first,
+                                // so nobody disappears when division fields differ.
+                                entries: [...sel.members]
+                                  .sort((x, y) => ((y.division === a.division) - (x.division === a.division)) || x.name.localeCompare(y.name))
+                                  .map((m) => ({
+                                    employee_id: m.employee_id, name: m.name, division: m.division,
+                                    score: (sc.find((x) => x.employee_id === m.employee_id) || {}).score ?? '',
+                                  })),
                               })}>Enter scores</button>}
                               <button className="btn link" onClick={() => toXlsx(`Scores-${a.name.replace(/[^\w]+/g, '-')}.xlsx`,
-                                ['Trainee', 'Score', 'Max', '%'],
-                                sel.members.filter((m) => m.division === a.division).map((m) => {
+                                ['Trainee', 'Division', 'Score', 'Max', '%'],
+                                sel.members.map((m) => {
                                   const s = (sc.find((x) => x.employee_id === m.employee_id) || {}).score;
-                                  return [m.name, s ?? '—', Number(a.max_marks), s != null ? Math.round(s / a.max_marks * 100) + '%' : '—'];
+                                  return [m.name, m.division || '', s ?? '—', Number(a.max_marks), s != null ? Math.round(s / a.max_marks * 100) + '%' : '—'];
                                 }))}>⬇</button>
                             </td>
                           </tr>
@@ -337,7 +345,10 @@ export default function Mavericks() {
             <h3>{scoresFor.name} · {scoresFor.division} <span className="muted">(max {Number(scoresFor.max_marks)})</span></h3>
             {scoresFor.entries.length ? scoresFor.entries.map((en, i) => (
               <div key={en.employee_id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '4px 0' }}>
-                <span style={{ flex: 1, fontSize: 13 }}>{en.name}</span>
+                <span style={{ flex: 1, fontSize: 13 }}>{en.name}
+                  {en.division !== scoresFor.division &&
+                    <span className="muted mini"> · {en.division || 'no division set'}</span>}
+                </span>
                 <input type="number" min="0" max={Number(scoresFor.max_marks)} step="0.5" style={{ width: 100 }}
                   value={en.score} placeholder="—"
                   onChange={(e) => {
@@ -346,7 +357,10 @@ export default function Mavericks() {
                     setScoresFor({ ...scoresFor, entries });
                   }} />
               </div>
-            )) : <p className="muted">No trainees in this batch belong to the {scoresFor.division} division.</p>}
+            )) : <p className="muted">This batch has no trainees yet — add them on the Trainees tab first.</p>}
+            <p className="muted mini" style={{ marginTop: 6 }}>
+              All trainees of the batch are listed; those from other divisions are tagged. Leave a score blank to skip.
+            </p>
             <div className="form-actions">
               <button className="btn gold" type="submit">Save scores</button>
               <button className="btn" type="button" onClick={() => setScoresFor(null)}>Cancel</button>
