@@ -114,23 +114,32 @@ export default function Attendance() {
   const [data, setData] = useState({});           // id -> {detail, marks:{empId|day:mark}}
   const [editing, setEditing] = useState(null);   // {tid, emp, marks:{day:m}, reason}
   const [importing, setImporting] = useState(null); // training being imported into
+  const [expanded, setExpanded] = useState(() => new Set()); // open training cards
   const [qr, setQr] = useState(null);
   const [err, setErr] = useState(null);
 
-  const doExport = () => {
+  const toggleCard = (id) => setExpanded((s) => {
+    const n = new Set(s);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
+  const doExport = async () => {
     const out = [];
-    shown.forEach((t) => {
-      const d = data[t.id];
-      if (!d) return;
+    for (const t of shown) {
+      const d = data[t.id] || await loadOne(t.id).catch(() => null);
+      if (!d) continue;
       const days = (t.days || []).map((x) => x.slice(0, 10));
       d.detail.participants.forEach((p) => {
-        const pc = pct(t.id, p.id, days);
+        const marks = days.map((day) => d.marks[p.id + '|' + day]);
+        const units = marks.reduce((s, m) => s + (m === 'P' ? 1 : m === 'H' ? 0.5 : 0), 0);
+        const pc = marks.every((m) => !m) ? null : Math.round((units / days.length) * 100);
         out.push([t.title, t.batch || '', fmtRange(t.days), p.name,
           days.map((day) => `${fmtDay(day)}: ${d.marks[p.id + '|' + day] || '–'}`).join(' | '),
-          pc === null ? '—' : pc + '%']);
+          pc === null ? '—' : pc + '%', p.comment || '']);
       });
-    });
-    toXlsx('Attendance.xlsx', ['Training', 'Batch', 'Dates', 'Participant', 'Day-wise marks', 'Percent'], out, 'Attendance');
+    }
+    toXlsx('Attendance.xlsx', ['Training', 'Batch', 'Dates', 'Participant', 'Day-wise marks', 'Percent', 'Comment'], out, 'Attendance');
   };
 
   useEffect(() => {
@@ -152,9 +161,34 @@ export default function Attendance() {
       m[k] = r.mark;
       meta[k] = { label: `${r.mark} · ${new Date(r.updated_at).toLocaleString('en-IN')} · ${r.marked_by}`, ts: r.updated_at, by: r.marked_by };
     });
-    setData((d) => ({ ...d, [id]: { detail, marks: m, meta } }));
+    const built = { detail, marks: m, meta };
+    setData((d) => ({ ...d, [id]: built }));
+    return built;
   };
-  useEffect(() => { shown.forEach((t) => { if (!data[t.id]) loadOne(t.id).catch((e) => setErr(e.message)); }); }, [list, selIds]);
+  // A card's grid loads when it is expanded; a lone filtered training opens itself.
+  useEffect(() => {
+    if (shown.length === 1) setExpanded((s) => (s.has(shown[0].id) ? s : new Set(s).add(shown[0].id)));
+  }, [list, selIds]);
+  useEffect(() => {
+    shown.forEach((t) => { if (expanded.has(t.id) && !data[t.id]) loadOne(t.id).catch((e) => setErr(e.message)); });
+  }, [list, selIds, expanded]);
+
+  const setComment = async (tid, empId, comment) => {
+    try {
+      await api.patch(`/api/trainings/${tid}/participants/${empId}`, { comment });
+      setData((d) => ({
+        ...d,
+        [tid]: {
+          ...d[tid],
+          detail: {
+            ...d[tid].detail,
+            participants: d[tid].detail.participants.map((p) => (p.id === empId ? { ...p, comment } : p)),
+          },
+        },
+      }));
+      toast('Comment saved.');
+    } catch (e) { setErr(e.message); }
+  };
 
   const setMark = async (tid, empId, day, mark, reason) => {
     await api.put('/api/attendance/' + tid, { employee_id: empId, day, mark: mark || null, reason });
@@ -214,30 +248,39 @@ export default function Attendance() {
       {!list ? <p className="muted">Loading…</p> :
         !shown.length ? <p className="muted">No trainings with participants yet — plan a training and add participants first.</p> :
           shown.map((t) => {
+            const isOpen = expanded.has(t.id);
             const d = data[t.id];
-            if (!d) return <div key={t.id} className="card muted">Loading {t.title}…</div>;
+            const header = (
+              <div className="toolbar" style={{ alignItems: 'center', marginBottom: isOpen ? 8 : 0, cursor: 'pointer' }}
+                onClick={() => toggleCard(t.id)}>
+                <span style={{ fontSize: 12 }}>{isOpen ? '▾' : '▸'}</span>
+                <b style={{ fontFamily: 'Fira Sans' }}>{t.title}{t.batch ? ' — ' + t.batch : ''}</b>
+                <span className="pill soft mini">{fmtRange(t.days)}</span>
+                {!isOpen && <span className="muted mini">{t.participant_count} participant(s)</span>}
+                <span style={{ flex: 1 }} />
+                {isOpen && isAdmin && t.public_token && (
+                  <button className="btn" onClick={(e) => { e.stopPropagation(); setQr({
+                    title: 'QR check-in — ' + t.title,
+                    url: `${location.origin}/p/att/${t.public_token}`,
+                    desc: 'Display this at the venue. A participant scans it, picks their name and is marked Present — tagged to this training automatically.',
+                  }); }}>▦ QR check-in</button>
+                )}
+                {isOpen && isAdmin && <button className="btn" onClick={(e) => { e.stopPropagation(); setImporting(t); }}>⬆ Import</button>}
+                {isOpen && isAdmin && <button className="btn" onClick={(e) => { e.stopPropagation(); markAll(t.id); }}>✓ Mark all present</button>}
+                {!isOpen && <span className="muted mini">click to expand</span>}
+              </div>
+            );
+            if (!isOpen) return <div key={t.id} className="card" style={{ padding: '10px 16px' }}>{header}</div>;
+            if (!d) return <div key={t.id} className="card">{header}<p className="muted mini" style={{ margin: 0 }}>Loading…</p></div>;
             const days = (t.days || []).map((x) => x.slice(0, 10));
             return (
               <div key={t.id} className="card" style={{ overflowX: 'auto' }}>
-                <div className="toolbar" style={{ alignItems: 'center', marginBottom: 8 }}>
-                  <b style={{ fontFamily: 'Fira Sans' }}>{t.title}{t.batch ? ' — ' + t.batch : ''}</b>
-                  <span className="pill soft mini">{fmtRange(t.days)}</span>
-                  <span style={{ flex: 1 }} />
-                  {isAdmin && t.public_token && (
-                    <button className="btn" onClick={() => setQr({
-                      title: 'QR check-in — ' + t.title,
-                      url: `${location.origin}/p/att/${t.public_token}`,
-                      desc: 'Display this at the venue. A participant scans it, picks their name and is marked Present — tagged to this training automatically.',
-                    })}>▦ QR check-in</button>
-                  )}
-                  {isAdmin && <button className="btn" onClick={() => setImporting(t)}>⬆ Import</button>}
-                  {isAdmin && <button className="btn" onClick={() => markAll(t.id)}>✓ Mark all present</button>}
-                </div>
+                {header}
                 <table style={{ minWidth: 480 }}>
                   <thead><tr>
                     <th>Participant</th>
                     {days.map((day) => <th key={day}>{fmtDay(day)}</th>)}
-                    <th style={{ textAlign: 'right' }}>%</th><th>Eligible</th><th>Last marked</th>{isAdmin && <th></th>}
+                    <th style={{ textAlign: 'right' }}>%</th><th>Eligible</th><th>Last marked</th><th style={{ minWidth: 170 }}>Comment</th>{isAdmin && <th></th>}
                   </tr></thead>
                   <tbody>
                     {d.detail.participants.map((p) => {
@@ -263,6 +306,11 @@ export default function Attendance() {
                             const last = metas.reduce((a, b) => (a.ts > b.ts ? a : b));
                             return `${new Date(last.ts).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${last.by}`;
                           })()}</td>
+                          <td>{isAdmin ? (
+                            <input defaultValue={p.comment || ''} placeholder="e.g. late, not attentive…"
+                              style={{ width: '100%', minWidth: 150, fontSize: 12 }}
+                              onBlur={(e) => { if (e.target.value.trim() !== (p.comment || '')) setComment(t.id, p.id, e.target.value); }} />
+                          ) : (p.comment || '—')}</td>
                           {isAdmin && <td><button className="btn link" onClick={() => {
                             const orig = {};
                             days.forEach((day) => { orig[day] = d.marks[p.id + '|' + day] || ''; });

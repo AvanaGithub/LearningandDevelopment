@@ -48,7 +48,7 @@ router.get('/:id', async (req, res, next) => {
     const { rows } = await query(`${listSelect} WHERE t.id = $1`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     const { rows: parts } = await query(
-      `SELECT e.id, e.name, e.zoho_emp_id, e.entity, e.division, e.department, e.email
+      `SELECT e.id, e.name, e.zoho_emp_id, e.entity, e.division, e.department, e.email, p.comment
        FROM training_participants p JOIN employees e ON e.id = p.employee_id
        WHERE p.training_id = $1 ORDER BY e.name`, [id]);
     if (req.user.role === 'manager') delete rows[0].public_token;
@@ -140,6 +140,22 @@ router.post('/:id/participants', requireRole('admin'), express.json(), async (re
       [id, employeeId, req.user.id]);
     await audit(req.user.id, 'training.participant_add', 'training', id, { employee_id: employeeId });
     res.status(201).json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Organizer's note on one participant (late, not attentive, …). Audited.
+router.patch('/:id/participants/:empId', requireRole('admin'), express.json(), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const empId = Number(req.params.empId);
+    const comment = req.body?.comment !== undefined ? (String(req.body.comment).trim().slice(0, 500) || null) : undefined;
+    if (comment === undefined) return res.status(400).json({ error: 'comment is required' });
+    const { rowCount } = await query(
+      'UPDATE training_participants SET comment=$3 WHERE training_id=$1 AND employee_id=$2',
+      [id, empId, comment]);
+    if (!rowCount) return res.status(404).json({ error: 'Not a participant of this training' });
+    await audit(req.user.id, 'training.participant_comment', 'training', id, { employee_id: empId, comment });
+    res.json({ ok: true });
   } catch (e) { next(e); }
 });
 
