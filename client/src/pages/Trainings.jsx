@@ -5,6 +5,7 @@ import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
 import QrModal from '../components/QrModal.jsx';
+import MSel from '../components/MSel.jsx';
 
 const IMPORT_FIELDS = [
   { key: 'title', label: 'Training title', req: true, syn: ['title', 'training title', 'training name', 'training', 'name'] },
@@ -67,7 +68,7 @@ export default function Trainings() {
   const [form, setForm] = useState(null);
   const [sel, setSel] = useState(null);       // training detail (with participants)
   const [emps, setEmps] = useState([]);
-  const [addEmp, setAddEmp] = useState('');
+  const [addEmps, setAddEmps] = useState([]);   // multi-choice add-participant selection
   const [removing, setRemoving] = useState(null); // {empId, reason}
   const [importing, setImporting] = useState(false);
   const [qr, setQr] = useState(null);             // {title, url, desc}
@@ -176,14 +177,19 @@ export default function Trainings() {
   };
 
   const addParticipant = async () => {
-    if (!addEmp) return;
-    try {
-      await api.post(`/api/trainings/${sel.id}/participants`, { employee_id: Number(addEmp) });
-      toast('Participant added — they appear in this training\'s attendance grid.');
-      setAddEmp('');
-      openDetail(sel.id);
-      load();
-    } catch (e2) { setErr(e2.message); }
+    if (!addEmps.length) return;
+    let ok = 0, firstErr = null;
+    for (const empId of addEmps) {
+      try {
+        await api.post(`/api/trainings/${sel.id}/participants`, { employee_id: Number(empId) });
+        ok++;
+      } catch (e2) { if (!firstErr) firstErr = e2.message; }
+    }
+    if (ok) toast(`${ok} participant(s) added — they appear in this training's attendance grid.`);
+    if (firstErr) setErr(firstErr);
+    setAddEmps([]);
+    openDetail(sel.id);
+    load();
   };
   const removeParticipant = async () => {
     try {
@@ -359,13 +365,15 @@ export default function Trainings() {
               </div>
             )}
             {isAdmin && !removing && (
-              <div className="form-actions" style={{ flexWrap: 'wrap' }}>
-                <select value={addEmp} onChange={(e) => setAddEmp(e.target.value)} style={{ flex: 1, minWidth: 200 }}>
-                  <option value="">Add participant…</option>
-                  {emps.filter((e) => !sel.participants.some((p) => p.id === e.id))
-                    .map((e) => <option key={e.id} value={e.id}>{e.name} — {e.division || e.department || e.entity}</option>)}
-                </select>
-                <button className="btn gold" disabled={!addEmp} onClick={addParticipant}>Add</button>
+              <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                <MSel label="Add participants" empty="none picked"
+                  options={emps.filter((e) => !sel.participants.some((p) => p.id === e.id))
+                    .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || e.entity}` }))}
+                  sel={addEmps} onChange={setAddEmps} />
+                <button className="btn gold" disabled={!addEmps.length} onClick={addParticipant}>
+                  Add{addEmps.length > 1 ? ` ${addEmps.length}` : ''}
+                </button>
+                <span className="muted mini">{sel.seats - sel.participants.length} seat(s) left</span>
               </div>
             )}
             {err && <p className="err">{err}</p>}
