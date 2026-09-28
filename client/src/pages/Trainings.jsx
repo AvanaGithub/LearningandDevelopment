@@ -119,7 +119,7 @@ export default function Trainings() {
   useEffect(() => { api.get('/api/employees?active=true').then(setEmps).catch(() => {}); }, []);
 
   const openDetail = (id) => {
-    setErr(null); setRemoving(null); setAddEmp('');
+    setErr(null); setRemoving(null); setAddEmps([]);
     api.get('/api/trainings/' + id).then(setSel).catch((e) => setErr(e.message));
   };
   // Calendar deep-link: /trainings?open=<id>
