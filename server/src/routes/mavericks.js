@@ -24,8 +24,8 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const b = req.body || {};
     if (!b.name?.trim()) return res.status(400).json({ error: 'Batch name is required' });
     const { rows } = await query(
-      'INSERT INTO mav_batches (name, mentor, start_date, notes) VALUES ($1,$2,$3,$4) RETURNING *',
-      [b.name.trim(), b.mentor?.trim() || null, b.start_date || null, b.notes?.trim() || null]);
+      'INSERT INTO mav_batches (name, mentor, start_date, end_date, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [b.name.trim(), b.mentor?.trim() || null, b.start_date || null, b.end_date || null, b.notes?.trim() || null]);
     await audit(req.user.id, 'mav.batch_create', 'mav_batch', rows[0].id, { name: b.name });
     res.status(201).json(rows[0]);
   } catch (e) { next(e); }
@@ -48,12 +48,13 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
       name: (b.name ?? cur[0].name)?.trim(),
       mentor: b.mentor !== undefined ? (b.mentor?.trim() || null) : cur[0].mentor,
       start_date: b.start_date !== undefined ? (b.start_date || null) : cur[0].start_date,
+      end_date: b.end_date !== undefined ? (b.end_date || null) : cur[0].end_date,
       status: BATCH_STATUS.includes(b.status) ? b.status : cur[0].status,
       notes: b.notes !== undefined ? (b.notes?.trim() || null) : cur[0].notes,
     };
     const { rows } = await query(
-      'UPDATE mav_batches SET name=$2, mentor=$3, start_date=$4, status=$5, notes=$6 WHERE id=$1 RETURNING *',
-      [id, f.name, f.mentor, f.start_date, f.status, f.notes]);
+      'UPDATE mav_batches SET name=$2, mentor=$3, start_date=$4, end_date=$5, status=$6, notes=$7 WHERE id=$1 RETURNING *',
+      [id, f.name, f.mentor, f.start_date, f.end_date, f.status, f.notes]);
     await audit(req.user.id, 'mav.batch_update', 'mav_batch', id, { changes: b }, b.reason);
     res.json(rows[0]);
   } catch (e) { next(e); }

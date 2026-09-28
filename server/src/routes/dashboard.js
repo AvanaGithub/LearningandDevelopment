@@ -55,7 +55,10 @@ router.get('/full', async (req, res, next) => {
       query(`SELECT
           (SELECT count(*)::int FROM mav_members m JOIN mav_batches b ON b.id=m.batch_id WHERE b.active) AS trainees,
           (SELECT count(*)::int FROM mav_members m JOIN mav_batches b ON b.id=m.batch_id WHERE b.active AND m.status='completed') AS completed,
-          (SELECT round(avg(CASE mark WHEN 'P' THEN 100 WHEN 'H' THEN 50 ELSE 0 END)::numeric, 0) FROM mav_attendance) AS att_pct,
+          (SELECT coalesce(
+             (SELECT round(avg(CASE a.mark WHEN 'P' THEN 100 WHEN 'H' THEN 50 ELSE 0 END)::numeric, 0)
+                FROM attendance a JOIN trainings t2 ON t2.id = a.training_id WHERE t2.category = 'Mavericks'),
+             (SELECT round(avg(CASE mark WHEN 'P' THEN 100 WHEN 'H' THEN 50 ELSE 0 END)::numeric, 0) FROM mav_attendance))) AS att_pct,
           (SELECT round(avg(s.score / a.max_marks * 100)::numeric, 1)
              FROM mav_scores s JOIN mav_assessments a ON a.id=s.assessment_id) AS avg_score`),
     ]);

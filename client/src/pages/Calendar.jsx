@@ -10,6 +10,8 @@ export default function Calendar() {
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [rows, setRows] = useState(null);
 
+  const [mavs, setMavs] = useState([]);
+
   const first = new Date(ym.y, ym.m, 1);
   const last = new Date(ym.y, ym.m + 1, 0);
 
@@ -17,6 +19,7 @@ export default function Calendar() {
     setRows(null);
     api.get(`/api/trainings?from=${iso(first)}&to=${iso(last)}`).then(setRows).catch(() => setRows([]));
   }, [ym.y, ym.m]);
+  useEffect(() => { api.get('/api/mavericks').then(setMavs).catch(() => {}); }, []);
 
   const step = (d) => setYm(({ y, m }) => {
     const n = m + d;
@@ -28,6 +31,17 @@ export default function Calendar() {
     const k = d.slice(0, 10);
     (byDay[k] = byDay[k] || []).push(t);
   }));
+
+  // Mavericks batches block their whole start→end range on the calendar.
+  const mavByDay = {};
+  mavs.filter((b) => b.start_date && b.status !== 'closed').forEach((b) => {
+    const from = new Date(b.start_date.slice(0, 10));
+    const to = new Date((b.end_date || b.start_date).slice(0, 10));
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      const k = iso(d);
+      (mavByDay[k] = mavByDay[k] || []).push(b);
+    }
+  });
 
   const offset = (first.getDay() + 6) % 7; // Monday-first grid
   const daysInMonth = last.getDate();
@@ -45,6 +59,7 @@ export default function Calendar() {
           <span style={{ flex: 1 }} />
           <span className="pill soft mini">Internal</span>
           <span className="pill crit mini">External</span>
+          <span className="pill warn mini">Mavericks — blocked</span>
           <span className="muted mini">• = mandatory</span>
         </div>
         <div className="cal">
@@ -56,6 +71,14 @@ export default function Calendar() {
             return (
               <div key={k} className={'day' + (k === todayIso ? ' today' : '')}>
                 <span className="dnum">{d}{k === todayIso ? ' · today' : ''}</span>
+                {(mavByDay[k] || []).map((b) => (
+                  <button key={'m' + b.id} className="evt"
+                    style={{ background: 'var(--gold, #c8930a)', color: '#fff' }}
+                    title={`MedTech Mavericks — ${b.name} (blocked ${b.start_date.slice(0, 10)} → ${(b.end_date || b.start_date).slice(0, 10)})`}
+                    onClick={() => nav('/mavericks')}>
+                    ⛔ Mavericks · {b.name}
+                  </button>
+                ))}
                 {(byDay[k] || []).map((t) => (
                   <button key={t.id} className={'evt' + (t.trainer_type === 'external' ? ' ext' : '')}
                     title={`${t.title}${t.batch ? ' (' + t.batch + ')' : ''} — ${TRN_STATUSES[t.status]}`}

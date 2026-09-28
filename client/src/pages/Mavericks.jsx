@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate, fmtDay } from '../api.js';
+import { api, fmtDate } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
-import { toXlsx, readSheet } from '../xlsx.js';
+import { toXlsx } from '../xlsx.js';
 
 const M_STATUS = {
   classroom: ['Classroom', 'soft'], field: ['Field', 'warn'],
@@ -10,96 +10,7 @@ const M_STATUS = {
 };
 const ASSESS_TYPES = ['Written Assessment', 'Presentation', 'Teach Back', 'Product Demonstration',
   'Viva', 'Final Assessment', 'Reassessment'];
-const CYCLE = { '': 'P', P: 'A', A: 'H', H: '' };
 const pct100 = (score, max) => Math.round((Number(score) / Number(max)) * 100);
-
-/* Date-wise attendance Excel → attendance records (kept additive, no deletes). */
-function AttImport({ batchId, kind, members, onClose, onDone }) {
-  const [sheet, setSheet] = useState(null);
-  const [idCol, setIdCol] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
-
-  const pick = async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    try {
-      const aoa = await readSheet(f);
-      const headers = (aoa[0] || []).map((h) => String(h).trim());
-      const rows = aoa.slice(1).filter((r) => r.some((c) => String(c).trim() !== ''));
-      if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
-      const dateCols = headers.map((h, i) => {
-        const t = Date.parse(h);
-        return isNaN(t) ? null : { i, day: new Date(t).toISOString().slice(0, 10) };
-      }).filter(Boolean);
-      if (!dateCols.length) throw new Error('No date columns found — column headers must be dates (e.g. 01-Oct-2026).');
-      const guess = headers.findIndex((h) => /emp|id|name|code/i.test(h));
-      setIdCol(guess >= 0 ? guess : 0);
-      setSheet({ headers, rows, dateCols });
-    } catch (e2) { setErr(e2.message); }
-  };
-
-  const markOf = (v) => {
-    const s = String(v).trim().toLowerCase();
-    if (!s) return null;
-    if (/^(p|present|1|yes|y)$/.test(s)) return 'P';
-    if (/^(a|absent|0|no|n)$/.test(s)) return 'A';
-    if (/^(h|half|hd|0\.5)$/.test(s)) return 'H';
-    return null;
-  };
-
-  const run = async () => {
-    setBusy(true); setErr(null);
-    let set = 0, unmatched = 0, blank = 0;
-    try {
-      for (const r of sheet.rows) {
-        const key = String(r[idCol] || '').trim().toLowerCase();
-        const m = members.find((x) =>
-          (x.zoho_emp_id || '').toLowerCase() === key || x.name.toLowerCase() === key);
-        if (!m) { unmatched++; continue; }
-        for (const { i, day } of sheet.dateCols) {
-          const mark = markOf(r[i]);
-          if (!mark) { blank++; continue; }
-          await api.put(`/api/mavericks/${batchId}/attendance`, { employee_id: m.employee_id, day, kind, mark });
-          set++;
-        }
-      }
-      onDone(`${set} mark(s) imported${unmatched ? ` · ${unmatched} row(s) skipped (no matching trainee)` : ''}${blank ? ` · ${blank} empty/unreadable cell(s) skipped` : ''}. Existing data was only added to, never removed.`);
-    } catch (e2) { setErr(e2.message); setBusy(false); }
-  };
-
-  return (
-    <div className="modal-backdrop" onClick={() => onClose()}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Import attendance — date-wise Excel</h3>
-        {!sheet ? (
-          <>
-            <p className="muted mini">One row per trainee; one column per date (header = the date). Cells: P/Present, A/Absent, H/Half.</p>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} style={{ marginTop: 8 }} />
-          </>
-        ) : (
-          <>
-            <div className="form-grid">
-              <div><label>Trainee column (Emp ID or Name)</label>
-                <select value={idCol} onChange={(e) => setIdCol(Number(e.target.value))}>
-                  {sheet.headers.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
-                </select></div>
-            </div>
-            <p className="muted mini" style={{ marginTop: 8 }}>
-              {sheet.rows.length} trainee row(s) · {sheet.dateCols.length} date column(s):
-              {' '}{sheet.dateCols.slice(0, 6).map((d) => fmtDay(d.day)).join(', ')}{sheet.dateCols.length > 6 ? '…' : ''}
-            </p>
-          </>
-        )}
-        {err && <p className="err">{err}</p>}
-        <div className="form-actions">
-          {sheet && <button className="btn gold" disabled={busy} onClick={run}>{busy ? 'Importing…' : 'Import attendance'}</button>}
-          <button className="btn" disabled={busy} onClick={() => onClose()}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Mavericks() {
   const { user: me } = useAuth();
@@ -110,12 +21,7 @@ export default function Mavericks() {
   const [sel, setSel] = useState(null);
   const [tab, setTab] = useState('trainees');
   const [emps, setEmps] = useState([]);
-  const [mavTrainings, setMavTrainings] = useState([]);
   const [form, setForm] = useState(null);
-  const [att, setAtt] = useState({});
-  const [days, setDays] = useState({ classroom: [], field: [] });
-  const [addDay, setAddDay] = useState('');
-  const [importing, setImporting] = useState(null); // kind
   const [assessForm, setAssessForm] = useState(null);
   const [scoresFor, setScoresFor] = useState(null);
   const [err, setErr] = useState(null);
@@ -124,25 +30,13 @@ export default function Mavericks() {
   useEffect(() => {
     loadList();
     api.get('/api/employees?active=true').then(setEmps).catch(() => {});
-    api.get('/api/trainings').then((ts) => setMavTrainings(ts.filter((t) => t.category === 'Mavericks'))).catch(() => {});
   }, []);
-
-  // Dates come from trainings planned in the Mavericks category.
-  const trainingDays = [...new Set(mavTrainings.flatMap((t) => (t.days || []).map((d) => d.slice(0, 10))))].sort();
 
   const open = async (id) => {
     setErr(null);
     const d = await api.get('/api/mavericks/' + id).catch((e) => { setErr(e.message); return null; });
     if (!d) return;
     setSel(d); setTab('trainees');
-    for (const kind of ['classroom', 'field']) loadAtt(id, kind);
-  };
-  const loadAtt = async (id, kind) => {
-    const rows = await api.get(`/api/mavericks/${id}/attendance?kind=${kind}`).catch(() => []);
-    const m = {}; const ds = new Set();
-    rows.forEach((r) => { const day = r.day.slice(0, 10); m[r.employee_id + '|' + day] = { mark: r.mark, at: r.updated_at }; ds.add(day); });
-    setAtt((a) => ({ ...a, [kind]: m }));
-    setDays((d) => ({ ...d, [kind]: [...ds].sort() }));
   };
 
   const saveBatch = async (e) => {
@@ -154,7 +48,7 @@ export default function Mavericks() {
         if (sel && form.id === sel.id) open(sel.id);
       } else {
         const b = await api.post('/api/mavericks', form);
-        toast('Batch created — add trainees, then work through the tabs.');
+        toast('Batch created — it blocks its dates on the Training Calendar.');
         open(b.id);
       }
       setForm(null); loadList();
@@ -185,31 +79,6 @@ export default function Mavericks() {
     } catch (e2) { setErr(e2.message); }
   };
 
-  // Single attendance view: earlier classroom + field records merged
-  // (classroom wins on the same day); new marks are stored as 'classroom'.
-  const attAll = { ...(att.field || {}), ...(att.classroom || {}) };
-  const daysAll = [...new Set([...(days.classroom || []), ...(days.field || [])])].sort();
-
-  const cycleMark = async (empId, day) => {
-    if (!isAdmin) return;
-    const cur = attAll[empId + '|' + day]?.mark || '';
-    const next = CYCLE[cur] || null;
-    try {
-      await api.put(`/api/mavericks/${sel.id}/attendance`, { employee_id: empId, day, kind: 'classroom', mark: next });
-      if (next === null && att.field?.[empId + '|' + day]) {
-        await api.put(`/api/mavericks/${sel.id}/attendance`, { employee_id: empId, day, kind: 'field', mark: null });
-      }
-      loadAtt(sel.id, 'classroom'); loadAtt(sel.id, 'field');
-    } catch (e2) { setErr(e2.message); }
-  };
-
-  const attPctOf = (empId) => {
-    const marks = daysAll.map((d) => attAll[empId + '|' + d]?.mark).filter(Boolean);
-    if (!marks.length) return null;
-    const units = marks.reduce((s, m) => s + (m === 'P' ? 1 : m === 'H' ? 0.5 : 0), 0);
-    return Math.round((units / daysAll.length) * 100);
-  };
-
   const saveScores = async (e) => {
     e.preventDefault();
     try {
@@ -229,12 +98,15 @@ export default function Mavericks() {
     });
     return g;
   };
+  const range = (b) => (b.start_date
+    ? fmtDate(b.start_date) + (b.end_date ? ' → ' + fmtDate(b.end_date) : '')
+    : '—');
 
   return (
     <>
       <div className="page-head">
         <h2>MedTech Mavericks</h2>
-        {isAdmin && !sel && <button className="btn gold" onClick={() => setForm({ name: '', mentor: '', start_date: '', notes: '' })}>Create batch</button>}
+        {isAdmin && !sel && <button className="btn gold" onClick={() => setForm({ name: '', mentor: '', start_date: '', end_date: '', notes: '' })}>Create batch</button>}
         {sel && <button className="btn" onClick={() => { setSel(null); loadList(); }}>← All batches</button>}
       </div>
       {err && <p className="err">{err}</p>}
@@ -244,13 +116,17 @@ export default function Mavericks() {
           <div className="form-grid">
             <div><label>Batch name *</label><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Mavericks B-4" /></div>
             <div><label>Programme lead</label><input value={form.mentor || ''} onChange={(e) => setForm({ ...form, mentor: e.target.value })} /></div>
-            <div><label>Start date</label><input type="date" value={form.start_date || ''} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
+            <div><label>Training start date</label><input type="date" value={form.start_date || ''} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
+            <div><label>Training end date</label><input type="date" min={form.start_date || undefined} value={form.end_date || ''} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
             {form.id && <div><label>Status</label>
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="active">Active</option><option value="completed">Completed</option><option value="closed">Closed</option>
               </select></div>}
             <div style={{ gridColumn: '1/-1' }}><label>Notes</label><input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
+          <p className="muted mini" style={{ marginTop: 8 }}>
+            The start→end range shows as blocked Mavericks dates on the Training Calendar.
+          </p>
           <div className="form-actions">
             <button className="btn gold" type="submit">Save</button>
             <button className="btn" type="button" onClick={() => setForm(null)}>Cancel</button>
@@ -261,15 +137,16 @@ export default function Mavericks() {
       {!sel && (batches ? (
         <>
           <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-            Open a batch for its <b>Trainees</b>, <b>Attendance</b>, <b>Assessments</b> and <b>Mentors</b>.
+            Open a batch for its <b>Trainees</b>, <b>Assessments</b> and <b>Mentors</b>. Attendance for
+            Mavericks is marked under the Attendance tab, on trainings in the Mavericks category.
           </p>
           <div className="card" style={{ padding: 0 }}>
             <table>
-              <thead><tr><th>Batch</th><th>Lead</th><th>Start</th><th style={{ textAlign: 'right' }}>Trainees</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Batch</th><th>Lead</th><th>Training dates</th><th style={{ textAlign: 'right' }}>Trainees</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {batches.map((b) => (
                   <tr key={b.id} className="rowlink" onClick={() => open(b.id)}>
-                    <td>{b.name}</td><td>{b.mentor}</td><td className="muted">{fmtDate(b.start_date)}</td>
+                    <td>{b.name}</td><td>{b.mentor}</td><td className="muted">{range(b)}</td>
                     <td style={{ textAlign: 'right' }}>{b.member_count}</td>
                     <td><span className={'pill ' + (b.status === 'active' ? 'good' : b.status === 'completed' ? 'soft' : 'neutral')}>{b.status}</span></td>
                     <td><button className="btn gold" onClick={(e) => { e.stopPropagation(); open(b.id); }}>Open →</button></td>
@@ -288,16 +165,16 @@ export default function Mavericks() {
             <div className="toolbar" style={{ marginBottom: 0, alignItems: 'center' }}>
               <b style={{ fontFamily: 'Fira Sans', fontSize: 16 }}>{sel.name}</b>
               {sel.mentor && <span className="muted">Lead: {sel.mentor}</span>}
-              {sel.start_date && <span className="muted">since {fmtDate(sel.start_date)}</span>}
+              {sel.start_date && <span className="muted">{range(sel)}</span>}
               <span className={'pill ' + (sel.status === 'active' ? 'good' : 'soft')}>{sel.status}</span>
               <span style={{ flex: 1 }} />
-              {isAdmin && <button className="btn" onClick={() => setForm({ id: sel.id, name: sel.name, mentor: sel.mentor || '', start_date: sel.start_date ? sel.start_date.slice(0, 10) : '', status: sel.status, notes: sel.notes || '' })}>Edit batch</button>}
+              {isAdmin && <button className="btn" onClick={() => setForm({ id: sel.id, name: sel.name, mentor: sel.mentor || '', start_date: sel.start_date ? sel.start_date.slice(0, 10) : '', end_date: sel.end_date ? sel.end_date.slice(0, 10) : '', status: sel.status, notes: sel.notes || '' })}>Edit batch</button>}
             </div>
             {sel.notes && <p className="muted mini" style={{ marginTop: 8 }}>{sel.notes}</p>}
           </div>
 
           <div className="toolbar">
-            {[['trainees', `Trainees (${sel.members.length})`], ['attendance', 'Attendance'],
+            {[['trainees', `Trainees (${sel.members.length})`],
               ['assessments', 'Assessments'], ['mentors', 'Mentors']].map(([t, label]) => (
               <button key={t} className={'btn' + (tab === t ? ' gold' : '')} onClick={() => setTab(t)}>{label}</button>
             ))}
@@ -357,48 +234,6 @@ export default function Mavericks() {
                   <button className="btn gold" onClick={() => { const s = document.getElementById('mavAdd'); if (s.value) { addMember(s.value); s.value = ''; } }}>Add</button>
                 </div>
               )}
-            </div>
-          )}
-
-          {tab === 'attendance' && (
-            <div className="card" style={{ overflowX: 'auto' }}>
-              {isAdmin && (
-                <div className="toolbar">
-                  <select value={addDay} onChange={(e) => setAddDay(e.target.value)}>
-                    <option value="">Add a training day…</option>
-                    {trainingDays.filter((d) => !daysAll.includes(d)).map((d) => <option key={d} value={d}>{fmtDate(d)}</option>)}
-                  </select>
-                  <button className="btn" disabled={!addDay}
-                    onClick={() => { setDays((d) => ({ ...d, classroom: [...d.classroom, addDay].sort() })); setAddDay(''); }}>+ Add day</button>
-                  <button className="btn" onClick={() => setImporting('classroom')}>⬆ Import (date-wise Excel)</button>
-                  <span className="muted mini">Days come from trainings planned in the "Mavericks" category. Click cells to cycle – → P → A → H.</span>
-                </div>
-              )}
-              {!trainingDays.length && (
-                <p className="muted mini">No Mavericks training dates exist yet — plan a training with category
-                  <b> Mavericks</b> under the Trainings tab and its dates appear here.</p>
-              )}
-              <table style={{ minWidth: 640 }}>
-                <thead><tr><th>Employee ID</th><th>Employee Name</th>{daysAll.map((d) => <th key={d}>{fmtDay(d)}</th>)}<th style={{ textAlign: 'right' }}>%</th></tr></thead>
-                <tbody>
-                  {sel.members.map((m) => (
-                    <tr key={m.employee_id}>
-                      <td className="muted">{m.zoho_emp_id || '—'}</td>
-                      <td>{m.name}</td>
-                      {daysAll.map((d) => {
-                        const cell = attAll[m.employee_id + '|' + d];
-                        return <td key={d}>
-                          <button className={'attcell ' + (cell?.mark || '')} disabled={!isAdmin}
-                            title={cell ? `${cell.mark} · ${new Date(cell.at).toLocaleString('en-IN')}` : 'Not marked'}
-                            onClick={() => cycleMark(m.employee_id, d)}>{cell?.mark || '–'}</button>
-                        </td>;
-                      })}
-                      <td style={{ textAlign: 'right' }}>{attPctOf(m.employee_id) ?? '—'}{attPctOf(m.employee_id) !== null && '%'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!daysAll.length && trainingDays.length > 0 && <p className="muted" style={{ marginTop: 10 }}>No days added yet — pick one above.</p>}
             </div>
           )}
 
@@ -521,12 +356,6 @@ export default function Mavericks() {
             </div>
           )}
         </>
-      )}
-
-      {importing && sel && (
-        <AttImport batchId={sel.id} kind={importing} members={sel.members}
-          onClose={() => setImporting(null)}
-          onDone={(msg) => { setImporting(null); toast(msg); loadAtt(sel.id, importing); }} />
       )}
 
       {scoresFor && (
