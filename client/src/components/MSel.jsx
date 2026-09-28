@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Multi-choice dropdown. Closes when clicking anywhere outside it, and
 // opening one closes any sibling dropdowns (native <details> does neither).
 // Long lists (>12 options) get a type-to-filter box automatically.
-export default function MSel({ label, options, sel, onChange, empty = 'All' }) {
+export default function MSel({ label, options, sel, onChange, empty = 'All', allowAll = false }) {
   const ref = useRef(null);
   const [q, setQ] = useState('');
 
@@ -38,6 +38,15 @@ export default function MSel({ label, options, sel, onChange, empty = 'All' }) {
             style={{ width: '100%', marginBottom: 6, fontSize: 12 }} />
         )}
         <label><input type="checkbox" checked={!n} onChange={() => onChange([])} /> {empty}</label>
+        {allowAll && shown.length > 0 && (
+          <label style={{ fontWeight: 600 }}>
+            <input type="checkbox" checked={shown.every((o) => sel.includes(o.v))}
+              onChange={(e) => onChange(e.target.checked
+                ? [...new Set([...sel, ...shown.map((o) => o.v)])]
+                : sel.filter((v) => !shown.some((o) => o.v === v)))} />
+            Select all{t ? ' shown' : ''} ({shown.length})
+          </label>
+        )}
         <hr style={{ border: 0, borderTop: '1px solid var(--line)' }} />
         {shown.map((o) => (
           <label key={o.v}>

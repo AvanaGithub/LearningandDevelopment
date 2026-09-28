@@ -1,8 +1,120 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtRange } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
-import { toXlsx } from '../xlsx.js';
+import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
+
+// Excel import of feedback collected offline: one row per respondent, one
+// column per question (ratings 1–5). Rows map to this training's
+// participants by Zoho ID, name or e-mail; question columns are matched to
+// the training's form, adjustable before importing.
+function FbImport({ t, questions, participants, onClose, onDone }) {
+  const [sheet, setSheet] = useState(null);
+  const [idCol, setIdCol] = useState(0);
+  const [qCols, setQCols] = useState([]);       // question index -> column index or ''
+  const [cCol, setCCol] = useState('');         // comment column
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const pick = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const aoa = await readSheet(f);
+      const headers = (aoa[0] || []).map((h) => String(h).trim());
+      const rows = aoa.slice(1).filter((r) => r.some((c) => String(c).trim() !== ''));
+      if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
+      const low = headers.map((h) => h.toLowerCase());
+      const guessId = low.findIndex((h) => /emp|zoho|id|name|participant|respondent|mail/.test(h));
+      // Match each form question to a column: by question text, then "Q<n>".
+      setQCols(questions.map((q, i) => {
+        const ql = q.toLowerCase();
+        let j = low.findIndex((h) => h.includes(ql.slice(0, 18)));
+        if (j < 0) j = low.findIndex((h) => new RegExp(`^q\\s*${i + 1}\\b`).test(h));
+        return j >= 0 ? j : '';
+      }));
+      const gc = low.findIndex((h) => /comment|improve|suggest|remark/.test(h));
+      setCCol(gc >= 0 ? gc : '');
+      setIdCol(guessId >= 0 ? guessId : 0);
+      setSheet({ headers, rows });
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const run = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const out = [];
+      let unmatched = 0;
+      for (const r of sheet.rows) {
+        const key = String(r[idCol] || '').trim().toLowerCase();
+        const p = participants.find((x) =>
+          (x.zoho_emp_id || '').toLowerCase() === key ||
+          x.name.toLowerCase() === key ||
+          (x.email || '').toLowerCase() === key);
+        if (!p) { unmatched++; continue; }
+        const scores = {};
+        questions.forEach((q, i) => {
+          if (qCols[i] === '') return;
+          const v = Number(String(r[qCols[i]]).trim());
+          if (Number.isInteger(v) && v >= 1 && v <= 5) scores[i] = v;
+        });
+        out.push({ employee_id: p.id, respondent: p.name, scores,
+          comment: cCol === '' ? null : String(r[cCol] || '').trim() || null });
+      }
+      if (!out.length) throw new Error('No row matched the participant list — check the respondent column.');
+      const res = await api.post(`/api/feedback/${t.id}/import`, { rows: out });
+      onDone(`${res.ok} response(s) imported${res.skipped ? ` · ${res.skipped} skipped (no valid 1–5 ratings)` : ''}${unmatched ? ` · ${unmatched} row(s) skipped (not in the participant list)` : ''}.`);
+    } catch (e2) { setErr(e2.message); setBusy(false); }
+  };
+
+  const colOpts = (allowNone) => (
+    <>
+      {allowNone && <option value="">— none —</option>}
+      {sheet.headers.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
+    </>
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Import feedback — {t.title}</h3>
+        {!sheet ? (
+          <>
+            <p className="muted mini">One row per respondent, one column per question with ratings 1–5, plus an optional
+              comment column. Rows are matched to this training's participants by Zoho ID, name or e-mail.</p>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} style={{ marginTop: 8 }} />
+          </>
+        ) : (
+          <>
+            <div className="form-grid">
+              <div><label>Respondent column (Zoho ID / Name / E-mail)</label>
+                <select value={idCol} onChange={(e) => setIdCol(Number(e.target.value))}>{colOpts(false)}</select></div>
+              <div><label>Comment column (optional)</label>
+                <select value={cCol} onChange={(e) => setCCol(e.target.value === '' ? '' : Number(e.target.value))}>{colOpts(true)}</select></div>
+            </div>
+            <p className="muted mini" style={{ margin: '10px 0 4px' }}>Map each question to its column:</p>
+            {questions.map((q, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', fontSize: 13 }}>
+                <span style={{ flex: 1 }}>Q{i + 1} · {q}</span>
+                <select value={qCols[i]} style={{ width: 200 }}
+                  onChange={(e) => { const c = [...qCols]; c[i] = e.target.value === '' ? '' : Number(e.target.value); setQCols(c); }}>
+                  {colOpts(true)}
+                </select>
+              </div>
+            ))}
+            <p className="muted mini" style={{ marginTop: 8 }}>{sheet.rows.length} row(s) found.</p>
+          </>
+        )}
+        {err && <p className="err">{err}</p>}
+        <div className="form-actions">
+          {sheet && <button className="btn gold" disabled={busy || qCols.every((c) => c === '')} onClick={run}>
+            {busy ? 'Importing…' : 'Import feedback'}</button>}
+          <button className="btn" disabled={busy} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const STD_QS = [
   'Relevance of content to my job', "Trainer's subject knowledge", "Trainer's delivery and clarity",
@@ -18,6 +130,7 @@ export default function Feedback() {
   const [respond, setRespond] = useState(null);   // {t, questions, scores, comment}
   const [results, setResults] = useState(null);   // {t, questions, responses}
   const [builder, setBuilder] = useState(null);   // {t, checked:Set(labels), custom:[], newQ}
+  const [importing, setImporting] = useState(null); // {t, questions, participants}
   const [qr, setQr] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -53,6 +166,14 @@ export default function Feedback() {
     try {
       const d = await api.get('/api/feedback/' + t.id);
       setResults({ t, ...d });
+    } catch (e) { setErr(e.message); }
+  };
+
+  const openImport = async (t) => {
+    try {
+      const [d, detail] = await Promise.all([api.get('/api/feedback/' + t.id), api.get('/api/trainings/' + t.id)]);
+      if (!detail.participants.length) { setErr('This training has no participants yet — add them first.'); return; }
+      setImporting({ t, questions: d.questions, participants: detail.participants });
     } catch (e) { setErr(e.message); }
   };
 
@@ -101,6 +222,7 @@ export default function Feedback() {
                     <button className="btn link" onClick={() => openRespond(t)}>Respond</button>
                     <button className="btn link" onClick={() => openResults(t)}>Results</button>
                     {isAdmin && <button className="btn link" onClick={() => openBuilder(t)}>Edit form</button>}
+                    {isAdmin && <button className="btn link" onClick={() => openImport(t)}>Import</button>}
                     {isAdmin && t.public_token && (
                       <button className="btn link" onClick={() => setQr({
                         title: 'Feedback QR — ' + t.title,
@@ -115,6 +237,12 @@ export default function Feedback() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {importing && (
+        <FbImport t={importing.t} questions={importing.questions} participants={importing.participants}
+          onClose={() => setImporting(null)}
+          onDone={(msg) => { setImporting(null); toast(msg); load(); }} />
       )}
 
       {respond && (

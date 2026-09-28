@@ -1,11 +1,109 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDay, fmtRange } from '../api.js';
+import { api, fmtDay, fmtDate, fmtRange } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
-import { toXlsx } from '../xlsx.js';
+import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
 import MSel from '../components/MSel.jsx';
 
 const CYCLE = { '': 'P', P: 'A', A: 'H', H: '' };
+
+// Excel import: one row per participant, one column per date (header = the
+// date). Cells P/Present, A/Absent, H/Half. Rows map to the participant
+// list by Zoho ID, name or e-mail; only this training's dates are used.
+function AttImport({ t, participants, onClose, onDone }) {
+  const [sheet, setSheet] = useState(null);
+  const [idCol, setIdCol] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const trnDays = (t.days || []).map((d) => d.slice(0, 10));
+
+  const pick = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const aoa = await readSheet(f);
+      const headers = (aoa[0] || []).map((h) => String(h).trim());
+      const rows = aoa.slice(1).filter((r) => r.some((c) => String(c).trim() !== ''));
+      if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
+      const dateCols = headers.map((h, i) => {
+        const ts = Date.parse(h);
+        return isNaN(ts) ? null : { i, day: new Date(ts).toISOString().slice(0, 10) };
+      }).filter(Boolean);
+      const matched = dateCols.filter((d) => trnDays.includes(d.day));
+      if (!matched.length) {
+        throw new Error(`No column matches this training's dates (${trnDays.map(fmtDate).join(', ')}) — column headers must be dates.`);
+      }
+      const guess = headers.findIndex((h) => /emp|id|name|participant|mail/i.test(h));
+      setIdCol(guess >= 0 ? guess : 0);
+      setSheet({ headers, rows, dateCols: matched, ignored: dateCols.length - matched.length });
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const markOf = (v) => {
+    const s = String(v).trim().toLowerCase();
+    if (!s) return null;
+    if (/^(p|present|1|yes|y)$/.test(s)) return 'P';
+    if (/^(a|absent|0|no|n)$/.test(s)) return 'A';
+    if (/^(h|half|hd|0\.5)$/.test(s)) return 'H';
+    return null;
+  };
+
+  const run = async () => {
+    setBusy(true); setErr(null);
+    let set = 0, unmatched = 0, blank = 0;
+    try {
+      for (const r of sheet.rows) {
+        const key = String(r[idCol] || '').trim().toLowerCase();
+        const p = participants.find((x) =>
+          (x.zoho_emp_id || '').toLowerCase() === key ||
+          x.name.toLowerCase() === key ||
+          (x.email || '').toLowerCase() === key);
+        if (!p) { unmatched++; continue; }
+        for (const { i, day } of sheet.dateCols) {
+          const mark = markOf(r[i]);
+          if (!mark) { blank++; continue; }
+          await api.put('/api/attendance/' + t.id, { employee_id: p.id, day, mark, reason: 'Imported from Excel' });
+          set++;
+        }
+      }
+      onDone(`${set} mark(s) imported${unmatched ? ` · ${unmatched} row(s) skipped (not in the participant list)` : ''}${blank ? ` · ${blank} empty/unreadable cell(s) skipped` : ''}. Existing marks were only added to or updated, never removed.`);
+    } catch (e2) { setErr(e2.message); setBusy(false); }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Import attendance — {t.title}</h3>
+        {!sheet ? (
+          <>
+            <p className="muted mini">One row per participant, one column per date (header = the date, e.g. 01-Oct-2026).
+              Cells: P/Present, A/Absent, H/Half. Rows are matched to this training's participant list by Zoho ID, name or e-mail.</p>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} style={{ marginTop: 8 }} />
+          </>
+        ) : (
+          <>
+            <div className="form-grid">
+              <div><label>Participant column (Zoho ID / Name / E-mail)</label>
+                <select value={idCol} onChange={(e) => setIdCol(Number(e.target.value))}>
+                  {sheet.headers.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
+                </select></div>
+            </div>
+            <p className="muted mini" style={{ marginTop: 8 }}>
+              {sheet.rows.length} row(s) · {sheet.dateCols.length} date column(s) matching this training:
+              {' '}{sheet.dateCols.map((d) => fmtDay(d.day)).join(', ')}
+              {sheet.ignored ? ` · ${sheet.ignored} other date column(s) ignored (not this training's dates)` : ''}
+            </p>
+          </>
+        )}
+        {err && <p className="err">{err}</p>}
+        <div className="form-actions">
+          {sheet && <button className="btn gold" disabled={busy} onClick={run}>{busy ? 'Importing…' : 'Import attendance'}</button>}
+          <button className="btn" disabled={busy} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Attendance() {
   const { user: me } = useAuth();
@@ -15,6 +113,7 @@ export default function Attendance() {
   const [selIds, setSelIds] = useState([]);       // filter: empty = all
   const [data, setData] = useState({});           // id -> {detail, marks:{empId|day:mark}}
   const [editing, setEditing] = useState(null);   // {tid, emp, marks:{day:m}, reason}
+  const [importing, setImporting] = useState(null); // training being imported into
   const [qr, setQr] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -131,6 +230,7 @@ export default function Attendance() {
                       desc: 'Display this at the venue. A participant scans it, picks their name and is marked Present — tagged to this training automatically.',
                     })}>▦ QR check-in</button>
                   )}
+                  {isAdmin && <button className="btn" onClick={() => setImporting(t)}>⬆ Import</button>}
                   {isAdmin && <button className="btn" onClick={() => markAll(t.id)}>✓ Mark all present</button>}
                 </div>
                 <table style={{ minWidth: 480 }}>
@@ -176,6 +276,12 @@ export default function Attendance() {
               </div>
             );
           })}
+
+      {importing && data[importing.id] && (
+        <AttImport t={importing} participants={data[importing.id].detail.participants}
+          onClose={() => setImporting(null)}
+          onDone={(msg) => { const tid = importing.id; setImporting(null); toast(msg); loadOne(tid).catch((e) => setErr(e.message)); }} />
+      )}
 
       {editing && (
         <div className="modal-backdrop" onClick={() => setEditing(null)}>

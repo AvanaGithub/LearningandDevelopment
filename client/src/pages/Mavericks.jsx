@@ -71,7 +71,7 @@ function AttImport({ batchId, kind, members, onClose, onDone }) {
   return (
     <div className="modal-backdrop" onClick={() => onClose()}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Import {kind} attendance — date-wise Excel</h3>
+        <h3>Import attendance — date-wise Excel</h3>
         {!sheet ? (
           <>
             <p className="muted mini">One row per trainee; one column per date (header = the date). Cells: P/Present, A/Absent, H/Half.</p>
@@ -185,22 +185,29 @@ export default function Mavericks() {
     } catch (e2) { setErr(e2.message); }
   };
 
-  const kind = tab === 'field' ? 'field' : 'classroom';
+  // Single attendance view: earlier classroom + field records merged
+  // (classroom wins on the same day); new marks are stored as 'classroom'.
+  const attAll = { ...(att.field || {}), ...(att.classroom || {}) };
+  const daysAll = [...new Set([...(days.classroom || []), ...(days.field || [])])].sort();
+
   const cycleMark = async (empId, day) => {
     if (!isAdmin) return;
-    const cur = att[kind]?.[empId + '|' + day]?.mark || '';
+    const cur = attAll[empId + '|' + day]?.mark || '';
+    const next = CYCLE[cur] || null;
     try {
-      await api.put(`/api/mavericks/${sel.id}/attendance`, { employee_id: empId, day, kind, mark: CYCLE[cur] || null });
-      loadAtt(sel.id, kind);
+      await api.put(`/api/mavericks/${sel.id}/attendance`, { employee_id: empId, day, kind: 'classroom', mark: next });
+      if (next === null && att.field?.[empId + '|' + day]) {
+        await api.put(`/api/mavericks/${sel.id}/attendance`, { employee_id: empId, day, kind: 'field', mark: null });
+      }
+      loadAtt(sel.id, 'classroom'); loadAtt(sel.id, 'field');
     } catch (e2) { setErr(e2.message); }
   };
 
-  const attPctOf = (empId, k) => {
-    const ds = days[k] || [];
-    const marks = ds.map((d) => att[k]?.[empId + '|' + d]?.mark).filter(Boolean);
+  const attPctOf = (empId) => {
+    const marks = daysAll.map((d) => attAll[empId + '|' + d]?.mark).filter(Boolean);
     if (!marks.length) return null;
     const units = marks.reduce((s, m) => s + (m === 'P' ? 1 : m === 'H' ? 0.5 : 0), 0);
-    return Math.round((units / ds.length) * 100);
+    return Math.round((units / daysAll.length) * 100);
   };
 
   const saveScores = async (e) => {
@@ -254,7 +261,7 @@ export default function Mavericks() {
       {!sel && (batches ? (
         <>
           <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-            Open a batch for its <b>Trainees</b>, <b>Classroom</b> and <b>Field</b> attendance, <b>Assessments</b> and <b>Mentors</b>.
+            Open a batch for its <b>Trainees</b>, <b>Attendance</b>, <b>Assessments</b> and <b>Mentors</b>.
           </p>
           <div className="card" style={{ padding: 0 }}>
             <table>
@@ -290,8 +297,8 @@ export default function Mavericks() {
           </div>
 
           <div className="toolbar">
-            {[['trainees', `Trainees (${sel.members.length})`], ['classroom', 'Classroom attendance'],
-              ['field', 'Field attendance'], ['assessments', 'Assessments'], ['mentors', 'Mentors']].map(([t, label]) => (
+            {[['trainees', `Trainees (${sel.members.length})`], ['attendance', 'Attendance'],
+              ['assessments', 'Assessments'], ['mentors', 'Mentors']].map(([t, label]) => (
               <button key={t} className={'btn' + (tab === t ? ' gold' : '')} onClick={() => setTab(t)}>{label}</button>
             ))}
           </div>
@@ -353,17 +360,17 @@ export default function Mavericks() {
             </div>
           )}
 
-          {(tab === 'classroom' || tab === 'field') && (
+          {tab === 'attendance' && (
             <div className="card" style={{ overflowX: 'auto' }}>
               {isAdmin && (
                 <div className="toolbar">
                   <select value={addDay} onChange={(e) => setAddDay(e.target.value)}>
                     <option value="">Add a training day…</option>
-                    {trainingDays.filter((d) => !days[kind].includes(d)).map((d) => <option key={d} value={d}>{fmtDate(d)}</option>)}
+                    {trainingDays.filter((d) => !daysAll.includes(d)).map((d) => <option key={d} value={d}>{fmtDate(d)}</option>)}
                   </select>
                   <button className="btn" disabled={!addDay}
-                    onClick={() => { setDays((d) => ({ ...d, [kind]: [...d[kind], addDay].sort() })); setAddDay(''); }}>+ Add day</button>
-                  <button className="btn" onClick={() => setImporting(kind)}>⬆ Import (date-wise Excel)</button>
+                    onClick={() => { setDays((d) => ({ ...d, classroom: [...d.classroom, addDay].sort() })); setAddDay(''); }}>+ Add day</button>
+                  <button className="btn" onClick={() => setImporting('classroom')}>⬆ Import (date-wise Excel)</button>
                   <span className="muted mini">Days come from trainings planned in the "Mavericks" category. Click cells to cycle – → P → A → H.</span>
                 </div>
               )}
@@ -372,26 +379,26 @@ export default function Mavericks() {
                   <b> Mavericks</b> under the Trainings tab and its dates appear here.</p>
               )}
               <table style={{ minWidth: 640 }}>
-                <thead><tr><th>Employee ID</th><th>Employee Name</th>{days[kind].map((d) => <th key={d}>{fmtDay(d)}</th>)}<th style={{ textAlign: 'right' }}>%</th></tr></thead>
+                <thead><tr><th>Employee ID</th><th>Employee Name</th>{daysAll.map((d) => <th key={d}>{fmtDay(d)}</th>)}<th style={{ textAlign: 'right' }}>%</th></tr></thead>
                 <tbody>
                   {sel.members.map((m) => (
                     <tr key={m.employee_id}>
                       <td className="muted">{m.zoho_emp_id || '—'}</td>
                       <td>{m.name}</td>
-                      {days[kind].map((d) => {
-                        const cell = att[kind]?.[m.employee_id + '|' + d];
+                      {daysAll.map((d) => {
+                        const cell = attAll[m.employee_id + '|' + d];
                         return <td key={d}>
                           <button className={'attcell ' + (cell?.mark || '')} disabled={!isAdmin}
                             title={cell ? `${cell.mark} · ${new Date(cell.at).toLocaleString('en-IN')}` : 'Not marked'}
                             onClick={() => cycleMark(m.employee_id, d)}>{cell?.mark || '–'}</button>
                         </td>;
                       })}
-                      <td style={{ textAlign: 'right' }}>{attPctOf(m.employee_id, kind) ?? '—'}{attPctOf(m.employee_id, kind) !== null && '%'}</td>
+                      <td style={{ textAlign: 'right' }}>{attPctOf(m.employee_id) ?? '—'}{attPctOf(m.employee_id) !== null && '%'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {!days[kind].length && trainingDays.length > 0 && <p className="muted" style={{ marginTop: 10 }}>No {kind} days added yet — pick one above.</p>}
+              {!daysAll.length && trainingDays.length > 0 && <p className="muted" style={{ marginTop: 10 }}>No days added yet — pick one above.</p>}
             </div>
           )}
 

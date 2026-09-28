@@ -46,6 +46,44 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
   } catch (e) { next(e); }
 });
 
+// Bulk import (admin): responses collected on paper/Excel, each matched to
+// a participant employee. An employee's earlier imported/QR response is
+// updated in place; nothing is ever deleted.
+router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '2mb' }), async (req, res, next) => {
+  try {
+    const trainingId = Number(req.params.trainingId);
+    const { rows: t } = await query('SELECT feedback_questions FROM trainings WHERE id=$1', [trainingId]);
+    if (!t.length) return res.status(404).json({ error: 'Not found' });
+    const questions = t[0].feedback_questions || DEFAULT_QUESTIONS;
+    const { rows: parts } = await query(
+      'SELECT employee_id FROM training_participants WHERE training_id=$1', [trainingId]);
+    const partIds = new Set(parts.map((p) => p.employee_id));
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length || rows.length > 1000) return res.status(400).json({ error: 'Send between 1 and 1000 rows' });
+    let ok = 0, skipped = 0;
+    for (const r of rows) {
+      const empId = Number(r.employee_id);
+      const scores = {};
+      let any = false;
+      questions.forEach((q, i) => {
+        const v = Number(r.scores?.[i]);
+        if (Number.isInteger(v) && v >= 1 && v <= 5) { scores[i] = v; any = true; }
+      });
+      if (!empId || !partIds.has(empId) || !any) { skipped++; continue; }
+      await query(
+        `INSERT INTO feedback_responses (training_id, employee_id, respondent, scores, comment)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (training_id, employee_id) WHERE employee_id IS NOT NULL
+         DO UPDATE SET scores=$4, comment=$5, created_at=now()`,
+        [trainingId, empId, String(r.respondent || 'Imported').slice(0, 120),
+         JSON.stringify(scores), r.comment ? String(r.comment).trim().slice(0, 2000) : null]);
+      ok++;
+    }
+    await audit(req.user.id, 'feedback.import', 'training', trainingId, { imported: ok, skipped });
+    res.json({ ok, skipped });
+  } catch (e) { next(e); }
+});
+
 // Submit (or update) my own response. One per user per training.
 router.post('/:trainingId', express.json(), async (req, res, next) => {
   try {

@@ -48,7 +48,7 @@ router.get('/:id', async (req, res, next) => {
     const { rows } = await query(`${listSelect} WHERE t.id = $1`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     const { rows: parts } = await query(
-      `SELECT e.id, e.name, e.zoho_emp_id, e.entity, e.division, e.department
+      `SELECT e.id, e.name, e.zoho_emp_id, e.entity, e.division, e.department, e.email
        FROM training_participants p JOIN employees e ON e.id = p.employee_id
        WHERE p.training_id = $1 ORDER BY e.name`, [id]);
     if (req.user.role === 'manager') delete rows[0].public_token;

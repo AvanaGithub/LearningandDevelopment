@@ -366,7 +366,7 @@ export default function Trainings() {
             )}
             {isAdmin && !removing && (
               <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                <MSel label="Add participants" empty="none picked"
+                <MSel label="Add participants" empty="none picked" allowAll
                   options={emps.filter((e) => !sel.participants.some((p) => p.id === e.id))
                     .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || e.entity}` }))}
                   sel={addEmps} onChange={setAddEmps} />
