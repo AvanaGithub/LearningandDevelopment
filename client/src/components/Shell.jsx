@@ -29,8 +29,8 @@ export default function Shell() {
       <div className="topbar">
         <div className="brand">Learning Hub<small>LEARNING &amp; DEVELOPMENT · AVANA GROUP</small></div>
         <div className="spacer" />
-        {user.real_role === 'super_admin' && (
-          <select value={previewing ? user.role : ''} onChange={(e) => viewAs(e.target.value)}
+        {user.real_role === 'super_admin' && !previewing && (
+          <select value="" onChange={(e) => viewAs(e.target.value)}
             title="Preview the app exactly as another role sees it — server permissions follow."
             style={{ marginRight: 10, fontSize: 12 }}>
             <option value="">👁 View as: Super admin</option>
