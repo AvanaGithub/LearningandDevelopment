@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate } from '../api.js';
+import { api, fmtDate, entLabel } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 
@@ -229,7 +229,7 @@ export default function Mavericks() {
                   <select id="mavAdd" style={{ flex: 1 }} defaultValue="">
                     <option value="" disabled>Add trainee from employees…</option>
                     {emps.filter((e) => !sel.members.some((m) => m.employee_id === e.id))
-                      .map((e) => <option key={e.id} value={e.id}>{e.name} — {e.division || e.entity}</option>)}
+                      .map((e) => <option key={e.id} value={e.id}>{e.name} — {e.division || entLabel(e.entity)}</option>)}
                   </select>
                   <button className="btn gold" onClick={() => { const s = document.getElementById('mavAdd'); if (s.value) { addMember(s.value); s.value = ''; } }}>Add</button>
                 </div>

@@ -35,6 +35,9 @@ export async function apiUpload(fileList) {
 }
 
 export const ENTITIES = ['AMD', 'ASS', 'ATS'];
+// 'ASS' stays the internal code (DB constraints, existing rows); it is
+// always DISPLAYED as ASSP.
+export const entLabel = (e) => (e === 'ASS' ? 'ASSP' : e);
 export const ENTITY_NAMES = {
   AMD: 'Avana Medical Devices',
   ASS: 'Avana Surgical Systems',

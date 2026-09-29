@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate } from '../api.js';
+import { api, fmtDate, entLabel } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 
 // New-joiner onboarding: everyone who joined recently, their induction
@@ -127,7 +127,7 @@ export default function NewJoiners() {
                 return (
                   <tr key={e.id}>
                     <td>{e.name}<div className="muted" style={{ fontSize: 11 }}>{e.zoho_emp_id} · {e.designation} · {e.division || e.department || ''}</div></td>
-                    <td>{e.entity}</td>
+                    <td>{entLabel(e.entity)}</td>
                     <td className="muted">{fmtDate(e.date_joined)}</td>
                     <td className="muted">{jt?.start_date
                       ? `${fmtDate(jt.start_date)}${jt.end_date ? ' → ' + fmtDate(jt.end_date) : ''}` : '—'}</td>

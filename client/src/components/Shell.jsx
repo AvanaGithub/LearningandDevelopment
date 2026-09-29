@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
-import { api, ROLES } from '../api.js';
+import { api, ROLES, entLabel } from '../api.js';
 
 const link = ({ isActive }) => (isActive ? 'active' : undefined);
 
@@ -51,7 +51,7 @@ export default function Shell() {
             <option value="manager">👁 View as: Manager</option>
           </select>
         )}
-        <div className="who"><b>{user.name}</b> · {ROLES[user.role]} · {user.entity}</div>
+        <div className="who"><b>{user.name}</b> · {ROLES[user.role]} · {entLabel(user.entity)}</div>
         <button className="btn-ghost" onClick={logout}>Sign out</button>
       </div>
       {previewing && (

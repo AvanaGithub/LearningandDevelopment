@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, apiUpload, ENTITIES, ENTITY_NAMES, EXP_CATEGORIES, fmtRange, inr } from '../api.js';
+import { api, apiUpload, ENTITIES, ENTITY_NAMES, entLabel, EXP_CATEGORIES, fmtRange, inr } from '../api.js';
 import { useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 
@@ -150,7 +150,7 @@ export default function Expenses() {
             (rows || []).map((r) => {
               const paid = paidOf(r);
               return [r.training_label, r.dates || '', r.location || '', r.participants,
-                (r.entity_split || []).map((s) => `${s.ent} ${s.n}`).join(' | '), r.category || '', r.training_type || '',
+                (r.entity_split || []).map((s) => `${entLabel(s.ent)} ${s.n}`).join(' | '), r.category || '', r.training_type || '',
                 r.vendor || '', r.description || '', Number(r.budget), Number(r.actual), paid,
                 Number(r.actual) - paid, Number(r.budget) - Number(r.actual), r.approval, payStatus(r)[0],
                 (r.payments || []).map((p) => `${p.date} ₹${p.amt}`).join(' | '),
@@ -293,7 +293,7 @@ export default function Expenses() {
                     <td>{r.training_label}</td>
                     <td className="muted">{r.dates}</td>
                     <td>{r.category}</td>
-                    <td>{(r.entity_split || []).map((s) => <span key={s.ent} className="pill soft mini" style={{ marginRight: 4 }}>{s.ent} {s.n}</span>)}</td>
+                    <td>{(r.entity_split || []).map((s) => <span key={s.ent} className="pill soft mini" style={{ marginRight: 4 }}>{entLabel(s.ent)} {s.n}</span>)}</td>
                     <td style={{ textAlign: 'right' }}>{inr(r.budget)}</td>
                     <td style={{ textAlign: 'right' }}>{inr(r.actual)}</td>
                     <td style={{ textAlign: 'right' }}>{inr(paid)}</td>

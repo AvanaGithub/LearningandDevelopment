@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, fmtDate, fmtRange, inr, TRN_STATUSES } from '../api.js';
+import { api, fmtDate, fmtRange, inr, entLabel, TRN_STATUSES } from '../api.js';
 import { useAuth } from '../App.jsx';
 import { toXlsx, toWorkbook } from '../xlsx.js';
 
@@ -114,7 +114,7 @@ export default function Reports() {
           const ms = days.map((d) => m[p.id + '|' + d] || '–');
           const units = ms.reduce((s, x) => s + (x === 'P' ? 1 : x === 'H' ? 0.5 : 0), 0);
           const pct = days.length && ms.some((x) => x !== '–') ? Math.round(units / days.length * 100) + '%' : '—';
-          return [p.name, p.zoho_emp_id || '', p.entity, ...ms, pct, (units * Number(detail.hours_per_day)).toFixed(1)];
+          return [p.name, p.zoho_emp_id || '', entLabel(p.entity), ...ms, pct, (units * Number(detail.hours_per_day)).toFixed(1)];
         }),
         `${TRN_STATUSES[detail.status]} · ${fmtRange(detail.days)} · trainer ${detail.trainer_type === 'external' ? detail.agency : detail.trainer_name}`);
     }
@@ -130,7 +130,7 @@ export default function Reports() {
         const units = ms.reduce((s, x) => s + (x === 'P' ? 1 : x === 'H' ? 0.5 : 0), 0);
         const pct = days.length && ms.some((x) => x !== '–') ? Math.round(units / days.length * 100) + '%' : '—';
         return [detail.code + ' ' + detail.title + (detail.batch ? ' — ' + detail.batch : ''),
-          p.name, p.zoho_emp_id || '', p.entity, `${units}/${days.length}`, pct,
+          p.name, p.zoho_emp_id || '', entLabel(p.entity), `${units}/${days.length}`, pct,
           (units * Number(detail.hours_per_day)).toFixed(1)];
       });
     });
@@ -143,7 +143,7 @@ export default function Reports() {
   const manhours = guard(async () => {
     const r = await api.get('/api/reports/manhours');
     show('Training man-hours per employee', ['Employee', 'Entity', 'Division', 'Department', 'Hours'],
-      r.map((x) => [x.name, x.entity, x.division || '', x.department || '', Number(x.hours)]),
+      r.map((x) => [x.name, entLabel(x.entity), x.division || '', x.department || '', Number(x.hours)]),
       'Hours = hours per day × attendance (P = full, H = half). Target: 16 h per employee per year.');
   });
 
@@ -152,7 +152,7 @@ export default function Reports() {
     if (!r.trainings.length) return show('Mandatory training compliance', ['Info'], [['No mandatory trainings planned yet.']]);
     show('Mandatory training compliance',
       ['Employee', 'Entity', ...r.trainings.map((t) => t.title + (t.batch ? ' — ' + t.batch : ''))],
-      r.employees.map((e) => [e.name, e.entity, ...e.status.map((s) => s === 'done' ? 'Done' : s === 'booked' ? 'Booked' : 'Due')]),
+      r.employees.map((e) => [e.name, entLabel(e.entity), ...e.status.map((s) => s === 'done' ? 'Done' : s === 'booked' ? 'Booked' : 'Due')]),
       '"Due" = active employee not enrolled on the mandatory training.');
   });
 
@@ -207,7 +207,7 @@ export default function Reports() {
       r.employees.map((e) => {
         const ind = e.induction[0];
         const done = e.induction.some((i) => i.status === 'completed' || (i.day_count > 0 && i.attended >= i.day_count));
-        return [e.name, e.entity, e.division || '', fmtDate(e.date_joined),
+        return [e.name, entLabel(e.entity), e.division || '', fmtDate(e.date_joined),
           Math.floor((Date.now() - new Date(e.date_joined)) / 86400000),
           ind ? ind.title + (ind.batch ? ' — ' + ind.batch : '') : 'Not enrolled',
           ind ? `${ind.attended}/${ind.day_count} days` : '—',
@@ -256,7 +256,7 @@ export default function Reports() {
       { sheet: 'Trainings', header: ['Code', 'Title', 'Batch', 'Category', 'Mode', 'Trainer type', 'Trainer', 'Agency', 'Hours per day', 'Seats', 'Mandatory', 'Status', 'Validity months', 'Days'],
         rows: d.trainings.map((t) => [t.code, t.title, t.batch || '', t.category || '', t.mode || '', t.trainer_type, t.trainer_name || '', t.agency || '', Number(t.hours_per_day), t.seats, t.mandatory ? 'Yes' : 'No', t.status, t.validity_months || '', t.days || '']) },
       { sheet: 'Participants', header: ['Training', 'Title', 'Employee', 'Zoho ID', 'Entity', 'Division', 'Department'],
-        rows: d.participants.map((p) => [p.code, p.title, p.name, p.zoho_emp_id || '', p.entity, p.division || '', p.department || '']) },
+        rows: d.participants.map((p) => [p.code, p.title, p.name, p.zoho_emp_id || '', entLabel(p.entity), p.division || '', p.department || '']) },
       { sheet: 'Attendance', header: ['Training', 'Employee', 'Day', 'Mark', 'Marked at', 'Marked by'],
         rows: d.attendance.map((a) => [a.code, a.name, a.day.slice(0, 10), a.mark, new Date(a.updated_at).toLocaleString('en-IN'), a.marked_by]) },
       { sheet: 'Feedback', header: ['Training', 'Respondent', 'Scores', 'Comment', 'Submitted at'],

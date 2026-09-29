@@ -1,8 +1,42 @@
-import React, { useEffect, useState } from 'react';
-import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, EMP_TYPES } from '../api.js';
+import React, { useEffect, useRef, useState } from 'react';
+import { api, ENTITIES, ENTITY_NAMES, entLabel, DIVISIONS, DEPARTMENTS, EMP_TYPES } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
+
+// Searchable single-pick over the employee list for "Reporting manager":
+// type to filter, click to select; free text still allowed for externals.
+function MgrPicker({ label, value, onChange, options, required }) {
+  const [openDD, setOpenDD] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpenDD(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, []);
+  const t = (value || '').trim().toLowerCase();
+  const shown = options.filter((o) => !t || o.name.toLowerCase().includes(t)).slice(0, 30);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <label>{label}</label>
+      <input value={value} required={required} placeholder="Type to search employees…"
+        onFocus={() => setOpenDD(true)}
+        onChange={(e) => { onChange(e.target.value); setOpenDD(true); }} />
+      {openDD && shown.length > 0 && (
+        <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, right: 0, marginTop: 2,
+          background: 'var(--card, #fff)', border: '1px solid var(--line)', borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,.12)', maxHeight: 220, overflowY: 'auto' }}>
+          {shown.map((o) => (
+            <div key={o.id} style={{ padding: '7px 10px', cursor: 'pointer', fontSize: 13, borderBottom: '1px dashed var(--line)' }}
+              onPointerDown={(e) => { e.preventDefault(); onChange(o.name); setOpenDD(false); }}>
+              {o.name} <span className="muted" style={{ fontSize: 11 }}>{[o.designation, entLabel(o.entity)].filter(Boolean).join(' · ')}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const IMPORT_FIELDS = [
   { key: 'zoho_emp_id', label: 'Zoho employee ID', syn: ['zoho', 'emp id', 'employee id', 'code', 'id'] },
@@ -20,7 +54,7 @@ const IMPORT_FIELDS = [
 ];
 const normEntity = (v) => {
   v = String(v || '').toLowerCase();
-  if (v.includes('surgical') || v.trim() === 'ass') return 'ASS';
+  if (v.includes('surgical') || v.trim() === 'ass' || v.trim() === 'assp') return 'ASS';
   if (v.includes('tech') || v.trim() === 'ats') return 'ATS';
   return 'AMD';
 };
@@ -55,7 +89,9 @@ export default function Employees() {
   const [sel, setSel] = useState(null);       // employee open in the detail modal
   const [deactReason, setDeactReason] = useState(null); // null = closed
   const [importing, setImporting] = useState(false);
+  const [allEmps, setAllEmps] = useState([]);   // full list for the manager picker
   const [err, setErr] = useState(null);
+  useEffect(() => { api.get('/api/employees?active=true').then(setAllEmps).catch(() => {}); }, []);
 
   const doImport = async (objs) => {
     // Never create duplicates: rows matching an existing Zoho ID, e-mail or
@@ -86,7 +122,7 @@ export default function Employees() {
 
   const doExport = () => toXlsx('Employees.xlsx',
     ['Zoho ID', 'Name', 'Entity', 'Division', 'Department', 'Designation', 'Manager', 'Type', 'E-mail', 'Mobile', 'DOJ', 'Location', 'Status'],
-    (rows || []).map((r) => [r.zoho_emp_id || '', r.name, r.entity, r.division || '', r.department || '', r.designation || '',
+    (rows || []).map((r) => [r.zoho_emp_id || '', r.name, entLabel(r.entity), r.division || '', r.department || '', r.designation || '',
       r.manager || '', r.employment_type || '', r.email || '', r.mobile || '',
       r.date_joined ? r.date_joined.slice(0, 10) : '', r.location || '', r.active ? 'Active' : 'Inactive']),
     'Employees');
@@ -205,7 +241,9 @@ export default function Employees() {
             {Sel(`Division${isReq('division') ? ' *' : ''}`, 'division', divisions, !isReq('division'))}
             {Sel(`Department${isReq('department') ? ' *' : ''}`, 'department', departments, !isReq('department'))}
             {F(`Designation${isReq('designation') ? ' *' : ''}`, 'designation', { placeholder: 'e.g. Sales Executive', required: isReq('designation') })}
-            {F(`Reporting manager${isReq('manager') ? ' *' : ''}`, 'manager', { placeholder: 'Manager name', required: isReq('manager') })}
+            <MgrPicker label={`Reporting manager${isReq('manager') ? ' *' : ''}`} required={isReq('manager')}
+              value={form.manager} onChange={(v) => setForm({ ...form, manager: v })}
+              options={allEmps.filter((x) => x.id !== form.id)} />
             {Sel('Employment type', 'employment_type', empTypes, false)}
             {F(`Official e-mail${isReq('email') ? ' *' : ''}`, 'email', { type: 'email', placeholder: 'name@avanasurgical.com', required: isReq('email') })}
             {F(`Mobile${isReq('mobile') ? ' *' : ''}`, 'mobile', { placeholder: '+91 …', required: isReq('mobile') })}
@@ -241,7 +279,7 @@ export default function Employees() {
                 <tr key={r.id} className="rowlink" onClick={() => { setSel(r); setDeactReason(null); setErr(null); }}>
                   <td className="muted">{r.zoho_emp_id || '—'}</td>
                   <td>{r.name}<div className="muted" style={{ fontSize: 11 }}>{r.email}</div></td>
-                  <td>{r.entity}</td>
+                  <td>{entLabel(r.entity)}</td>
                   <td>{r.division}</td>
                   <td>{r.department}</td>
                   <td>{r.designation}</td>

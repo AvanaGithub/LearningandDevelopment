@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, apiUpload, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
+import { api, apiUpload, entLabel, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -350,7 +350,7 @@ export default function Trainings() {
             {sel.participants.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
                 <span className="muted">{p.zoho_emp_id || '—'}</span>
-                <span style={{ flex: 1 }}>{p.name} · {p.entity}</span>
+                <span style={{ flex: 1 }}>{p.name} · {entLabel(p.entity)}</span>
                 {isAdmin && (removing?.empId === p.id ? null :
                   <button className="btn link" onClick={() => setRemoving({ empId: p.id, name: p.name, reason: '' })}>Remove…</button>)}
               </div>
@@ -368,7 +368,7 @@ export default function Trainings() {
               <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
                 <MSel label="Add participants" empty="none picked" allowAll
                   options={emps.filter((e) => !sel.participants.some((p) => p.id === e.id))
-                    .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || e.entity}` }))}
+                    .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || entLabel(e.entity)}` }))}
                   sel={addEmps} onChange={setAddEmps} />
                 <button className="btn gold" disabled={!addEmps.length} onClick={addParticipant}>
                   Add{addEmps.length > 1 ? ` ${addEmps.length}` : ''}

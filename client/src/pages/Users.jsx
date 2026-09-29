@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, ENTITIES, ROLES } from '../api.js';
+import { api, ENTITIES, ROLES, entLabel } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
 
 const EMPTY = { email: '', name: '', role: 'manager', entity: 'AMD' };
@@ -72,7 +72,7 @@ export default function Users() {
               <select value={form._emp || ''} onChange={(e) => pickEmployee(e.target.value)}>
                 <option value="">— type the details manually below —</option>
                 {emps.filter((e) => e.email).map((e) => (
-                  <option key={e.id} value={e.id}>{e.name} — {e.email} ({e.entity})</option>
+                  <option key={e.id} value={e.id}>{e.name} — {e.email} ({entLabel(e.entity)})</option>
                 ))}
               </select></div>
             <div><label>Zoho e-mail ID</label>
@@ -89,7 +89,7 @@ export default function Users() {
               </select></div>
             <div><label>Entity</label>
               <select value={form.entity} onChange={(e) => setForm({ ...form, entity: e.target.value })}>
-                {ENTITIES.map((x) => <option key={x}>{x}</option>)}
+                {ENTITIES.map((x) => <option key={x} value={x}>{entLabel(x)}</option>)}
               </select></div>
           </div>
           <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
@@ -113,7 +113,7 @@ export default function Users() {
                 <td>{u.name}{u.id === me.id && <span className="muted"> (you)</span>}</td>
                 <td>{u.email}</td>
                 <td>{ROLES[u.role]}</td>
-                <td>{u.entity}</td>
+                <td>{entLabel(u.entity)}</td>
                 <td><span className={'pill ' + (u.active ? 'good' : 'crit')}>{u.active ? 'Active' : 'Disabled'}</span></td>
                 <td className="muted">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
@@ -152,7 +152,7 @@ export default function Users() {
               </div>
               <div><label>Entity</label>
                 <select value={editU.entity} onChange={(e) => setEditU({ ...editU, entity: e.target.value })}>
-                  {ENTITIES.map((x) => <option key={x}>{x}</option>)}
+                  {ENTITIES.map((x) => <option key={x} value={x}>{entLabel(x)}</option>)}
                 </select></div>
               <div style={{ gridColumn: '1/-1' }}><label>Reason for the change (goes to the audit trail)</label>
                 <input value={editU.reason} placeholder="e.g. promoted to leader"
