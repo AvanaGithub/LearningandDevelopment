@@ -83,11 +83,13 @@ export default function Shell() {
           <NavLink to="/users" className={link}>Users &amp; Access</NavLink>
           <NavLink to="/settings" className={link}>Settings</NavLink>
         </>)}
-        <div className="sect">Phase 2 · Planned</div>
-        <div className="locked">Nominations</div>
-        <div className="locked">Effectiveness</div>
-        <div className="locked">Assessments</div>
-        <div className="locked">Certificates</div>
+        {isAdmin && (<>
+          <div className="sect">Phase 2 · Planned</div>
+          <div className="locked">Nominations</div>
+          <div className="locked">Effectiveness</div>
+          <div className="locked">Assessments</div>
+          <div className="locked">Certificates</div>
+        </>)}
       </nav>
       <main className="main"><Outlet /></main>
     </div>

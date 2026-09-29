@@ -129,7 +129,7 @@ export default function Dashboard() {
           <div className="val">{calc.avgHours.toFixed(1)}</div>
           <div className="sub" style={{ color: 'var(--good)' }}>Target 16 h per year</div>
         </div>
-        {calc.spend !== null && (
+        {(isAdmin || me.role === 'leader') && calc.spend !== null && (
           <div className="tile">
             <div className="lbl">Actual spend (FY)</div>
             <div className="val">₹{inr(calc.spend)}</div>
