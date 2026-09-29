@@ -168,7 +168,7 @@ export default function Employees() {
     <>
       <div className="page-head">
         <h2>Employees</h2>
-        {!isAdmin && <span className="muted mini">Showing only employees reporting to you</span>}
+        {me.role === 'manager' && <span className="muted mini">Showing only employees reporting to you</span>}
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && <button className="btn" onClick={() => setImporting(true)}>⬆ Import (Excel)</button>}
           {isAdmin && <button className="btn" onClick={doExport}>⬇ Export</button>}
