@@ -9,6 +9,7 @@ export default function Users() {
   const toast = useToast();
   const [rows, setRows] = useState(null);
   const [form, setForm] = useState(null); // null = closed, EMPTY-shaped = add form
+  const [editU, setEditU] = useState(null); // user being edited (super admin only)
   const [emps, setEmps] = useState([]);
   const [err, setErr] = useState(null);
 
@@ -29,6 +30,19 @@ export default function Users() {
       toast(`${form.name} added — they can now sign in with Zoho (${form.email}).`);
       setForm(null);
       load();
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    try {
+      await api.patch('/api/users/' + editU.id, {
+        name: editU.name.trim(), role: editU.role, entity: editU.entity,
+        reason: editU.reason?.trim() || undefined,
+      });
+      toast(`${editU.name} updated — change recorded in the audit trail.`);
+      setEditU(null); load();
     } catch (e2) { setErr(e2.message); }
   };
 
@@ -102,7 +116,10 @@ export default function Users() {
                 <td>{u.entity}</td>
                 <td><span className={'pill ' + (u.active ? 'good' : 'crit')}>{u.active ? 'Active' : 'Disabled'}</span></td>
                 <td className="muted">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
-                <td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  {me.role === 'super_admin' && (
+                    <button className="btn link" onClick={() => { setErr(null); setEditU({ id: u.id, name: u.name, email: u.email, role: u.role, entity: u.entity, reason: '' }); }}>Edit</button>
+                  )}
                   {u.id !== me.id && (u.role !== 'super_admin' || me.role === 'super_admin') && (
                     u.active
                       ? <button className="btn link" onClick={() => setActive(u, false)}>Disable</button>
@@ -118,6 +135,41 @@ export default function Users() {
         Users are deactivated, never deleted (ISO 13485). Disabling revokes live sessions immediately;
         every change is recorded in the audit trail.
       </p>
+
+      {editU && (
+        <div className="modal-backdrop" onClick={() => setEditU(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={saveEdit}>
+            <h3>Edit user — {editU.email}</h3>
+            <div className="form-grid">
+              <div><label>Name</label>
+                <input required value={editU.name} onChange={(e) => setEditU({ ...editU, name: e.target.value })} /></div>
+              <div><label>Role</label>
+                <select value={editU.role} disabled={editU.id === me.id}
+                  onChange={(e) => setEditU({ ...editU, role: e.target.value })}>
+                  {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+                {editU.id === me.id && <div className="muted mini">You cannot change your own role.</div>}
+              </div>
+              <div><label>Entity</label>
+                <select value={editU.entity} onChange={(e) => setEditU({ ...editU, entity: e.target.value })}>
+                  {ENTITIES.map((x) => <option key={x}>{x}</option>)}
+                </select></div>
+              <div style={{ gridColumn: '1/-1' }}><label>Reason for the change (goes to the audit trail)</label>
+                <input value={editU.reason} placeholder="e.g. promoted to leader"
+                  onChange={(e) => setEditU({ ...editU, reason: e.target.value })} /></div>
+            </div>
+            <p className="muted mini" style={{ marginTop: 8 }}>
+              The Zoho e-mail is the person's sign-in identity and cannot be edited — disable this user
+              and add a new one if their e-mail changes. Role changes apply on their next page load.
+            </p>
+            {err && <p className="err">{err}</p>}
+            <div className="form-actions">
+              <button className="btn gold" type="submit">Save changes</button>
+              <button className="btn" type="button" onClick={() => setEditU(null)}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
   );
 }
