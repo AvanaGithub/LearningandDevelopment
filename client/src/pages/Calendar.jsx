@@ -76,7 +76,7 @@ export default function Calendar() {
                     style={{ background: 'var(--gold, #c8930a)', color: '#fff' }}
                     title={`MedTech Mavericks — ${b.name} (blocked ${b.start_date.slice(0, 10)} → ${(b.end_date || b.start_date).slice(0, 10)})`}
                     onClick={() => nav('/mavericks')}>
-                    ⛔ Mavericks · {b.name}
+                    Mavericks · {b.name}
                   </button>
                 ))}
                 {(byDay[k] || []).map((t) => (
