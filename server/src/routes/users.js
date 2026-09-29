@@ -3,7 +3,7 @@ const { query } = require('../db');
 const { requireRole, audit } = require('../auth');
 
 const router = express.Router();
-const ROLES = ['super_admin', 'admin', 'manager'];
+const ROLES = ['super_admin', 'admin', 'leader', 'manager'];
 const ENTITIES = ['AMD', 'ASS', 'ATS'];
 
 // All user-management routes need admin; writes that touch super_admins need super_admin.

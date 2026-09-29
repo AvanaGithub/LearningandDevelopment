@@ -46,7 +46,7 @@ async function requireAuth(req, res, next) {
     // it can only LOWER the effective role — every server check then sees it.
     req.user.real_role = req.user.role;
     if (req.user.act_role && req.user.role === 'super_admin' &&
-        ['manager', 'admin'].includes(req.user.act_role)) {
+        ['manager', 'leader', 'admin'].includes(req.user.act_role)) {
       req.user.role = req.user.act_role;
     }
     req.sessionToken = token;
@@ -54,9 +54,10 @@ async function requireAuth(req, res, next) {
   } catch (e) { next(e); }
 }
 
-const ROLE_RANK = { manager: 1, admin: 2, super_admin: 3 };
+const ROLE_RANK = { manager: 1, leader: 2, admin: 3, super_admin: 4 };
 
-// requireRole('admin') = admin or super_admin.
+// requireRole('admin') = admin or super_admin; requireRole('leader') also
+// admits leaders (manager access + expenses + Mavericks view).
 const requireRole = (minRole) => (req, res, next) => {
   if (ROLE_RANK[req.user.role] >= ROLE_RANK[minRole]) return next();
   res.status(403).json({ error: 'Insufficient permissions' });

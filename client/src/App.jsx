@@ -73,7 +73,7 @@ export default function App() {
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/expenses" element={<RequireAdmin><Expenses /></RequireAdmin>} />
             <Route path="/reports" element={<Reports />} />
-            <Route path="/mavericks" element={<Mavericks />} />
+            <Route path="/mavericks" element={<RequireLeader><Mavericks /></RequireLeader>} />
             <Route path="/joiners" element={<NewJoiners />} />
             <Route path="/users" element={<RequireAdmin><Users /></RequireAdmin>} />
             <Route path="/settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
@@ -96,5 +96,11 @@ function RequireUser({ user, children }) {
 function RequireAdmin({ children }) {
   const { user } = useAuth();
   if (user.role !== 'admin' && user.role !== 'super_admin') return <Navigate to="/" replace />;
+  return children;
+}
+
+function RequireLeader({ children }) {
+  const { user } = useAuth();
+  if (!['leader', 'admin', 'super_admin'].includes(user.role)) return <Navigate to="/" replace />;
   return children;
 }

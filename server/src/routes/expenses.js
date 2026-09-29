@@ -2,19 +2,22 @@ const express = require('express');
 const { query } = require('../db');
 const { requireRole, audit } = require('../auth');
 
-// Cost data is admin-only in its entirety (checklist K6).
+// Cost data is admin-only to change (checklist K6); leaders may read it
+// for the dashboard tile and the expense report.
 const router = express.Router();
-router.use(requireRole('admin'));
 
 const APPROVALS = ['pending', 'approved', 'rejected'];
 const ENTS = ['AMD', 'ASS', 'ATS'];
 
-router.get('/', async (req, res, next) => {
+router.get('/', requireRole('leader'), async (req, res, next) => {
   try {
     const { rows } = await query('SELECT * FROM expenses WHERE active ORDER BY id DESC LIMIT 500');
     res.json(rows);
   } catch (e) { next(e); }
 });
+
+// Everything below (create/edit/deactivate) stays strictly admin.
+router.use(requireRole('admin'));
 
 function pick(b) {
   const split = (Array.isArray(b.entity_split) ? b.entity_split : [])

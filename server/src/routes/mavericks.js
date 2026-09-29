@@ -60,7 +60,9 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
   } catch (e) { next(e); }
 });
 
-router.get('/:id', async (req, res, next) => {
+// Batch detail is for leaders and above; the bare list stays readable by
+// everyone because the calendar shows blocked batch dates.
+router.get('/:id', requireRole('leader'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const { rows: batch } = await query('SELECT * FROM mav_batches WHERE id=$1', [id]);
@@ -124,7 +126,7 @@ router.delete('/:id/members/:empId', requireRole('admin'), async (req, res, next
   } catch (e) { next(e); }
 });
 
-router.get('/:id/attendance', async (req, res, next) => {
+router.get('/:id/attendance', requireRole('leader'), async (req, res, next) => {
   try {
     const kind = req.query.kind === 'field' ? 'field' : 'classroom';
     const { rows } = await query(

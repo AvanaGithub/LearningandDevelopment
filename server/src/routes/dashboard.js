@@ -37,7 +37,8 @@ router.get('/', async (req, res, next) => {
 // prototype. Expense figures are included for admins only (checklist K6).
 router.get('/full', async (req, res, next) => {
   try {
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+    // Leaders see expense figures too (dashboard tile + expense report).
+    const isAdmin = ['admin', 'super_admin', 'leader'].includes(req.user.role);
     const [emps, trns, att, exp, mav] = await Promise.all([
       query(`SELECT id, name, entity, division, department, manager FROM employees WHERE active ORDER BY name`),
       query(`SELECT t.id, t.code, t.title, t.batch, t.status, t.mandatory, t.trainer_type, t.mode,

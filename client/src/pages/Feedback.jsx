@@ -219,7 +219,7 @@ export default function Feedback() {
                   <td className="muted">{fmtRange(t.days)}</td>
                   <td>{t.response_count} / {t.participant_count}</td>
                   <td>
-                    <button className="btn link" onClick={() => openRespond(t)}>Respond</button>
+                    {isAdmin && <button className="btn link" onClick={() => openRespond(t)}>Respond</button>}
                     <button className="btn link" onClick={() => openResults(t)}>Results</button>
                     {isAdmin && <button className="btn link" onClick={() => openBuilder(t)}>Edit form</button>}
                     {isAdmin && <button className="btn link" onClick={() => openImport(t)}>Import</button>}

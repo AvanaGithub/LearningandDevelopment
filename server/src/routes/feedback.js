@@ -85,7 +85,8 @@ router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '
 });
 
 // Submit (or update) my own response. One per user per training.
-router.post('/:trainingId', express.json(), async (req, res, next) => {
+// Managers/leaders are view-only — participants respond via the QR link.
+router.post('/:trainingId', requireRole('admin'), express.json(), async (req, res, next) => {
   try {
     const trainingId = Number(req.params.trainingId);
     const { rows: t } = await query('SELECT feedback_questions FROM trainings WHERE id=$1', [trainingId]);

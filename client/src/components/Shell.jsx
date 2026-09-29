@@ -1,14 +1,26 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
-import { ROLES } from '../api.js';
+import { api, ROLES } from '../api.js';
 
 const link = ({ isActive }) => (isActive ? 'active' : undefined);
 
 export default function Shell() {
   const { user, refresh } = useAuth();
   const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+  const isLeader = user.role === 'leader';
   const previewing = user.real_role === 'super_admin' && user.role !== 'super_admin';
+
+  // Managers/leaders get the New Joiners tab only while a reportee of
+  // theirs is still in the training phase (the server filters to them).
+  const [hasJoiners, setHasJoiners] = useState(isAdmin);
+  useEffect(() => {
+    if (isAdmin) { setHasJoiners(true); return; }
+    setHasJoiners(false);
+    api.get('/api/joiners?days=365')
+      .then((d) => setHasJoiners(d.employees.length > 0))
+      .catch(() => setHasJoiners(false));
+  }, [user.role]);
 
   const logout = async () => {
     await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
@@ -35,6 +47,7 @@ export default function Shell() {
             style={{ marginRight: 10, fontSize: 12 }}>
             <option value="">👁 View as: Super admin</option>
             <option value="admin">👁 View as: Admin</option>
+            <option value="leader">👁 View as: Leader</option>
             <option value="manager">👁 View as: Manager</option>
           </select>
         )}
@@ -62,9 +75,9 @@ export default function Shell() {
         <NavLink to="/feedback" className={link}>Feedback</NavLink>
         {isAdmin && <NavLink to="/expenses" className={link}>Expenses</NavLink>}
         <NavLink to="/reports" className={link}>Reports</NavLink>
-        <div className="sect">Programmes</div>
-        <NavLink to="/mavericks" className={link}>Mavericks</NavLink>
-        <NavLink to="/joiners" className={link}>New Joiners</NavLink>
+        {(isAdmin || isLeader || hasJoiners) && <div className="sect">Programmes</div>}
+        {(isAdmin || isLeader) && <NavLink to="/mavericks" className={link}>Mavericks</NavLink>}
+        {hasJoiners && <NavLink to="/joiners" className={link}>New Joiners</NavLink>}
         {isAdmin && (<>
           <div className="sect">Administration</div>
           <NavLink to="/users" className={link}>Users &amp; Access</NavLink>

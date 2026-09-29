@@ -66,6 +66,7 @@ function Picker({ label, options, onPick }) {
 export default function Reports() {
   const { user: me } = useAuth();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+  const canExpense = isAdmin || me.role === 'leader';
   const [open, setOpen] = useState(null);   // {title, header, rows, note}
   const [emps, setEmps] = useState([]);
   const [trns, setTrns] = useState([]);
@@ -235,6 +236,20 @@ export default function Reports() {
         : 'Nothing is overdue or due within 60 days. Set "Re-training validity (months)" on trainings to drive this report.');
   });
 
+  const expenseReport = guard(async () => {
+    const r = await api.get('/api/expenses');
+    show('Expense report',
+      ['Training', 'Dates', 'Category', 'Type', 'Vendor', 'Budget (₹)', 'Actual (₹)', 'Paid (₹)', 'Pending (₹)', 'Variance (₹)', 'Approval', 'Payment status'],
+      r.map((x) => {
+        const paid = (x.payments || []).reduce((a, p) => a + Number(p.amt), 0);
+        const status = x.payment_status || (paid >= Number(x.actual) ? 'paid' : paid > 0 ? 'partial' : 'unpaid');
+        return [x.training_label, x.dates || '', x.category || '', x.training_type || '', x.vendor || '',
+          Number(x.budget), Number(x.actual), paid, Number(x.actual) - paid, Number(x.budget) - Number(x.actual),
+          x.approval, status];
+      }),
+      `Pending = actual − paid · Variance = budget − actual. Total actual: ₹${inr(r.reduce((a, x) => a + Number(x.actual), 0))}.`);
+  });
+
   const evidencePack = guard(async () => {
     const d = await api.get('/api/reports/evidence');
     toWorkbook(`Audit-Evidence-Pack-${new Date().toISOString().slice(0, 10)}.xlsx`, [
@@ -262,6 +277,7 @@ export default function Reports() {
     { name: 'Planned vs actual — calendar adherence', desc: 'Per month: planned, completed, postponed, cancelled, adherence %.', run: adherence },
     { name: 'New joiner induction status', desc: 'Last 12 months of joiners against Induction trainings.', run: joiners },
     { name: 'Overdue & expiring re-trainings', desc: 'Validity-driven due list, 60-day horizon.', run: overdue },
+    ...(canExpense ? [{ name: 'Expense report', desc: 'Budget, actual, paid, pending and variance per training, with approval and payment status.', run: expenseReport }] : []),
     ...(isAdmin ? [{ name: 'Audit-ready evidence pack', desc: 'One Excel workbook: trainings, participants, attendance with timestamps, feedback, expenses and the audit trail.', run: evidencePack, download: true }] : []),
   ];
 
