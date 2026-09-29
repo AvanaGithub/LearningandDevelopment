@@ -37,6 +37,12 @@ router.get('/', async (req, res, next) => {
       params.push(active === 'true');
       cond.push(`active = $${params.length}`);
     }
+    // Managers and leaders see only their own reportees (matched on the
+    // "Reporting manager" field, "Mentor:" prefix ignored).
+    if (req.user.role === 'manager' || req.user.role === 'leader') {
+      params.push(String(req.user.name || '').trim().toLowerCase());
+      cond.push(`lower(btrim(regexp_replace(coalesce(manager,''), '^mentor:\\s*', '', 'i'))) = $${params.length}`);
+    }
     const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
     const { rows } = await query(
       `SELECT e.*,

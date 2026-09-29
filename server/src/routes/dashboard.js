@@ -64,14 +64,15 @@ router.get('/full', async (req, res, next) => {
              FROM mav_scores s JOIN mav_assessments a ON a.id=s.assessment_id) AS avg_score`),
     ]);
     const m = mav.rows[0];
+    // Mavericks stats follow the module's access: leaders and above.
     res.json({
       employees: emps.rows, trainings: trns.rows, attendance: att.rows, expenses: exp.rows,
-      mavericks: {
+      mavericks: isAdmin ? {
         trainees: m.trainees,
         att_pct: m.att_pct === null ? null : Number(m.att_pct),
         avg_score: m.avg_score === null ? null : Number(m.avg_score),
         completion_pct: m.trainees ? Math.round(m.completed / m.trainees * 100) : null,
-      },
+      } : null,
     });
   } catch (e) { next(e); }
 });
