@@ -319,7 +319,14 @@ export default function Trainings() {
                   <td>{t.trainer_type === 'external' ? (t.agency || t.trainer_name) : t.trainer_name}</td>
                   <td className="muted">{fmtRange(t.days)}</td>
                   <td style={{ textAlign: 'right' }}>{(t.days?.length || 0) * Number(t.hours_per_day)}</td>
-                  <td style={{ textAlign: 'right' }}>{t.participant_count}/{t.seats}</td>
+                  <td style={{ textAlign: 'right' }}
+                    title={t.marked_count > 0
+                      ? `${t.attended_count} attended (present/half-day) of ${t.participant_count} enrolled · ${t.seats} seats`
+                      : `${t.participant_count} enrolled of ${t.seats} seats — attendance not marked yet`}>
+                    {t.marked_count > 0
+                      ? <>{t.attended_count}/{t.participant_count}</>
+                      : <span className="muted">{t.participant_count}/{t.seats}</span>}
+                  </td>
                   <td><span className={'pill ' + statusPill(t.status)}>{TRN_STATUSES[t.status]}</span></td>
                 </tr>
               ))}

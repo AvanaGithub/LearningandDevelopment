@@ -9,7 +9,9 @@ const listSelect = `
   SELECT t.*,
     (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id = t.id) AS days,
     (SELECT count(*)::int FROM training_participants p WHERE p.training_id = t.id) AS participant_count,
-    (SELECT count(*)::int FROM feedback_responses f WHERE f.training_id = t.id) AS response_count
+    (SELECT count(*)::int FROM feedback_responses f WHERE f.training_id = t.id) AS response_count,
+    (SELECT count(DISTINCT a.employee_id)::int FROM attendance a WHERE a.training_id = t.id AND a.mark IN ('P','H')) AS attended_count,
+    (SELECT count(*)::int FROM attendance a WHERE a.training_id = t.id) AS marked_count
   FROM trainings t`;
 
 // Any signed-in role can view trainings and the calendar.
