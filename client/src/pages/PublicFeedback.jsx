@@ -18,6 +18,15 @@ export default function PublicFeedback() {
       .catch((e) => setErr(e.message));
   }, [token]);
 
+  // This training collects feedback on an external (Microsoft) form —
+  // send the participant straight there.
+  useEffect(() => {
+    if (t?.external_form_url) {
+      const id = setTimeout(() => { location.href = t.external_form_url; }, 800);
+      return () => clearTimeout(id);
+    }
+  }, [t]);
+
   const loginUrl = '/auth/zoho?ret=' + encodeURIComponent('/p/fb/' + token);
 
   const submit = async () => {
@@ -51,7 +60,16 @@ export default function PublicFeedback() {
             <p className="muted mini">{done.name} · {new Date(done.at).toLocaleString('en-IN')} · tagged to {t.title}.</p>
           </div>
         )}
-        {t && !done && (
+        {t && !done && t.external_form_url && (
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <p className="login-sub">Feedback · <b>{t.title}{t.batch ? ' — ' + t.batch : ''}</b></p>
+            <p style={{ fontSize: 13 }} className="muted">Taking you to the Microsoft Form…</p>
+            <a className="btn-primary" style={{ textDecoration: 'none' }} href={t.external_form_url}>
+              Open the feedback form
+            </a>
+          </div>
+        )}
+        {t && !done && !t.external_form_url && (
           <>
             <p className="login-sub" style={{ textAlign: 'center' }}>
               Feedback · <b>{t.title}{t.batch ? ' — ' + t.batch : ''}</b>

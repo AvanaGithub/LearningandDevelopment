@@ -18,7 +18,7 @@ const DEFAULT_QUESTIONS = [
 
 async function byToken(token) {
   const { rows } = await query(
-    `SELECT t.id, t.code, t.title, t.batch, t.status, t.feedback_questions,
+    `SELECT t.id, t.code, t.title, t.batch, t.status, t.feedback_questions, t.external_form_url,
        (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
      FROM trainings t WHERE t.public_token=$1 AND t.status <> 'cancelled'`, [String(token)]);
   return rows[0] || null;
@@ -47,6 +47,7 @@ router.get('/training/:token', async (req, res, next) => {
     res.json({
       code: t.code, title: t.title, batch: t.batch, days: t.days || [],
       questions: t.feedback_questions || DEFAULT_QUESTIONS,
+      external_form_url: t.external_form_url || null,
       sso: config.zoho.configured,
       me: me ? { name: me.name, assigned: await isAssigned(t.id, me.id) } : null,
     });

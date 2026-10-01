@@ -102,7 +102,21 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
                 </select>
               </div>
             ))}
-            <p className="muted mini" style={{ marginTop: 8 }}>{sheet.rows.length} row(s) found.</p>
+            {(() => {
+              const matched = sheet.rows.filter((r) => {
+                const key = String(r[idCol] || '').trim().toLowerCase();
+                return participants.some((x) =>
+                  (x.zoho_emp_id || '').toLowerCase() === key ||
+                  x.name.toLowerCase() === key ||
+                  (x.email || '').toLowerCase() === key);
+              }).length;
+              return (
+                <p className="muted mini" style={{ marginTop: 8 }}>
+                  <b>{matched}</b> of {sheet.rows.length} row(s) match this training's participant list —
+                  only those are imported; everyone else in the sheet is ignored.
+                </p>
+              );
+            })()}
           </>
         )}
         {err && <p className="err">{err}</p>}
@@ -186,15 +200,18 @@ export default function Feedback() {
         checked: new Set(STD_QS.filter((q) => current.includes(q))),
         custom: current.filter((q) => !STD_QS.includes(q)),
         newQ: '',
+        ext: d.external_form_url || '',
       });
     } catch (e) { setErr(e.message); }
   };
   const saveForm = async () => {
     try {
       const questions = [...STD_QS.filter((q) => builder.checked.has(q)), ...builder.custom];
-      await api.put(`/api/feedback/${builder.t.id}/form`, { questions });
-      toast(`Feedback form saved — ${questions.length} questions.`);
-      setBuilder(null);
+      await api.put(`/api/feedback/${builder.t.id}/form`, { questions, external_form_url: builder.ext.trim() || null });
+      toast(builder.ext.trim()
+        ? 'Saved — the QR/link now sends participants to the Microsoft Form.'
+        : `Feedback form saved — ${questions.length} questions.`);
+      setBuilder(null); load();
     } catch (e) { setErr(e.message); }
   };
 
@@ -215,7 +232,8 @@ export default function Feedback() {
             <tbody>
               {list.map((t) => (
                 <tr key={t.id}>
-                  <td>{t.title}{t.batch && <span className="pill soft mini" style={{ marginLeft: 6 }}>{t.batch}</span>}</td>
+                  <td>{t.title}{t.batch && <span className="pill soft mini" style={{ marginLeft: 6 }}>{t.batch}</span>}
+                    {t.external_form_url && <span className="pill warn mini" style={{ marginLeft: 6 }} title="The QR/link redirects to this Microsoft Form">MS Form</span>}</td>
                   <td className="muted">{fmtRange(t.days)}</td>
                   <td>{t.response_count} / {t.participant_count}</td>
                   <td>
@@ -282,6 +300,10 @@ export default function Feedback() {
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
             <h3>Results — {results.t.title}</h3>
             <p className="muted mini">{results.responses.length} response(s) · scale 1–5</p>
+            {results.external_form_url && (
+              <p className="muted mini">This training collects feedback on a <a href={results.external_form_url} target="_blank" rel="noreferrer">Microsoft Form</a> —
+                export responses there and use <b>Import</b> to bring the scores in.</p>
+            )}
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead><tr><th>Respondent</th>{results.questions.map((q, i) =>
@@ -340,6 +362,18 @@ export default function Feedback() {
               <button className="btn" disabled={!builder.newQ.trim()}
                 onClick={() => setBuilder({ ...builder, custom: [...builder.custom, builder.newQ.trim()], newQ: '' })}>+ Add</button>
             </div>
+            <p className="muted mini" style={{ marginTop: 14, marginBottom: 4 }}>
+              <b>Or use a Microsoft Form instead:</b> paste its share link and the same QR / link sends
+              participants to that form (the questions above are then not shown).
+            </p>
+            <input style={{ width: '100%' }} placeholder="https://forms.office.com/… (leave empty to use the questions above)"
+              value={builder.ext} onChange={(e) => setBuilder({ ...builder, ext: e.target.value })} />
+            {builder.ext.trim() && (
+              <p className="muted mini" style={{ marginTop: 4 }}>
+                Responses will be collected in Microsoft Forms — export them there and use this training's
+                <b> Import</b> button to bring the scores into the hub.
+              </p>
+            )}
             <div className="form-actions">
               <button className="btn gold" disabled={builder.checked.size + builder.custom.length < 1} onClick={saveForm}>Save form</button>
               <button className="btn" onClick={() => setBuilder(null)}>Cancel</button>
