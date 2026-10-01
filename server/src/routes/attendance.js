@@ -3,7 +3,7 @@ const { query } = require('../db');
 const { requireRole, audit } = require('../auth');
 
 const router = express.Router();
-const MARKS = ['P', 'A', 'H'];
+const MARKS = ['P', 'A', 'H', 'L'];
 
 // Marks for one training. Any signed-in role can view.
 router.get('/:trainingId', async (req, res, next) => {
@@ -23,7 +23,7 @@ router.put('/:trainingId', requireRole('admin'), express.json(), async (req, res
     const trainingId = Number(req.params.trainingId);
     const { employee_id, day, mark, reason } = req.body || {};
     if (!employee_id || !day) return res.status(400).json({ error: 'employee_id and day are required' });
-    if (mark !== null && !MARKS.includes(mark)) return res.status(400).json({ error: 'mark must be P, A, H or null' });
+    if (mark !== null && !MARKS.includes(mark)) return res.status(400).json({ error: 'mark must be P, A, H, L or null' });
     const { rows: prev } = await query(
       'SELECT mark FROM attendance WHERE training_id=$1 AND employee_id=$2 AND day=$3',
       [trainingId, employee_id, day]);

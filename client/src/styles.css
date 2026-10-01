@@ -92,6 +92,7 @@ tr.rowlink{cursor:pointer}
 .attcell.P{background:var(--good-soft);color:var(--good);border-color:transparent}
 .attcell.A{background:var(--crit-soft);color:var(--crit);border-color:transparent}
 .attcell.H{background:#F7EDD8;color:#A8720E;border-color:transparent}
+.attcell.L{background:#E8ECF7;color:#3D5A9E;border-color:transparent}
 .attcell:disabled{cursor:default;opacity:.9}
 
 /* ---- training calendar ---- */

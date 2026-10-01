@@ -5,7 +5,7 @@ import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
 import MSel from '../components/MSel.jsx';
 
-const CYCLE = { '': 'P', P: 'A', A: 'H', H: '' };
+const CYCLE = { '': 'P', P: 'A', A: 'H', H: 'L', L: '' };
 
 // Excel import: one row per participant, one column per date (header = the
 // date). Cells P/Present, A/Absent, H/Half. Rows map to the participant
@@ -45,6 +45,7 @@ function AttImport({ t, participants, onClose, onDone }) {
     if (/^(p|present|1|yes|y)$/.test(s)) return 'P';
     if (/^(a|absent|0|no|n)$/.test(s)) return 'A';
     if (/^(h|half|hd|0\.5)$/.test(s)) return 'H';
+    if (/^(l|leave|lv|on leave)$/.test(s)) return 'L';
     return null;
   };
 
@@ -77,7 +78,7 @@ function AttImport({ t, participants, onClose, onDone }) {
         {!sheet ? (
           <>
             <p className="muted mini">One row per participant, one column per date (header = the date, e.g. 01-Oct-2026).
-              Cells: P/Present, A/Absent, H/Half. Rows are matched to this training's participant list by Zoho ID, name or e-mail.</p>
+              Cells: P/Present, A/Absent, H/Half, L/Leave. Rows are matched to this training's participant list by Zoho ID, name or e-mail.</p>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} style={{ marginTop: 8 }} />
           </>
         ) : (
@@ -235,7 +236,7 @@ export default function Attendance() {
     <>
       <div className="page-head"><h2>Attendance</h2></div>
       <p className="muted" style={{ marginBottom: 12, fontSize: 12 }}>
-        – not marked · P present · A absent · H half-day. {isAdmin ? 'Click a cell to cycle, or use Edit for a correction with a recorded reason.' : 'View-only for your role.'} Eligibility assumes minimum 75% attendance.
+        – not marked · P present · A absent · H half-day · L leave. {isAdmin ? 'Click a cell to cycle, or use Edit for a correction with a recorded reason.' : 'View-only for your role.'} Eligibility assumes minimum 75% attendance.
       </p>
       <div className="toolbar">
         <MSel label="Trainings" sel={selIds} onChange={setSelIds}
@@ -341,6 +342,7 @@ export default function Attendance() {
                   <select value={editing.marks[day]} onChange={(e) => setEditing({ ...editing, marks: { ...editing.marks, [day]: e.target.value } })}>
                     <option value="">– not marked</option><option value="P">P — present</option>
                     <option value="A">A — absent</option><option value="H">H — half-day</option>
+                    <option value="L">L — leave</option>
                   </select></div>
               ))}
             </div>

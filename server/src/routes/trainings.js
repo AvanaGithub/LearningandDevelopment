@@ -62,6 +62,7 @@ const pickFields = (b) => ({
   title: b.title?.trim(),
   batch: b.batch?.trim() || null,
   category: b.category?.trim() || null,
+  department: b.department?.trim() || null,
   mode: b.mode?.trim() || null,
   trainer_type: b.trainer_type === 'external' ? 'external' : 'internal',
   trainer_name: b.trainer_name?.trim() || null,
@@ -89,10 +90,10 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const { rows: code } = await query(`SELECT 'TRG-' || nextval('training_code_seq') AS code`);
     const token = require('crypto').randomBytes(12).toString('hex');
     const { rows } = await query(
-      `INSERT INTO trainings (code, title, batch, category, mode, trainer_type, trainer_name, agency,
+      `INSERT INTO trainings (code, title, batch, category, department, mode, trainer_type, trainer_name, agency,
          hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-      [code[0].code, f.title, f.batch, f.category, f.mode, f.trainer_type, f.trainer_name, f.agency,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      [code[0].code, f.title, f.batch, f.category, f.department, f.mode, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
@@ -109,11 +110,11 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     const f = pickFields({ ...cur[0], ...b });
     if (!f.title) return res.status(400).json({ error: 'Title is required' });
     const { rows } = await query(
-      `UPDATE trainings SET title=$2, batch=$3, category=$4, mode=$5, trainer_type=$6, trainer_name=$7,
-         agency=$8, hours_per_day=$9, seats=$10, mandatory=$11, status=$12,
-         validity_months=$13, agenda_file=$14, updated_at=now()
+      `UPDATE trainings SET title=$2, batch=$3, category=$4, department=$5, mode=$6, trainer_type=$7,
+         trainer_name=$8, agency=$9, hours_per_day=$10, seats=$11, mandatory=$12, status=$13,
+         validity_months=$14, agenda_file=$15, updated_at=now()
        WHERE id=$1 RETURNING *`,
-      [id, f.title, f.batch, f.category, f.mode, f.trainer_type, f.trainer_name, f.agency,
+      [id, f.title, f.batch, f.category, f.department, f.mode, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file]);
     if (b.days !== undefined) {
       const days = [...new Set(b.days)].sort();

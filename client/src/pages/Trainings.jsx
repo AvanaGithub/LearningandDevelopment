@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, apiUpload, entLabel, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
+import { api, apiUpload, entLabel, DEPARTMENTS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -31,7 +31,7 @@ const spanDays = (from, to) =>
   Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000) + 1;
 
 const EMPTY = {
-  title: '', batch: '', category: 'Product', mode: 'Classroom',
+  title: '', batch: '', category: 'Product', department: '', mode: 'Classroom',
   trainer_type: 'internal', trainer_name: '', agency: '',
   numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
   mandatory: false, status: 'planned', validity_months: '',
@@ -44,6 +44,7 @@ export default function Trainings() {
   const toast = useToast();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
   const categories = settings?.trn_categories || TRN_CATEGORIES;
+  const departments = settings?.departments || DEPARTMENTS;
 
   const uploadAgenda = async (files) => {
     try {
@@ -69,6 +70,8 @@ export default function Trainings() {
   const [sel, setSel] = useState(null);       // training detail (with participants)
   const [emps, setEmps] = useState([]);
   const [addEmps, setAddEmps] = useState([]);   // multi-choice add-participant selection
+  const [pDept, setPDept] = useState('');       // narrow the add-participant list by department
+  const [pMgr, setPMgr] = useState('');         // …and by reporting manager
   const [removing, setRemoving] = useState(null); // {empId, reason}
   const [importing, setImporting] = useState(false);
   const [qr, setQr] = useState(null);             // {title, url, desc}
@@ -166,6 +169,7 @@ export default function Trainings() {
     setSel(null);
     setForm({
       id: t.id, title: t.title, batch: t.batch || '', category: t.category || 'Product',
+      department: t.department || '',
       mode: t.mode || 'Classroom', trainer_type: t.trainer_type, trainer_name: t.trainer_name || '',
       agency: t.agency || '', numDays: days.length || 1,
       from: days[0] ? days[0].slice(0, 10) : '', to: days.length ? days[days.length - 1].slice(0, 10) : '',
@@ -241,6 +245,11 @@ export default function Trainings() {
             <div><label>Category</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {categories.map((x) => <option key={x}>{x}</option>)}
+              </select></div>
+            <div><label>Department (optional)</label>
+              <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+                <option value="">All departments</option>
+                {departments.map((x) => <option key={x}>{x}</option>)}
               </select></div>
             <div><label>Mode</label>
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
@@ -342,6 +351,7 @@ export default function Trainings() {
             <h3>{sel.code} · {sel.title}{sel.batch ? ` — ${sel.batch}` : ''}</h3>
             <dl className="kv">
               <dt>Category / Mode</dt><dd>{[sel.category, sel.mode].filter(Boolean).join(' · ') || '—'}</dd>
+              {sel.department && <><dt>Department</dt><dd>{sel.department}</dd></>}
               <dt>Trainer</dt><dd>{sel.trainer_type === 'external'
                 ? `${sel.agency || '—'}${sel.trainer_name ? ' — ' + sel.trainer_name : ''} (external)`
                 : `${sel.trainer_name || '—'} (internal)`}</dd>
@@ -371,18 +381,33 @@ export default function Trainings() {
                 <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
               </div>
             )}
-            {isAdmin && !removing && (
-              <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                <MSel label="Add participants" empty="none picked" allowAll
-                  options={emps.filter((e) => !sel.participants.some((p) => p.id === e.id))
-                    .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || entLabel(e.entity)}` }))}
-                  sel={addEmps} onChange={setAddEmps} />
-                <button className="btn gold" disabled={!addEmps.length} onClick={addParticipant}>
-                  Add{addEmps.length > 1 ? ` ${addEmps.length}` : ''}
-                </button>
-                <span className="muted mini">{sel.seats - sel.participants.length} seat(s) left</span>
-              </div>
-            )}
+            {isAdmin && !removing && (() => {
+              const mgrOf = (e) => (e.manager || '').replace(/^Mentor:\s*/i, '').trim();
+              const pool = emps.filter((e) => !sel.participants.some((p) => p.id === e.id));
+              const depts = [...new Set(pool.map((e) => e.department).filter(Boolean))].sort();
+              const mgrs = [...new Set(pool.map(mgrOf).filter(Boolean))].sort();
+              const options = pool
+                .filter((e) => (!pDept || e.department === pDept) && (!pMgr || mgrOf(e) === pMgr))
+                .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || entLabel(e.entity)}` }));
+              return (
+                <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select value={pDept} onChange={(e) => { setPDept(e.target.value); setAddEmps([]); }} title="Narrow the list by department">
+                    <option value="">All departments</option>
+                    {depts.map((d) => <option key={d}>{d}</option>)}
+                  </select>
+                  <select value={pMgr} onChange={(e) => { setPMgr(e.target.value); setAddEmps([]); }} title="Narrow the list by reporting manager">
+                    <option value="">All managers</option>
+                    {mgrs.map((m) => <option key={m}>{m}</option>)}
+                  </select>
+                  <MSel label="Add participants" empty="none picked" allowAll
+                    options={options} sel={addEmps} onChange={setAddEmps} />
+                  <button className="btn gold" disabled={!addEmps.length} onClick={addParticipant}>
+                    Add{addEmps.length > 1 ? ` ${addEmps.length}` : ''}
+                  </button>
+                  <span className="muted mini">{sel.seats - sel.participants.length} seat(s) left</span>
+                </div>
+              );
+            })()}
             {err && <p className="err">{err}</p>}
             <div className="form-actions" style={{ flexWrap: 'wrap' }}>
               {isAdmin && <button className="btn gold" onClick={() => edit(sel)}>Edit</button>}
