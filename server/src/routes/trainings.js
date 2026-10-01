@@ -62,7 +62,10 @@ const pickFields = (b) => ({
   title: b.title?.trim(),
   batch: b.batch?.trim() || null,
   category: b.category?.trim() || null,
-  department: b.department?.trim() || null,
+  // Accepts one department, several (array -> comma-separated), or none.
+  department: Array.isArray(b.department)
+    ? (b.department.map((d) => String(d).trim()).filter(Boolean).join(', ') || null)
+    : (b.department?.trim() || null),
   mode: b.mode?.trim() || null,
   trainer_type: b.trainer_type === 'external' ? 'external' : 'internal',
   trainer_name: b.trainer_name?.trim() || null,

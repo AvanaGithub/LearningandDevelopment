@@ -31,7 +31,7 @@ const spanDays = (from, to) =>
   Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000) + 1;
 
 const EMPTY = {
-  title: '', batch: '', category: 'Product', department: '', mode: 'Classroom',
+  title: '', batch: '', category: 'Product', department: [], mode: 'Classroom',
   trainer_type: 'internal', trainer_name: '', agency: '',
   numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
   mandatory: false, status: 'planned', validity_months: '',
@@ -169,7 +169,7 @@ export default function Trainings() {
     setSel(null);
     setForm({
       id: t.id, title: t.title, batch: t.batch || '', category: t.category || 'Product',
-      department: t.department || '',
+      department: t.department ? t.department.split(',').map((s) => s.trim()).filter(Boolean) : [],
       mode: t.mode || 'Classroom', trainer_type: t.trainer_type, trainer_name: t.trainer_name || '',
       agency: t.agency || '', numDays: days.length || 1,
       from: days[0] ? days[0].slice(0, 10) : '', to: days.length ? days[days.length - 1].slice(0, 10) : '',
@@ -246,11 +246,11 @@ export default function Trainings() {
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {categories.map((x) => <option key={x}>{x}</option>)}
               </select></div>
-            <div><label>Department (optional)</label>
-              <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
-                <option value="">All departments</option>
-                {departments.map((x) => <option key={x}>{x}</option>)}
-              </select></div>
+            <div><label>Departments (optional — tick several for a joint training)</label>
+              <MSel label="Departments" empty="All departments" allowAll
+                options={departments.map((x) => ({ v: x, t: x }))}
+                sel={form.department} onChange={(v) => setForm({ ...form, department: v })} />
+            </div>
             <div><label>Mode</label>
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
                 {TRN_MODES.map((x) => <option key={x}>{x}</option>)}
