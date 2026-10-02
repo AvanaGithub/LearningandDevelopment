@@ -107,6 +107,10 @@ tr.rowlink{cursor:pointer}
 
 /* ---- multi-choice filter dropdown ---- */
 details.msel{position:relative;display:inline-block}
+/* Inside a form grid the dropdown lines up like the inputs around it. */
+.form-grid details.msel{display:block;width:100%}
+.form-grid details.msel>summary{display:block;width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--panel2)}
+.form-grid details.msel .menu{width:100%;box-sizing:border-box;min-width:0}
 details.msel>summary{list-style:none;cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 14px;font-size:13px}
 details.msel[open]>summary{background:var(--panel2)}
 details.msel .menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(33,27,16,.12);padding:10px 14px;min-width:280px;max-height:300px;overflow:auto}

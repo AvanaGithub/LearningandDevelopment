@@ -66,6 +66,9 @@ const pickFields = (b) => ({
   department: Array.isArray(b.department)
     ? (b.department.map((d) => String(d).trim()).filter(Boolean).join(', ') || null)
     : (b.department?.trim() || null),
+  division: Array.isArray(b.division)
+    ? (b.division.map((d) => String(d).trim()).filter(Boolean).join(', ') || null)
+    : (b.division?.trim() || null),
   mode: b.mode?.trim() || null,
   trainer_type: b.trainer_type === 'external' ? 'external' : 'internal',
   trainer_name: b.trainer_name?.trim() || null,
@@ -93,10 +96,10 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const { rows: code } = await query(`SELECT 'TRG-' || nextval('training_code_seq') AS code`);
     const token = require('crypto').randomBytes(12).toString('hex');
     const { rows } = await query(
-      `INSERT INTO trainings (code, title, batch, category, department, mode, trainer_type, trainer_name, agency,
+      `INSERT INTO trainings (code, title, batch, category, department, division, mode, trainer_type, trainer_name, agency,
          hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-      [code[0].code, f.title, f.batch, f.category, f.department, f.mode, f.trainer_type, f.trainer_name, f.agency,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+      [code[0].code, f.title, f.batch, f.category, f.department, f.division, f.mode, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
@@ -113,12 +116,12 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     const f = pickFields({ ...cur[0], ...b });
     if (!f.title) return res.status(400).json({ error: 'Title is required' });
     const { rows } = await query(
-      `UPDATE trainings SET title=$2, batch=$3, category=$4, department=$5, mode=$6, trainer_type=$7,
-         trainer_name=$8, agency=$9, hours_per_day=$10, seats=$11, mandatory=$12, status=$13,
-         validity_months=$14, agenda_file=$15, updated_at=now()
+      `UPDATE trainings SET title=$2, batch=$3, category=$4, department=$5, division=$6, mode=$7,
+         trainer_type=$8, trainer_name=$9, agency=$10, hours_per_day=$11, seats=$12, mandatory=$13,
+         status=$14, validity_months=$15, agenda_file=$16, updated_at=now()
        WHERE id=$1 RETURNING *`,
-      [id, f.title, f.batch, f.category, f.department, f.mode, f.trainer_type, f.trainer_name, f.agency,
-       f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file]);
+      [id, f.title, f.batch, f.category, f.department, f.division, f.mode, f.trainer_type, f.trainer_name,
+       f.agency, f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file]);
     if (b.days !== undefined) {
       const days = [...new Set(b.days)].sort();
       if (!validDays(days)) return res.status(400).json({ error: 'Pick between 1 and 60 training dates' });
@@ -137,10 +140,9 @@ router.post('/:id/participants', requireRole('admin'), express.json(), async (re
   try {
     const id = Number(req.params.id);
     const employeeId = Number(req.body?.employee_id);
+    // Seats are informational only — org-wide trainings may exceed them.
     const { rows: t } = await query('SELECT seats FROM trainings WHERE id=$1', [id]);
     if (!t.length) return res.status(404).json({ error: 'Not found' });
-    const { rows: n } = await query('SELECT count(*)::int AS n FROM training_participants WHERE training_id=$1', [id]);
-    if (n[0].n >= t[0].seats) return res.status(409).json({ error: `Batch is full (${t[0].seats} seats)` });
     await query(
       'INSERT INTO training_participants (training_id, employee_id, added_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
       [id, employeeId, req.user.id]);

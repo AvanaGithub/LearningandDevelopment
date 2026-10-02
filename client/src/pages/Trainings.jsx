@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, apiUpload, entLabel, DEPARTMENTS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
+import { api, apiUpload, entLabel, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -31,7 +31,7 @@ const spanDays = (from, to) =>
   Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000) + 1;
 
 const EMPTY = {
-  title: '', batch: '', category: 'Product', department: [], mode: 'Classroom',
+  title: '', batch: '', category: 'Product', department: [], division: [], mode: 'Classroom',
   trainer_type: 'internal', trainer_name: '', agency: '',
   numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
   mandatory: false, status: 'planned', validity_months: '',
@@ -45,6 +45,7 @@ export default function Trainings() {
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
   const categories = settings?.trn_categories || TRN_CATEGORIES;
   const departments = settings?.departments || DEPARTMENTS;
+  const divisions = settings?.divisions || DIVISIONS;
 
   const uploadAgenda = async (files) => {
     try {
@@ -170,6 +171,7 @@ export default function Trainings() {
     setForm({
       id: t.id, title: t.title, batch: t.batch || '', category: t.category || 'Product',
       department: t.department ? t.department.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      division: t.division ? t.division.split(',').map((s) => s.trim()).filter(Boolean) : [],
       mode: t.mode || 'Classroom', trainer_type: t.trainer_type, trainer_name: t.trainer_name || '',
       agency: t.agency || '', numDays: days.length || 1,
       from: days[0] ? days[0].slice(0, 10) : '', to: days.length ? days[days.length - 1].slice(0, 10) : '',
@@ -246,10 +248,15 @@ export default function Trainings() {
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {categories.map((x) => <option key={x}>{x}</option>)}
               </select></div>
-            <div><label>Departments (optional — tick several for a joint training)</label>
+            <div><label>Departments (optional)</label>
               <MSel label="Departments" empty="All departments" allowAll
                 options={departments.map((x) => ({ v: x, t: x }))}
                 sel={form.department} onChange={(v) => setForm({ ...form, department: v })} />
+            </div>
+            <div><label>Divisions (optional)</label>
+              <MSel label="Divisions" empty="All divisions" allowAll
+                options={divisions.map((x) => ({ v: x, t: x }))}
+                sel={form.division} onChange={(v) => setForm({ ...form, division: v })} />
             </div>
             <div><label>Mode</label>
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
@@ -351,7 +358,8 @@ export default function Trainings() {
             <h3>{sel.code} · {sel.title}{sel.batch ? ` — ${sel.batch}` : ''}</h3>
             <dl className="kv">
               <dt>Category / Mode</dt><dd>{[sel.category, sel.mode].filter(Boolean).join(' · ') || '—'}</dd>
-              {sel.department && <><dt>Department</dt><dd>{sel.department}</dd></>}
+              {sel.department && <><dt>Departments</dt><dd>{sel.department}</dd></>}
+              {sel.division && <><dt>Divisions</dt><dd>{sel.division}</dd></>}
               <dt>Trainer</dt><dd>{sel.trainer_type === 'external'
                 ? `${sel.agency || '—'}${sel.trainer_name ? ' — ' + sel.trainer_name : ''} (external)`
                 : `${sel.trainer_name || '—'} (internal)`}</dd>
@@ -404,7 +412,7 @@ export default function Trainings() {
                   <button className="btn gold" disabled={!addEmps.length} onClick={addParticipant}>
                     Add{addEmps.length > 1 ? ` ${addEmps.length}` : ''}
                   </button>
-                  <span className="muted mini">{sel.seats - sel.participants.length} seat(s) left</span>
+                  <span className="muted mini">{sel.participants.length} added · seats are a guide, not a limit</span>
                 </div>
               );
             })()}
