@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, ENTITIES, ENTITY_NAMES, entLabel, DIVISIONS, DEPARTMENTS, EMP_TYPES } from '../api.js';
+import { api, ENTITIES, ENTITY_NAMES, entLabel, toISODay, DIVISIONS, DEPARTMENTS, EMP_TYPES } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -61,7 +61,7 @@ const normEntity = (v) => {
 const normDate = (v) => {
   if (!v) return null;
   const t = Date.parse(v);
-  return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+  return isNaN(t) ? null : toISODay(new Date(t));
 };
 
 const EMPTY = {

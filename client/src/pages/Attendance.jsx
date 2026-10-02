@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDay, fmtDate, fmtRange } from '../api.js';
+import { api, fmtDay, fmtDate, fmtRange, toISODay } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
 import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
@@ -27,7 +27,7 @@ function AttImport({ t, participants, onClose, onDone }) {
       if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
       const dateCols = headers.map((h, i) => {
         const ts = Date.parse(h);
-        return isNaN(ts) ? null : { i, day: new Date(ts).toISOString().slice(0, 10) };
+        return isNaN(ts) ? null : { i, day: toISODay(new Date(ts)) };
       }).filter(Boolean);
       const matched = dateCols.filter((d) => trnDays.includes(d.day));
       if (!matched.length) {

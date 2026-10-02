@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, fmtDay, inr } from '../api.js';
+import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, fmtDay, inr, toISODay } from '../api.js';
 import { useAuth } from '../App.jsx';
 import MSel from '../components/MSel.jsx';
 
@@ -69,7 +69,7 @@ export default function Dashboard() {
       pendingExp = scoped.filter((x) => x.approval === 'pending').length;
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toISODay(new Date());
     const upcoming = trns
       .filter((t) => ['planned', 'confirmed', 'in_progress'].includes(t.status) &&
         (t.days || []).some((d) => d.slice(0, 10) >= today))

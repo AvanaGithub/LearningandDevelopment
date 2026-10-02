@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { fmtDate } from '../api.js';
+import { fmtDate, toISODay } from '../api.js';
 
 // QR attendance page. The participant signs in with THEIR OWN Zoho account —
 // nobody can mark attendance for someone else.
@@ -17,7 +17,7 @@ export default function PublicCheckin() {
       .then((r) => r.json().then((d) => (r.ok ? d : Promise.reject(new Error(d.error)))))
       .then((d) => {
         setT(d);
-        const today = new Date().toISOString().slice(0, 10);
+        const today = toISODay(new Date());
         const days = (d.days || []).map((x) => x.slice(0, 10));
         setDay(days.includes(today) ? today : days[0] || '');
       })

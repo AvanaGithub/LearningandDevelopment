@@ -60,6 +60,11 @@ export const EXP_CATEGORIES = ['Food / Catering', 'Flight', 'Venue / Conference 
   'Local Transportation', 'Train', 'Training materials', 'Printing', 'Others'];
 
 // Formatting helpers (IST conventions from the checklist).
+// Local-calendar YYYY-MM-DD. NEVER use toISOString() for calendar days:
+// it converts to UTC, which in IST lands 5½ hours earlier — the previous day.
+export const toISODay = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 export const fmtDay = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '');
 export const fmtRange = (days) => {

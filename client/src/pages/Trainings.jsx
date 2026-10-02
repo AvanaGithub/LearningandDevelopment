@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, apiUpload, entLabel, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
+import { api, apiUpload, entLabel, toISODay, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -21,7 +21,7 @@ const IMPORT_FIELDS = [
   { key: 'mandatory', label: 'Mandatory (yes/no)', syn: ['mandatory', 'compulsory'] },
 ];
 
-const iso = (d) => d.toISOString().slice(0, 10);
+const iso = (d) => toISODay(d);
 const addDays = (isoDate, n) => {
   const d = new Date(isoDate + 'T00:00:00');
   d.setDate(d.getDate() + n);
@@ -84,7 +84,7 @@ export default function Trainings() {
       try {
         const days = String(o.dates || '').split(/[,;|]/).map((s) => {
           const t = Date.parse(s.trim());
-          return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+          return isNaN(t) ? null : toISODay(new Date(t));
         }).filter(Boolean);
         if (!days.length) throw new Error('No valid dates in "' + o.dates + '"');
         const external = /ext/i.test(o.trainer_type || '');
