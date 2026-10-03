@@ -80,6 +80,62 @@ router.get('/feedback-summary', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Compliance dataset: every mandatory training with per-participant status.
+// Status progresses Assigned -> Nominated -> Attended -> Completed; a
+// nomination alone NEVER counts as complete. "Leader" is derived as the
+// reporting manager's own manager from the employee master.
+router.get('/compliance-detail', async (req, res, next) => {
+  try {
+    if (req.user.role === 'manager') return res.status(403).json({ error: 'Insufficient permissions' });
+    const [trns, parts, att, emps] = await Promise.all([
+      query(`SELECT t.id, t.code, t.title, t.batch, t.status, t.nom_deadline, t.completion_deadline,
+               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
+             FROM trainings t WHERE t.mandatory AND t.status <> 'cancelled' ORDER BY t.id`),
+      query(`SELECT p.training_id, p.added_at, e.id AS employee_id, e.name, e.zoho_emp_id, e.entity,
+                    e.department, e.division, e.location, e.manager,
+                    n.slot, n.source, n.nominated_by, n.created_at AS nominated_at
+             FROM training_participants p
+             JOIN employees e ON e.id = p.employee_id
+             LEFT JOIN nominations n ON n.training_id = p.training_id AND n.employee_id = p.employee_id AND n.status='confirmed'
+             ORDER BY e.name`),
+      query(`SELECT training_id, employee_id,
+               sum(CASE mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::float AS units
+             FROM attendance GROUP BY training_id, employee_id`),
+      query(`SELECT name, manager FROM employees`),
+    ]);
+    const mgrOfName = {};
+    emps.rows.forEach((e) => {
+      mgrOfName[e.name.trim().toLowerCase()] = (e.manager || '').replace(/^Mentor:\s*/i, '').trim();
+    });
+    const attMap = {};
+    att.rows.forEach((a) => { attMap[a.training_id + ':' + a.employee_id] = a.units; });
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = [];
+    for (const t of trns.rows) {
+      const days = (t.days || []).map((d) => d.slice(0, 10));
+      const over = t.status === 'completed' || (days.length && days[days.length - 1] < today);
+      for (const p of parts.rows.filter((x) => x.training_id === t.id)) {
+        const manager = (p.manager || '').replace(/^Mentor:\s*/i, '').trim();
+        const units = attMap[t.id + ':' + p.employee_id] || 0;
+        const attended = units > 0;
+        const status = t.status === 'completed' && attended ? 'completed'
+          : attended ? 'attended' : over ? 'not_attended' : 'pending';
+        rows.push({
+          training_id: t.id, code: t.code, title: t.title, batch: t.batch,
+          training_date: days[0] || null, last_day: days[days.length - 1] || null,
+          employee_id: p.employee_id, name: p.name, zoho_emp_id: p.zoho_emp_id,
+          entity: p.entity, department: p.department, division: p.division, location: p.location,
+          manager, leader: mgrOfName[manager.toLowerCase()] || '',
+          slot: p.slot, source: p.source || 'admin', nominated_by: p.nominated_by,
+          assigned_at: p.added_at || p.nominated_at || null,
+          status,
+        });
+      }
+    }
+    res.json({ trainings: trns.rows, rows });
+  } catch (e) { next(e); }
+});
+
 // Everything an ISO 13485 auditor asks for, in one payload — the client
 // turns it into a multi-sheet Excel evidence pack. Admin only.
 router.get('/evidence', async (req, res, next) => {

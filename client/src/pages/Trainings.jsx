@@ -36,6 +36,7 @@ const EMPTY = {
   numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
   mandatory: false, status: 'planned', validity_months: '',
   agenda_file: null, agenda_name: '', reason: '',
+  nom_self: false, nom_manager: false, nom_leader: false, nom_deadline: '', completion_deadline: '',
 };
 
 export default function Trainings() {
@@ -73,6 +74,7 @@ export default function Trainings() {
   const [addEmps, setAddEmps] = useState([]);   // multi-choice add-participant selection
   const [pDept, setPDept] = useState('');       // narrow the add-participant list by department
   const [pMgr, setPMgr] = useState('');         // …and by reporting manager
+  const [nomSlot, setNomSlot] = useState('');   // preferred slot for a manager/leader nomination
   const [removing, setRemoving] = useState(null); // {empId, reason}
   const [importing, setImporting] = useState(false);
   const [qr, setQr] = useState(null);             // {title, url, desc}
@@ -178,6 +180,9 @@ export default function Trainings() {
       hours_per_day: Number(t.hours_per_day), seats: t.seats, mandatory: t.mandatory,
       status: t.status, validity_months: t.validity_months || '',
       agenda_file: t.agenda_file || null, agenda_name: t.agenda_file ? 'Current agenda' : '', reason: '',
+      nom_self: Boolean(t.nom_self), nom_manager: Boolean(t.nom_manager), nom_leader: Boolean(t.nom_leader),
+      nom_deadline: t.nom_deadline ? t.nom_deadline.slice(0, 10) : '',
+      completion_deadline: t.completion_deadline ? t.completion_deadline.slice(0, 10) : '',
     });
     setErr(null);
   };
@@ -197,6 +202,15 @@ export default function Trainings() {
     openDetail(sel.id);
     load();
   };
+  const nominate = async () => {
+    try {
+      const r = await api.post(`/api/trainings/${sel.id}/nominate`, { employee_ids: addEmps.map(Number), slot: nomSlot });
+      toast(`${r.added} nominated${r.already ? ` · ${r.already} already on the training` : ''}${r.not_reportees ? ` · ${r.not_reportees} skipped (not your reportees)` : ''}.`);
+      setAddEmps([]); setNomSlot('');
+      openDetail(sel.id); load();
+    } catch (e2) { setErr(e2.message); }
+  };
+
   const removeParticipant = async () => {
     try {
       await api.del(`/api/trainings/${sel.id}/participants/${removing.empId}?reason=` + encodeURIComponent(removing.reason));
@@ -304,6 +318,32 @@ export default function Trainings() {
                 : <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xlsx" onChange={(e) => e.target.files.length && uploadAgenda(e.target.files)} />}
             </div>
             {form.id && F('Reason for this correction', 'reason', { placeholder: 'Goes to the audit trail (optional)' })}
+            {me.role === 'super_admin' && (
+              <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+                <b style={{ fontSize: 13 }}>Who can nominate? <span className="muted mini">(super admin only — admins always assign directly)</span></b>
+                <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', margin: '8px 0' }}>
+                  {[['nom_self', 'Employees can nominate themselves (via the nomination QR/link)'],
+                    ['nom_manager', 'Managers can nominate their team members'],
+                    ['nom_leader', 'Leaders can nominate their team members']].map(([k, label]) => (
+                    <label key={k} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.checked })} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <label className="muted mini">Nomination deadline
+                    <input type="date" style={{ marginLeft: 6 }} value={form.nom_deadline}
+                      onChange={(e) => setForm({ ...form, nom_deadline: e.target.value })} /></label>
+                  <label className="muted mini">Completion deadline
+                    <input type="date" style={{ marginLeft: 6 }} value={form.completion_deadline}
+                      onChange={(e) => setForm({ ...form, completion_deadline: e.target.value })} /></label>
+                </div>
+                <p className="muted mini" style={{ margin: '6px 0 0' }}>
+                  Self-nomination respects the Departments/Divisions above — employees outside them cannot nominate themselves.
+                </p>
+              </div>
+            )}
           </div>
           {form.numDays > 1 && form.from && form.to &&
             <p className="muted mini" style={{ marginTop: 8 }}>Blocked automatically: {fmtDate(form.from)} → {fmtDate(form.to)} · {form.numDays} consecutive days.</p>}
@@ -368,6 +408,13 @@ export default function Trainings() {
               <dt>Seats</dt><dd>{sel.participants.length}/{sel.seats} filled</dd>
               <dt>Mandatory</dt><dd>{sel.mandatory ? `Yes${sel.validity_months ? ` · re-training every ${sel.validity_months} months` : ''}` : 'No'}</dd>
               <dt>Status</dt><dd><span className={'pill ' + statusPill(sel.status)}>{TRN_STATUSES[sel.status]}</span></dd>
+              {(sel.nom_self || sel.nom_manager || sel.nom_leader) && <>
+                <dt>Nominations</dt><dd>
+                  {[sel.nom_self && 'Self', sel.nom_manager && 'Managers', sel.nom_leader && 'Leaders'].filter(Boolean).join(' · ')}
+                  {sel.nom_deadline && <span className="muted"> · until {fmtDate(sel.nom_deadline)}</span>}
+                </dd>
+              </>}
+              {sel.completion_deadline && <><dt>Complete by</dt><dd>{fmtDate(sel.completion_deadline)}</dd></>}
               {sel.agenda_file && <><dt>Agenda</dt><dd><a href={'/api/files/' + sel.agenda_file} target="_blank" rel="noreferrer">📄 View / download agenda</a></dd></>}
             </dl>
 
@@ -375,7 +422,13 @@ export default function Trainings() {
             {sel.participants.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
                 <span className="muted">{p.zoho_emp_id || '—'}</span>
-                <span style={{ flex: 1 }}>{p.name} · {entLabel(p.entity)}</span>
+                <span style={{ flex: 1 }}>{p.name} · {entLabel(p.entity)}
+                  <span className="pill soft mini" style={{ marginLeft: 6 }}
+                    title={p.nominated_by ? `By ${p.nominated_by}` : ''}>
+                    {{ self: 'Self', manager: 'Manager', leader: 'Leader', admin: 'Admin' }[p.nom_source || 'admin']}
+                  </span>
+                  {p.nom_slot && <span className="pill warn mini" style={{ marginLeft: 4 }}>Slot: {p.nom_slot}</span>}
+                </span>
                 {isAdmin && (removing?.empId === p.id ? null :
                   <button className="btn link" onClick={() => setRemoving({ empId: p.id, name: p.name, reason: '' })}>Remove…</button>)}
               </div>
@@ -416,6 +469,28 @@ export default function Trainings() {
                 </div>
               );
             })()}
+            {!isAdmin && ((me.role === 'manager' && sel.nom_manager) || (me.role === 'leader' && sel.nom_leader)) && (() => {
+              const mine = emps.filter((e) =>
+                (e.manager || '').replace(/^Mentor:\s*/i, '').trim().toLowerCase() === (me.name || '').trim().toLowerCase() &&
+                !sel.participants.some((p) => p.id === e.id));
+              return (
+                <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                  <MSel label="Nominate team member(s)" empty="none picked" allowAll
+                    options={mine.map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || entLabel(e.entity)}` }))}
+                    sel={addEmps} onChange={setAddEmps} />
+                  <select value={nomSlot} onChange={(e) => setNomSlot(e.target.value)} title="Preferred slot">
+                    <option value="">Any slot / day</option>
+                    {(sel.days || []).map((d) => <option key={d} value={fmtDate(d)}>{fmtDate(d)}</option>)}
+                  </select>
+                  <button className="btn gold" disabled={!addEmps.length} onClick={nominate}>
+                    Nominate{addEmps.length > 1 ? ` ${addEmps.length}` : ''}
+                  </button>
+                  <span className="muted mini">
+                    Your reportees only{sel.nom_deadline ? ` · until ${fmtDate(sel.nom_deadline)}` : ''}
+                  </span>
+                </div>
+              );
+            })()}
             {err && <p className="err">{err}</p>}
             <div className="form-actions" style={{ flexWrap: 'wrap' }}>
               {isAdmin && <button className="btn gold" onClick={() => edit(sel)}>Edit</button>}
@@ -425,6 +500,13 @@ export default function Trainings() {
                   url: `${location.origin}/p/att/${sel.public_token}`,
                   desc: 'Display this at the venue. A participant scans it on their phone, picks their name, and is marked Present for the day — tagged to ' + sel.code + ' automatically.',
                 })}>▦ Attendance QR</button>
+              )}
+              {isAdmin && sel.public_token && sel.nom_self && (
+                <button className="btn" onClick={() => setQr({
+                  title: 'Nomination QR — ' + sel.title,
+                  url: `${location.origin}/p/nom/${sel.public_token}`,
+                  desc: 'Share this QR or link — employees sign in with Zoho and nominate themselves. Only eligible departments/divisions, until the nomination deadline.',
+                })}>▦ Nomination QR</button>
               )}
               {isAdmin && sel.public_token && (
                 <button className="btn" onClick={() => setQr({

@@ -1,7 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, fmtDate, fmtRange, inr, entLabel, TRN_STATUSES } from '../api.js';
-import { useAuth } from '../App.jsx';
+import { useAuth, useToast } from '../App.jsx';
 import { toXlsx, toWorkbook } from '../xlsx.js';
+import MSel from '../components/MSel.jsx';
+
+// Compliance status progression: Assigned -> Nominated -> Attended ->
+// Completed. A nomination alone never counts as complete.
+const CSTAT = {
+  completed: ['🔵 Completed', 'good'],
+  attended: ['🟢 Attended', 'good'],
+  not_attended: ['🔴 Not Attended', 'crit'],
+  pending: ['🟡 Pending', 'warn'],
+};
+const SRC = { self: 'Self', manager: 'Manager', leader: 'Leader', admin: 'Admin' };
 
 // Searchable multi-select: type to filter, tick one or many, Open runs the
 // report for the whole selection. Scales past 100 entries.
@@ -67,9 +78,13 @@ export default function Reports() {
   const { user: me } = useAuth();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
   const canExpense = isAdmin || me.role === 'leader';
+  const toast = useToast();
   const [open, setOpen] = useState(null);   // {title, header, rows, note}
   const [emps, setEmps] = useState([]);
   const [trns, setTrns] = useState([]);
+  const [comp, setComp] = useState(null);       // compliance dataset {trainings, rows}
+  const [compView, setCompView] = useState(null); // summary | leader | pending | followup
+  const [cf, setCf] = useState({ leader: [], mgr: [], dept: [], ent: [], loc: [], trn: [], status: [] });
   const [err, setErr] = useState(null);
 
   useEffect(() => {
@@ -236,6 +251,12 @@ export default function Reports() {
         : 'Nothing is overdue or due within 60 days. Set "Re-training validity (months)" on trainings to drive this report.');
   });
 
+  const openComp = guard(async (view) => {
+    let d = comp;
+    if (!d) { d = await api.get('/api/reports/compliance-detail'); setComp(d); }
+    setCompView(view);
+  });
+
   const expenseReport = guard(async () => {
     const r = await api.get('/api/expenses');
     show('Expense report',
@@ -277,6 +298,12 @@ export default function Reports() {
     { name: 'Planned vs actual — calendar adherence', desc: 'Per month: planned, completed, postponed, cancelled, adherence %.', run: adherence },
     { name: 'New joiner induction status', desc: 'Last 12 months of joiners against Induction trainings.', run: joiners },
     { name: 'Overdue & expiring re-trainings', desc: 'Validity-driven due list, 60-day horizon.', run: overdue },
+    ...(isAdmin ? [
+      { name: 'Compliance training report', desc: 'Every mandatory training: summary counts plus the employee-level status table.', run: () => openComp('summary') },
+      { name: 'Leader-wise compliance', desc: 'Filter by leader, manager, department, entity, location, training and status — with totals.', run: () => openComp('leader') },
+      { name: 'View pending employees', desc: 'Everyone assigned a mandatory training who has not completed it, exportable.', run: () => openComp('pending') },
+      { name: 'Leader follow-up report', desc: 'Pending employees grouped by leader and manager, with an e-mail-ready summary per leader.', run: () => openComp('followup') },
+    ] : []),
     ...(canExpense ? [{ name: 'Expense report', desc: 'Budget, actual, paid, pending and variance per training, with approval and payment status.', run: expenseReport }] : []),
     ...(isAdmin ? [{ name: 'Audit-ready evidence pack', desc: 'One Excel workbook: trainings, participants, attendance with timestamps, feedback, expenses and the audit trail.', run: evidencePack, download: true }] : []),
   ];
@@ -296,6 +323,159 @@ export default function Reports() {
           </div>
         ))}
       </div>
+
+      {compView && comp && (() => {
+        const uniq = (k) => [...new Set(comp.rows.map((r) => r[k]).filter(Boolean))].sort();
+        const trnLabel = (t) => `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}`;
+        const rowsFor = (view) => {
+          if (view === 'leader') {
+            return comp.rows.filter((r) =>
+              (!cf.leader.length || cf.leader.includes(r.leader)) &&
+              (!cf.mgr.length || cf.mgr.includes(r.manager)) &&
+              (!cf.dept.length || cf.dept.includes(r.department)) &&
+              (!cf.ent.length || cf.ent.includes(r.entity)) &&
+              (!cf.loc.length || cf.loc.includes(r.location)) &&
+              (!cf.trn.length || cf.trn.includes(r.training_id)) &&
+              (!cf.status.length || cf.status.includes(r.status)));
+          }
+          if (view === 'pending' || view === 'followup') return comp.rows.filter((r) => r.status !== 'completed');
+          return comp.rows;
+        };
+        const rows = rowsFor(compView);
+        const attendedN = rows.filter((r) => r.status === 'attended' || r.status === 'completed').length;
+        const statusCell = (s) => <span className={'pill mini ' + CSTAT[s][1]}>{CSTAT[s][0]}</span>;
+        const exportPending = () => toXlsx('Pending-Compliance-Employees.xlsx',
+          ['Employee Name', 'Employee ID', 'Department', 'Manager', 'Leader', 'Training', 'Training Date', 'Assigned Date', 'Selected Slot', 'Attendance Status', 'Completion Status'],
+          rows.map((r) => [r.name, r.zoho_emp_id || '', r.department || '', r.manager || '', r.leader || '',
+            trnLabel(r), r.training_date ? fmtDate(r.training_date) : '', r.assigned_at ? fmtDate(r.assigned_at) : '',
+            r.slot || '', CSTAT[r.status][0].replace(/^\S+\s/, ''), r.status === 'completed' ? 'Completed' : 'Not completed']));
+        const byLeader = {};
+        rows.forEach((r) => { const k = r.leader || '(no leader on record)'; (byLeader[k] = byLeader[k] || []).push(r); });
+        const emailFor = (leader, list) => {
+          const lines = list.map((r) => `- ${r.name} (${r.manager || 'no manager on record'}) — ${trnLabel(r)} — ${CSTAT[r.status][0].replace(/^\S+\s/, '')}`);
+          return `Subject: Follow-up needed — pending mandatory trainings\n\nDear ${leader},\n\nThe following team members have not yet completed their mandatory training:\n\n${lines.join('\n')}\n\nPlease ensure they attend before the completion deadline.\n\nRegards,\nL&D — Avana Learning Hub`;
+        };
+        return (
+          <div className="modal-backdrop" onClick={() => setCompView(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1040 }}>
+              <h3>{{ summary: 'Compliance training report', leader: 'Leader-wise compliance',
+                pending: 'Pending employees — mandatory trainings', followup: 'Leader follow-up report' }[compView]}</h3>
+              <p className="muted mini">Status progression: Assigned → Nominated → Attended → Completed — a nomination alone never counts as complete.</p>
+
+              {compView === 'summary' && (
+                <>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ minWidth: 860 }}>
+                      <thead><tr><th>Training</th><th>Date</th><th style={{ textAlign: 'right' }}>Assigned</th>
+                        <th style={{ textAlign: 'right' }}>Nominated</th><th style={{ textAlign: 'right' }}>Attended</th>
+                        <th style={{ textAlign: 'right' }}>Completed</th><th style={{ textAlign: 'right' }}>Not attended</th>
+                        <th style={{ textAlign: 'right' }}>Pending</th><th style={{ textAlign: 'right' }}>Attendance %</th></tr></thead>
+                      <tbody>
+                        {comp.trainings.map((t) => {
+                          const rs = comp.rows.filter((r) => r.training_id === t.id);
+                          const n = (s) => rs.filter((r) => r.status === s).length;
+                          const att = n('attended') + n('completed');
+                          return (
+                            <tr key={t.id}>
+                              <td>{trnLabel(t)}</td>
+                              <td className="muted">{rs[0]?.training_date ? fmtDate(rs[0].training_date) : '—'}</td>
+                              <td style={{ textAlign: 'right' }}>{rs.length}</td>
+                              <td style={{ textAlign: 'right' }}>{rs.filter((r) => r.source !== 'admin').length}</td>
+                              <td style={{ textAlign: 'right' }}>{att}</td>
+                              <td style={{ textAlign: 'right' }}>{n('completed')}</td>
+                              <td style={{ textAlign: 'right' }}>{n('not_attended')}</td>
+                              <td style={{ textAlign: 'right' }}>{n('pending')}</td>
+                              <td style={{ textAlign: 'right' }}>{rs.length ? Math.round(att / rs.length * 100) + '%' : '—'}</td>
+                            </tr>
+                          );
+                        })}
+                        {!comp.trainings.length && <tr><td colSpan={9} className="muted">No mandatory trainings yet — tick "Mandatory" on a training.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>Employee level</h3>
+                </>
+              )}
+
+              {compView === 'leader' && (
+                <div className="toolbar" style={{ flexWrap: 'wrap' }}>
+                  <MSel label="Leader" options={uniq('leader').map((v) => ({ v, t: v }))} sel={cf.leader} onChange={(v) => setCf({ ...cf, leader: v })} />
+                  <MSel label="Manager" options={uniq('manager').map((v) => ({ v, t: v }))} sel={cf.mgr} onChange={(v) => setCf({ ...cf, mgr: v })} />
+                  <MSel label="Department" options={uniq('department').map((v) => ({ v, t: v }))} sel={cf.dept} onChange={(v) => setCf({ ...cf, dept: v })} />
+                  <MSel label="Entity" options={uniq('entity').map((v) => ({ v, t: entLabel(v) }))} sel={cf.ent} onChange={(v) => setCf({ ...cf, ent: v })} />
+                  <MSel label="Location" options={uniq('location').map((v) => ({ v, t: v }))} sel={cf.loc} onChange={(v) => setCf({ ...cf, loc: v })} />
+                  <MSel label="Training" options={comp.trainings.map((t) => ({ v: t.id, t: trnLabel(t) }))} sel={cf.trn} onChange={(v) => setCf({ ...cf, trn: v })} />
+                  <MSel label="Status" options={Object.keys(CSTAT).map((s) => ({ v: s, t: CSTAT[s][0] }))} sel={cf.status} onChange={(v) => setCf({ ...cf, status: v })} />
+                </div>
+              )}
+
+              {compView === 'followup' ? (
+                <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                  {Object.keys(byLeader).sort().map((leader) => (
+                    <div key={leader} className="card" style={{ marginBottom: 10 }}>
+                      <div className="toolbar" style={{ marginBottom: 6 }}>
+                        <b>Leader: {leader}</b>
+                        <span className="muted mini">{byLeader[leader].length} pending</span>
+                        <span style={{ flex: 1 }} />
+                        <button className="btn" onClick={() => {
+                          navigator.clipboard.writeText(emailFor(leader, byLeader[leader]))
+                            .then(() => toast('E-mail summary copied — paste it into Outlook.'));
+                        }}>✉ Copy e-mail summary</button>
+                      </div>
+                      {byLeader[leader].map((r, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '3px 0', borderBottom: '1px dashed var(--line)' }}>
+                          <span style={{ flex: 1 }}>{r.name} <span className="muted mini">· {r.manager || '—'} · {trnLabel(r)}</span></span>
+                          {statusCell(r.status)}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {!rows.length && <p className="muted">Nobody is pending — all mandatory trainings are completed. 🎉</p>}
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
+                  <table style={{ minWidth: 980 }}>
+                    <thead><tr><th>Employee</th><th>Employee ID</th><th>Department</th><th>Manager</th><th>Leader</th>
+                      <th>Training</th><th>Slot</th><th>Nominated by</th><th>Attendance</th><th>Completion</th></tr></thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i}>
+                          <td>{r.name}</td><td className="muted">{r.zoho_emp_id || '—'}</td>
+                          <td>{r.department || '—'}</td><td>{r.manager || '—'}</td><td>{r.leader || '—'}</td>
+                          <td>{trnLabel(r)}</td><td>{r.slot || '—'}</td>
+                          <td>{SRC[r.source]}{r.nominated_by && r.source !== 'self' ? ` (${r.nominated_by})` : ''}</td>
+                          <td>{statusCell(r.status === 'completed' ? 'attended' : r.status)}</td>
+                          <td>{r.status === 'completed' ? statusCell('completed') : <span className="muted">—</span>}</td>
+                        </tr>
+                      ))}
+                      {!rows.length && <tr><td colSpan={10} className="muted">Nothing in scope.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <p style={{ fontSize: 13, marginTop: 10 }}>
+                <b>Total assigned: {rows.length}</b> · Attended: {attendedN} · Not attended: {rows.filter((r) => r.status === 'not_attended').length} ·
+                Pending: {rows.filter((r) => r.status === 'pending').length} ·
+                Completion: {rows.length ? Math.round(rows.filter((r) => r.status === 'completed').length / rows.length * 100) : 0}% ·
+                Attendance: {rows.length ? Math.round(attendedN / rows.length * 100) : 0}%
+              </p>
+              <div className="form-actions">
+                {compView === 'followup' ? (
+                  <button className="btn gold" onClick={() => toXlsx('Leader-Followup-Report.xlsx',
+                    ['Leader', 'Manager', 'Employee', 'Employee ID', 'Training', 'Training Date', 'Status'],
+                    Object.keys(byLeader).sort().flatMap((leader) => byLeader[leader].map((r) =>
+                      [leader, r.manager || '', r.name, r.zoho_emp_id || '', trnLabel(r),
+                       r.training_date ? fmtDate(r.training_date) : '', CSTAT[r.status][0].replace(/^\S+\s/, '')])))}>⬇ Excel</button>
+                ) : (
+                  <button className="btn gold" onClick={exportPending}>⬇ Excel</button>
+                )}
+                <button className="btn" onClick={() => setCompView(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {open && (
         <div className="modal-backdrop" onClick={() => setOpen(null)}>

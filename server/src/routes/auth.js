@@ -15,7 +15,7 @@ setInterval(() => {
 
 const sha256 = (t) => crypto.createHash('sha256').update(t).digest('hex');
 // Only QR participant pages are valid return targets for the participant flow.
-const validRet = (r) => (typeof r === 'string' && /^\/p\/(att|fb)\/[\w-]{6,64}$/.test(r) ? r : null);
+const validRet = (r) => (typeof r === 'string' && /^\/p\/(att|fb|nom)\/[\w-]{6,64}$/.test(r) ? r : null);
 
 // Step 1: send the user to Zoho. With ?ret=/p/att/<token> this is the
 // PARTICIPANT flow: Zoho proves who is scanning; no portal session is made.

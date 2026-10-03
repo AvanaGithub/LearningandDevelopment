@@ -19,6 +19,7 @@ const DEFAULT_QUESTIONS = [
 async function byToken(token) {
   const { rows } = await query(
     `SELECT t.id, t.code, t.title, t.batch, t.status, t.feedback_questions, t.external_form_url,
+       t.department, t.division, t.nom_self, t.nom_deadline,
        (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
      FROM trainings t WHERE t.public_token=$1 AND t.status <> 'cancelled'`, [String(token)]);
   return rows[0] || null;
@@ -28,10 +29,22 @@ async function participantOf(req) {
   const token = req.cookies?.psession;
   if (!token) return null;
   const { rows } = await query(
-    `SELECT e.id, e.name FROM participant_sessions p JOIN employees e ON e.id = p.employee_id
+    `SELECT e.id, e.name, e.department, e.division
+     FROM participant_sessions p JOIN employees e ON e.id = p.employee_id
      WHERE p.token_hash=$1 AND p.expires_at > now() AND e.active=TRUE`, [sha256(token)]);
   return rows[0] || null;
 }
+
+// A training that names departments/divisions is only open to employees in
+// them; an empty setting means the whole organisation.
+const inScope = (listStr, val) => {
+  if (!listStr) return true;
+  const list = listStr.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return list.includes(String(val || '').trim().toLowerCase());
+};
+const eligibleFor = (t, me) => inScope(t.department, me.department) && inScope(t.division, me.division);
+const nomOpen = (t) => t.nom_self &&
+  (!t.nom_deadline || new Date(t.nom_deadline) >= new Date(new Date().toDateString()));
 
 const isAssigned = async (trainingId, employeeId) => {
   const { rows } = await query(
@@ -49,8 +62,44 @@ router.get('/training/:token', async (req, res, next) => {
       questions: t.feedback_questions || DEFAULT_QUESTIONS,
       external_form_url: t.external_form_url || null,
       sso: config.zoho.configured,
+      nominate: {
+        open: nomOpen(t),
+        deadline: t.nom_deadline || null,
+        scope: [t.department, t.division].filter(Boolean).join(' · ') || null,
+        eligible: me ? eligibleFor(t, me) : null,
+      },
       me: me ? { name: me.name, assigned: await isAssigned(t.id, me.id) } : null,
     });
+  } catch (e) { next(e); }
+});
+
+// Self-nomination — only when the super admin enabled it on this training,
+// before the deadline, and only for eligible, Zoho-verified employees.
+router.post('/nom/:token', express.json(), async (req, res, next) => {
+  try {
+    const t = await byToken(req.params.token);
+    if (!t) return res.status(404).json({ error: 'This link is not valid any more.' });
+    const me = await participantOf(req);
+    if (!me) return res.status(401).json({ error: 'Sign in with Zoho first.', need_login: true });
+    if (!nomOpen(t)) return res.status(403).json({ error: 'Self-nomination is not open for this training.' });
+    if (!eligibleFor(t, me)) {
+      return res.status(403).json({ error: 'This training targets other departments/divisions — contact L&D if you believe you should attend.' });
+    }
+    if (await isAssigned(t.id, me.id)) {
+      return res.status(409).json({ error: 'You are already on this training.' });
+    }
+    const slot = String(req.body?.slot || '').trim().slice(0, 80) || null;
+    await query('INSERT INTO training_participants (training_id, employee_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [t.id, me.id]);
+    await query(
+      `INSERT INTO nominations (training_id, employee_id, slot, source, nominated_by)
+       VALUES ($1,$2,$3,'self',$4)
+       ON CONFLICT (training_id, employee_id) DO UPDATE
+         SET status='confirmed', slot=EXCLUDED.slot, source=EXCLUDED.source,
+             nominated_by=EXCLUDED.nominated_by, created_at=now()
+         WHERE nominations.status='cancelled'`,
+      [t.id, me.id, slot, me.name]);
+    await audit(null, 'nomination.self', 'training', t.id, { employee_id: me.id, slot });
+    res.status(201).json({ ok: true, name: me.name, at: new Date().toISOString() });
   } catch (e) { next(e); }
 });
 
