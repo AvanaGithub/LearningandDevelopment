@@ -68,6 +68,7 @@ tr:hover td{background:var(--panel2)}
 .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .form-grid label{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px}
 .form-grid input,.form-grid select{width:100%}
+.form-grid input[type=checkbox]{width:auto;margin:0}
 .form-actions{display:flex;gap:10px;margin-top:14px}
 .muted{color:var(--ink2)}
 .err{color:var(--crit);font-size:13px}
@@ -110,7 +111,9 @@ details.msel{position:relative;display:inline-block}
 /* Inside a form grid the dropdown lines up like the inputs around it. */
 .form-grid details.msel{display:block;width:100%}
 .form-grid details.msel>summary{display:block;width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--panel2)}
-.form-grid details.msel .menu{width:100%;box-sizing:border-box;min-width:0}
+.form-grid details.msel .menu{width:max-content;min-width:260px;max-width:360px;box-sizing:border-box}
+.form-grid details.msel .menu label{display:flex;align-items:center;text-align:left;margin:0;font-size:13px;white-space:nowrap}
+.form-grid details.msel .menu input{width:auto}
 details.msel>summary{list-style:none;cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 14px;font-size:13px}
 details.msel[open]>summary{background:var(--panel2)}
 details.msel .menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(33,27,16,.12);padding:10px 14px;min-width:280px;max-height:300px;overflow:auto}
