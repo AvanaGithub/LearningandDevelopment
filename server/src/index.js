@@ -19,6 +19,16 @@ app.use('/api/public', require('./routes/public'));
 
 // Everything else under /api requires a valid session of an active user.
 app.use('/api', requireAuth);
+// Learners only ever reach their own portal (plus settings lists and
+// files like agendas) — every staff API is closed to them here.
+app.use('/api', (req, res, next) => {
+  if (req.user.role !== 'learner') return next();
+  const ok = req.path.startsWith('/learner') ||
+    (req.method === 'GET' && (req.path.startsWith('/settings') || req.path.startsWith('/files/')));
+  if (!ok) return res.status(403).json({ error: 'Learner access is limited to your own trainings' });
+  next();
+});
+app.use('/api/learner', require('./routes/learner'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/employees', require('./routes/employees'));
 app.use('/api/trainings', require('./routes/trainings'));

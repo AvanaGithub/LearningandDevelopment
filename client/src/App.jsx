@@ -14,6 +14,7 @@ import Reports from './pages/Reports.jsx';
 import PublicCheckin from './pages/PublicCheckin.jsx';
 import PublicFeedback from './pages/PublicFeedback.jsx';
 import PublicNominate from './pages/PublicNominate.jsx';
+import LearnerPortal from './pages/LearnerPortal.jsx';
 import Mavericks from './pages/Mavericks.jsx';
 import NewJoiners from './pages/NewJoiners.jsx';
 import Settings from './pages/Settings.jsx';
@@ -66,6 +67,9 @@ export default function App() {
           <Route path="/p/fb/:token" element={<PublicFeedback />} />
           <Route path="/p/nom/:token" element={<PublicNominate />} />
           <Route path="/login" element={auth.user ? <Navigate to="/" replace /> : <Login />} />
+          {auth.user?.role === 'learner' ? (
+            <Route path="*" element={<LearnerPortal />} />
+          ) : (
           <Route element={<RequireUser user={auth.user}><Shell /></RequireUser>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/calendar" element={<Calendar />} />
@@ -81,6 +85,7 @@ export default function App() {
             <Route path="/settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
+          )}
         </Routes>
         {toast && <div className="toast">{toast}</div>}
       </ToastCtx.Provider>

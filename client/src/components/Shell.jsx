@@ -27,18 +27,7 @@ export default function Shell() {
     refresh();
   };
 
-  // Learners (employees) have no portal login by design — their whole
-  // experience is the Zoho-verified link/QR pages. "View as: Learner"
-  // therefore opens a preview panel with direct links to those pages.
-  const [learner, setLearner] = useState(null); // null | 'loading' | trainings[]
-
   const viewAs = async (role) => {
-    if (role === 'learner') {
-      setLearner('loading');
-      api.get('/api/trainings').then((rows) => setLearner(rows.filter((t) => t.public_token && t.status !== 'cancelled')))
-        .catch(() => setLearner([]));
-      return;
-    }
     await fetch('/auth/view-as', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -104,39 +93,6 @@ export default function Shell() {
         </>)}
       </nav>
       <main className="main"><Outlet /></main>
-
-      {learner !== null && (
-        <div className="modal-backdrop" onClick={() => setLearner(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-            <h3>Learner (employee) experience</h3>
-            <p className="muted" style={{ fontSize: 13 }}>
-              Learners never sign in to this portal — that is the security model. Each training has
-              Zoho-verified pages where the employee proves who they are with their own Zoho account:
-              <b> self-nomination</b>, <b>attendance check-in</b> and <b>feedback</b>. Open any page below
-              to see and test exactly what an employee gets (you will be asked to sign in with Zoho,
-              just like they are).
-            </p>
-            {learner === 'loading' ? <p className="muted">Loading trainings…</p> : (
-              <div style={{ maxHeight: 340, overflowY: 'auto' }}>
-                {learner.map((t) => (
-                  <div key={t.id} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
-                    <span style={{ flex: 1, minWidth: 180 }}>{t.title}{t.batch ? ' — ' + t.batch : ''}</span>
-                    {t.nom_self
-                      ? <a className="btn" style={{ textDecoration: 'none' }} href={`/p/nom/${t.public_token}`} target="_blank" rel="noreferrer">Nominate</a>
-                      : <span className="pill neutral mini" title="Self-nomination is not enabled on this training">no self-nom</span>}
-                    <a className="btn" style={{ textDecoration: 'none' }} href={`/p/att/${t.public_token}`} target="_blank" rel="noreferrer">Check-in</a>
-                    <a className="btn" style={{ textDecoration: 'none' }} href={`/p/fb/${t.public_token}`} target="_blank" rel="noreferrer">Feedback</a>
-                  </div>
-                ))}
-                {!learner.length && <p className="muted">No trainings with learner pages yet.</p>}
-              </div>
-            )}
-            <div className="form-actions">
-              <button className="btn" onClick={() => setLearner(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

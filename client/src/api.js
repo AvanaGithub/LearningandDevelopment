@@ -43,7 +43,7 @@ export const ENTITY_NAMES = {
   ASS: 'Avana Surgical Systems',
   ATS: 'Avana Technology Services',
 };
-export const ROLES = { super_admin: 'Super admin', admin: 'Admin', leader: 'Leader', manager: 'Manager' };
+export const ROLES = { super_admin: 'Super admin', admin: 'Admin', leader: 'Leader', manager: 'Manager', learner: 'Learner' };
 
 // Canonical lists from the prototype spec — one source for forms and filters.
 export const DIVISIONS = ['Sports Medicine', 'Dex & Bio', 'Endospine', 'Orthotics', 'Business Support'];

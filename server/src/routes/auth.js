@@ -97,8 +97,8 @@ router.post('/view-as', requireAuth, express.json(), async (req, res) => {
     return res.status(403).json({ error: 'Only a super admin can preview another role' });
   }
   const role = req.body?.role ?? null;
-  if (role !== null && !['manager', 'leader', 'admin'].includes(role)) {
-    return res.status(400).json({ error: 'role must be manager, leader, admin or null' });
+  if (role !== null && !['manager', 'leader', 'admin', 'learner'].includes(role)) {
+    return res.status(400).json({ error: 'role must be learner, manager, leader, admin or null' });
   }
   await query('UPDATE sessions SET act_role=$2 WHERE token_hash=$1', [sha256(req.sessionToken), role]);
   await audit(req.user.id, 'auth.view_as', 'user', req.user.id, { role: role || 'super_admin (exit preview)' });
@@ -126,7 +126,7 @@ router.get('/me', async (req, res) => {
   let user = rows[0] || null;
   if (user) {
     user = { ...user, real_role: user.role };
-    if (user.act_role && user.role === 'super_admin' && ['manager', 'leader', 'admin'].includes(user.act_role)) {
+    if (user.act_role && user.role === 'super_admin' && ['manager', 'leader', 'admin', 'learner'].includes(user.act_role)) {
       user.role = user.act_role;
     }
     delete user.act_role;

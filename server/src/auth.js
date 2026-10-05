@@ -46,7 +46,7 @@ async function requireAuth(req, res, next) {
     // it can only LOWER the effective role — every server check then sees it.
     req.user.real_role = req.user.role;
     if (req.user.act_role && req.user.role === 'super_admin' &&
-        ['manager', 'leader', 'admin'].includes(req.user.act_role)) {
+        ['manager', 'leader', 'admin', 'learner'].includes(req.user.act_role)) {
       req.user.role = req.user.act_role;
     }
     req.sessionToken = token;
@@ -54,7 +54,7 @@ async function requireAuth(req, res, next) {
   } catch (e) { next(e); }
 }
 
-const ROLE_RANK = { manager: 1, leader: 2, admin: 3, super_admin: 4 };
+const ROLE_RANK = { learner: 0, manager: 1, leader: 2, admin: 3, super_admin: 4 };
 
 // requireRole('admin') = admin or super_admin; requireRole('leader') also
 // admits leaders (manager access + expenses + Mavericks view).
