@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate, entLabel } from '../api.js';
+import { api, fmtDate, fmtRange, entLabel, toISODay } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 
 // New-joiner onboarding: everyone who joined recently, their induction
@@ -22,10 +22,59 @@ export default function NewJoiners() {
   const [days, setDays] = useState(180);
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(null); // {emp, start_date, end_date, status, comment, newA}
+  const [inds, setInds] = useState([]);         // induction-category trainings (managed here, not on the calendar)
+  const [indForm, setIndForm] = useState(null); // {title, from, numDays, hours_per_day, trainer_name}
   const [err, setErr] = useState(null);
 
   const load = (d = days) => api.get('/api/joiners?days=' + d).then(setData).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
+  const loadInds = () => api.get('/api/trainings')
+    .then((rows) => setInds(rows.filter((t) => t.category === 'Induction' && t.status !== 'cancelled')))
+    .catch(() => {});
+  useEffect(() => { load(); loadInds(); }, []);
+
+  const saveInd = async (e) => {
+    e.preventDefault();
+    try {
+      const n = Math.min(60, Math.max(1, Number(indForm.numDays) || 1));
+      const d0 = new Date(indForm.from + 'T00:00:00');
+      const trainingDays = Array.from({ length: n }, (_, i) => {
+        const d = new Date(d0); d.setDate(d.getDate() + i); return toISODay(d);
+      });
+      await api.post('/api/trainings', {
+        title: indForm.title, category: 'Induction', mode: 'Classroom',
+        trainer_type: 'internal', trainer_name: indForm.trainer_name || 'HR / L&D',
+        hours_per_day: Number(indForm.hours_per_day) || 8, days: trainingDays,
+      });
+      toast('Induction training created — it stays off the Training Calendar.');
+      setIndForm(null); loadInds();
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const setIndStatus = async (t, status) => {
+    try {
+      await api.patch('/api/trainings/' + t.id, { status });
+      toast(`${t.title} marked ${status.replace('_', ' ')}.`);
+      loadInds(); load();
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const delInd = async (t) => {
+    const reason = window.prompt(`Delete ${t.title}? Only test/wrong entries can be deleted — one with attendance or feedback must be cancelled instead.\n\nReason (audit trail):`);
+    if (!reason?.trim()) return;
+    try {
+      await api.del(`/api/trainings/${t.id}?reason=` + encodeURIComponent(reason.trim()));
+      toast('Induction training deleted — reason recorded.');
+      loadInds(); load();
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const enrol = async (emp, trainingId) => {
+    try {
+      await api.post(`/api/trainings/${trainingId}/participants`, { employee_id: emp.id });
+      toast(`${emp.name} enrolled — mark their attendance under the Attendance tab.`);
+      load(); loadInds();
+    } catch (e2) { setErr(e2.message); }
+  };
 
   const steps = settings?.joiner_steps || [];
 
@@ -109,6 +158,44 @@ export default function NewJoiners() {
         </label>
       </div>
       {err && <p className="err">{err}</p>}
+
+      {isAdmin && (
+        <div className="card">
+          <div className="toolbar" style={{ marginBottom: inds.length || indForm ? 10 : 0, alignItems: 'center' }}>
+            <b style={{ fontFamily: 'Fira Sans', fontSize: 14 }}>Induction trainings</b>
+            <span className="muted mini">managed here — never shown on the Training Calendar</span>
+            <span style={{ flex: 1 }} />
+            {!indForm && <button className="btn gold" onClick={() => setIndForm({ title: '', from: '', numDays: 1, hours_per_day: 8, trainer_name: '' })}>+ New induction training</button>}
+          </div>
+          {indForm && (
+            <form onSubmit={saveInd}>
+              <div className="form-grid">
+                <div><label>Title *</label><input required value={indForm.title} onChange={(e) => setIndForm({ ...indForm, title: e.target.value })} placeholder="e.g. Induction — October batch" /></div>
+                <div><label>Start date *</label><input required type="date" value={indForm.from} onChange={(e) => setIndForm({ ...indForm, from: e.target.value })} /></div>
+                <div><label>No. of days</label><input type="number" min="1" max="60" value={indForm.numDays} onChange={(e) => setIndForm({ ...indForm, numDays: e.target.value })} /></div>
+                <div><label>Hours per day</label><input type="number" min="1" max="12" step="0.5" value={indForm.hours_per_day} onChange={(e) => setIndForm({ ...indForm, hours_per_day: e.target.value })} /></div>
+                <div><label>Trainer</label><input value={indForm.trainer_name} onChange={(e) => setIndForm({ ...indForm, trainer_name: e.target.value })} placeholder="HR / L&D" /></div>
+              </div>
+              <div className="form-actions">
+                <button className="btn gold" type="submit">Create</button>
+                <button className="btn" type="button" onClick={() => setIndForm(null)}>Cancel</button>
+              </div>
+            </form>
+          )}
+          {inds.map((t) => (
+            <div key={t.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 0', borderBottom: '1px dashed var(--line)', fontSize: 13, flexWrap: 'wrap' }}>
+              <span style={{ flex: 1, minWidth: 180 }}><b>{t.title}</b> <span className="muted">· {fmtRange(t.days)} · {t.participant_count} joiner(s)</span></span>
+              <select value={t.status} onChange={(e) => setIndStatus(t, e.target.value)}>
+                <option value="planned">Planned</option><option value="in_progress">In progress</option>
+                <option value="completed">Completed</option><option value="postponed">Postponed</option>
+              </select>
+              <button className="btn link" onClick={() => delInd(t)}>Delete…</button>
+            </div>
+          ))}
+          {!inds.length && !indForm && <p className="muted mini" style={{ margin: 0 }}>No induction trainings yet — create one, then enrol joiners from the list below.</p>}
+        </div>
+      )}
+
       {!data ? <p className="muted">Loading…</p> : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           <table style={{ minWidth: 1050 }}>
@@ -132,15 +219,18 @@ export default function NewJoiners() {
                     <td className="muted">{jt?.start_date
                       ? `${fmtDate(jt.start_date)}${jt.end_date ? ' → ' + fmtDate(jt.end_date) : ''}` : '—'}</td>
                     <td><span className={'pill ' + sc}>{st}</span></td>
-                    <td>{scores ? e.assessments.map((a) => {
-                      const p = pct100(a.score, a.max_marks);
-                      return (
-                        <div key={a.id} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                          {a.atype}: <b>{p}</b>/100{' '}
-                          <span className={'pill mini ' + (p >= 80 ? 'good' : 'crit')}>{p >= 80 ? 'Pass' : 'Fail'}</span>
-                        </div>
-                      );
-                    }) : <span className="muted">—</span>}</td>
+                    <td>
+                      {scores ? e.assessments.map((a) => {
+                        const p = pct100(a.score, a.max_marks);
+                        return (
+                          <div key={a.id} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                            {a.atype}: <b>{p}</b>/100{' '}
+                            <span className={'pill mini ' + (p >= 80 ? 'good' : 'crit')}>{p >= 80 ? 'Pass' : 'Fail'}</span>
+                          </div>
+                        );
+                      }) : (!isAdmin && <span className="muted">—</span>)}
+                      {isAdmin && <button className="btn link" style={{ fontSize: 11, padding: 0 }} onClick={() => openEdit(e)}>＋ Add score</button>}
+                    </td>
                     <td className="muted mini">{jt?.comment || '—'}</td>
                     <td><span className={'pill ' + cls}>{txt}</span>
                       {e.induction.map((i) => (
@@ -148,6 +238,16 @@ export default function NewJoiners() {
                           {i.title}{i.batch ? ' — ' + i.batch : ''} · {i.attended}/{i.day_count} days
                         </div>
                       ))}
+                      {isAdmin && (() => {
+                        const opts = inds.filter((t) => !e.induction.some((i) => i.id === t.id));
+                        return opts.length ? (
+                          <select defaultValue="" style={{ marginTop: 4, fontSize: 11, maxWidth: 150 }}
+                            onChange={(ev) => { if (ev.target.value) { enrol(e, Number(ev.target.value)); ev.target.value = ''; } }}>
+                            <option value="" disabled>Enrol in…</option>
+                            {opts.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                          </select>
+                        ) : null;
+                      })()}
                     </td>
                     {steps.map((s) => (
                       <td key={s} style={{ textAlign: 'center' }}>

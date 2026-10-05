@@ -26,8 +26,11 @@ export default function Calendar() {
     return { y: y + Math.floor(n / 12), m: ((n % 12) + 12) % 12 };
   });
 
+  // Induction trainings are managed under New Joiners and kept off the
+  // shared calendar by request.
+  const shownRows = (rows || []).filter((t) => t.category !== 'Induction');
   const byDay = {};
-  (rows || []).forEach((t) => (t.days || []).forEach((d) => {
+  shownRows.forEach((t) => (t.days || []).forEach((d) => {
     const k = d.slice(0, 10);
     (byDay[k] = byDay[k] || []).push(t);
   }));
@@ -95,7 +98,7 @@ export default function Calendar() {
         <table>
           <thead><tr><th>Dates</th><th>Training</th><th>Mode</th><th>Trainer</th><th>Agenda</th><th>Status</th></tr></thead>
           <tbody>
-            {(rows || []).map((t) => (
+            {shownRows.map((t) => (
               <tr key={t.id} className="rowlink" onClick={() => nav('/trainings?open=' + t.id)}>
                 <td className="muted">{fmtRange(t.days)}</td>
                 <td>{t.title}{t.batch && <span className="pill soft mini" style={{ marginLeft: 6 }}>{t.batch}</span>}
@@ -108,7 +111,7 @@ export default function Calendar() {
                 <td><span className={'pill ' + statusPill(t.status)}>{TRN_STATUSES[t.status]}</span></td>
               </tr>
             ))}
-            {rows && !rows.length && <tr><td colSpan={6} className="muted">No trainings planned this month.</td></tr>}
+            {rows && !shownRows.length && <tr><td colSpan={6} className="muted">No trainings planned this month.</td></tr>}
           </tbody>
         </table>
       </div>

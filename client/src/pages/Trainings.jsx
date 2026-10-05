@@ -262,8 +262,10 @@ export default function Trainings() {
             {F('Batch (optional)', 'batch', { placeholder: 'e.g. Batch 2' })}
             <div><label>Category</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {categories.map((x) => <option key={x}>{x}</option>)}
-              </select></div>
+                {categories.filter((x) => x !== 'Induction' || form.category === 'Induction')
+                  .map((x) => <option key={x}>{x}</option>)}
+              </select>
+              <div className="muted" style={{ fontSize: 11 }}>Induction trainings are created under New Joiners.</div></div>
             <div><label>Departments (optional)</label>
               <MSel label="Departments" empty="All departments" allowAll
                 options={departments.map((x) => ({ v: x, t: x }))}
@@ -365,7 +367,7 @@ export default function Trainings() {
               <th style={{ textAlign: 'right' }}>Hours</th><th style={{ textAlign: 'right' }}>Participants</th><th>Status</th>
             </tr></thead>
             <tbody>
-              {rows.map((t) => (
+              {rows.filter((t) => t.category !== 'Induction').map((t) => (
                 <tr key={t.id} className="rowlink" onClick={() => openDetail(t.id)}>
                   <td className="muted">{t.code}</td>
                   <td>{t.title}
