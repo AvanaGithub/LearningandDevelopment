@@ -72,8 +72,9 @@ export default function Trainings() {
   const [sel, setSel] = useState(null);       // training detail (with participants)
   const [emps, setEmps] = useState([]);
   const [addEmps, setAddEmps] = useState([]);   // multi-choice add-participant selection
-  const [pDept, setPDept] = useState('');       // narrow the add-participant list by department
-  const [pMgr, setPMgr] = useState('');         // …and by reporting manager
+  const [pDept, setPDept] = useState([]);       // narrow the add-participant list by departments
+  const [pDiv, setPDiv] = useState([]);         // …divisions
+  const [pMgr, setPMgr] = useState([]);         // …and reporting managers
   const [nomSlot, setNomSlot] = useState('');   // preferred slot for a manager/leader nomination
   const [removing, setRemoving] = useState(null); // {empId, reason}
   const [importing, setImporting] = useState(false);
@@ -126,6 +127,7 @@ export default function Trainings() {
 
   const openDetail = (id) => {
     setErr(null); setRemoving(null); setAddEmps([]);
+    setPDept([]); setPDiv([]); setPMgr([]);
     api.get('/api/trainings/' + id).then(setSel).catch((e) => setErr(e.message));
   };
   // Calendar deep-link: /trainings?open=<id>
@@ -444,28 +446,35 @@ export default function Trainings() {
             )}
             {isAdmin && !removing && (() => {
               const mgrOf = (e) => (e.manager || '').replace(/^Mentor:\s*/i, '').trim();
-              const pool = emps.filter((e) => !sel.participants.some((p) => p.id === e.id));
-              const depts = [...new Set(pool.map((e) => e.department).filter(Boolean))].sort();
-              const mgrs = [...new Set(pool.map(mgrOf).filter(Boolean))].sort();
-              const options = pool
-                .filter((e) => (!pDept || e.department === pDept) && (!pMgr || mgrOf(e) === pMgr))
+              const depts = [...new Set(emps.map((e) => e.department).filter(Boolean))].sort();
+              const divs = [...new Set(emps.map((e) => e.division).filter(Boolean))].sort();
+              const mgrs = [...new Set(emps.map(mgrOf).filter(Boolean))].sort();
+              const match = (e) =>
+                (!pDept.length || pDept.includes(e.department)) &&
+                (!pDiv.length || pDiv.includes(e.division)) &&
+                (!pMgr.length || pMgr.includes(mgrOf(e)));
+              const matching = emps.filter(match);
+              const options = matching
+                .filter((e) => !sel.participants.some((p) => p.id === e.id))
                 .map((e) => ({ v: e.id, t: `${e.name} — ${e.division || e.department || entLabel(e.entity)}` }));
+              const alreadyIn = matching.length - options.length;
               return (
                 <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                  <select value={pDept} onChange={(e) => { setPDept(e.target.value); setAddEmps([]); }} title="Narrow the list by department">
-                    <option value="">All departments</option>
-                    {depts.map((d) => <option key={d}>{d}</option>)}
-                  </select>
-                  <select value={pMgr} onChange={(e) => { setPMgr(e.target.value); setAddEmps([]); }} title="Narrow the list by reporting manager">
-                    <option value="">All managers</option>
-                    {mgrs.map((m) => <option key={m}>{m}</option>)}
-                  </select>
+                  <MSel label="Departments" options={depts.map((d) => ({ v: d, t: d }))}
+                    sel={pDept} onChange={(v) => { setPDept(v); setAddEmps([]); }} />
+                  <MSel label="Divisions" options={divs.map((d) => ({ v: d, t: d }))}
+                    sel={pDiv} onChange={(v) => { setPDiv(v); setAddEmps([]); }} />
+                  <MSel label="Managers" options={mgrs.map((m) => ({ v: m, t: m }))}
+                    sel={pMgr} onChange={(v) => { setPMgr(v); setAddEmps([]); }} />
                   <MSel label="Add participants" empty="none picked" allowAll
                     options={options} sel={addEmps} onChange={setAddEmps} />
                   <button className="btn gold" disabled={!addEmps.length} onClick={addParticipant}>
                     Add{addEmps.length > 1 ? ` ${addEmps.length}` : ''}
                   </button>
-                  <span className="muted mini">{sel.participants.length} added · seats are a guide, not a limit</span>
+                  <span className="muted mini">
+                    {options.length} available{alreadyIn > 0 ? ` · ${alreadyIn} matching already on this training` : ''} ·
+                    {' '}{sel.participants.length} added · seats are a guide, not a limit
+                  </span>
                 </div>
               );
             })()}
