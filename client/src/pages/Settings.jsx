@@ -154,20 +154,34 @@ export default function Settings() {
             Send nomination / assignment e-mails
           </label>
           <div className="form-grid">
-            <div><label>Mailbox (Microsoft 365 sign-in)</label>
-              <input value={sm.user} onChange={(e) => setSmtp({ ...sm, user: e.target.value })} placeholder="lokshni@avanasurgical.com" /></div>
-            <div><label>App password {settings.smtp?.has_pass ? '(saved — leave blank to keep)' : '*'}</label>
-              <input type="password" value={sm.pass} onChange={(e) => setSmtp({ ...sm, pass: e.target.value })}
-                placeholder={settings.smtp?.has_pass ? '••••••••' : 'paste the app password'} autoComplete="new-password" /></div>
-            <div><label>Send as (From)</label>
-              <input value={sm.from} onChange={(e) => setSmtp({ ...sm, from: e.target.value })} /></div>
+            <div><label>Connection method</label>
+              <select value={sm.method || 'graph'} onChange={(e) => setSmtp({ ...sm, method: e.target.value })}>
+                <option value="graph">Microsoft Graph API (recommended — no app password)</option>
+                <option value="smtp">SMTP app password (only if your company allows it)</option>
+              </select></div>
+            <div><label>Send as (From mailbox)</label>
+              <input value={sm.from} onChange={(e) => setSmtp({ ...sm, from: e.target.value, user: e.target.value })} placeholder="lokshni@avanasurgical.com" /></div>
             <div><label>Notify L&amp;D copy to</label>
               <input value={sm.notify} onChange={(e) => setSmtp({ ...sm, notify: e.target.value })} placeholder="lokshni@avanasurgical.com" /></div>
+            {(sm.method || 'graph') === 'graph' ? (<>
+              <div><label>Directory (tenant) ID</label>
+                <input value={sm.tenant_id} onChange={(e) => setSmtp({ ...sm, tenant_id: e.target.value })} placeholder="xxxxxxxx-xxxx-…" /></div>
+              <div><label>Application (client) ID</label>
+                <input value={sm.client_id} onChange={(e) => setSmtp({ ...sm, client_id: e.target.value })} placeholder="xxxxxxxx-xxxx-…" /></div>
+              <div><label>Client secret {settings.smtp?.has_secret ? '(saved — leave blank to keep)' : '*'}</label>
+                <input type="password" value={sm.client_secret} onChange={(e) => setSmtp({ ...sm, client_secret: e.target.value })}
+                  placeholder={settings.smtp?.has_secret ? '••••••••' : 'paste the secret Value'} autoComplete="new-password" /></div>
+            </>) : (
+              <div><label>App password {settings.smtp?.has_pass ? '(saved — leave blank to keep)' : '*'}</label>
+                <input type="password" value={sm.pass} onChange={(e) => setSmtp({ ...sm, pass: e.target.value })}
+                  placeholder={settings.smtp?.has_pass ? '••••••••' : 'paste the app password'} autoComplete="new-password" /></div>
+            )}
           </div>
           <p className="muted mini" style={{ marginTop: 8 }}>
-            Server: smtp.office365.com, port 587. If sign-in fails, the mailbox needs <b>SMTP AUTH</b> enabled and an
-            <b> app password</b> (Microsoft 365 admin center → user → Mail → Manage email apps → Authenticated SMTP;
-            app password via Security info when MFA is on). The password is stored on your server only and never shown again.
+            {(sm.method || 'graph') === 'graph'
+              ? 'The three values come from a one-time app registration at entra.microsoft.com (App registrations → New → copy tenant ID + client ID; Certificates & secrets → New client secret; API permissions → Microsoft Graph → Application → Mail.Send → Grant admin consent).'
+              : 'Server: smtp.office365.com, port 587. Needs Authenticated SMTP enabled on the mailbox and an app password.'}
+            {' '}Secrets are stored on your server only and never shown again.
           </p>
           <div className="form-actions">
             <button className="btn gold" onClick={saveSmtp}>Save e-mail settings</button>

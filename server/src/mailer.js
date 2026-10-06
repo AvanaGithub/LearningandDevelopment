@@ -9,7 +9,11 @@ const { query } = require('./db');
 async function cfg() {
   const { rows } = await query(`SELECT value FROM settings WHERE key='smtp'`);
   const c = rows.length ? rows[0].value : null;
-  return c && c.enabled && c.user && c.pass ? c : null;
+  if (!c || !c.enabled) return null;
+  if ((c.method || 'smtp') === 'graph') {
+    return c.tenant_id && c.client_id && c.client_secret ? c : null;
+  }
+  return c.user && c.pass ? c : null;
 }
 
 function transport(c) {
@@ -21,7 +25,42 @@ function transport(c) {
   });
 }
 
+// Microsoft Graph (client credentials) — the path for tenants that have
+// app passwords / SMTP AUTH disabled by security policy.
+async function graphToken(c) {
+  const body = new URLSearchParams({
+    client_id: c.client_id, client_secret: c.client_secret,
+    scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials',
+  });
+  const r = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(c.tenant_id)}/oauth2/v2.0/token`, { method: 'POST', body });
+  const d = await r.json();
+  if (!d.access_token) throw new Error(d.error_description || 'Microsoft sign-in failed — check tenant ID, client ID and secret');
+  return d.access_token;
+}
+
+async function sendGraph(c, to, subject, html) {
+  const tok = await graphToken(c);
+  const sender = c.from || c.user;
+  const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: html },
+        toRecipients: [{ emailAddress: { address: to } }],
+      },
+      saveToSentItems: true,
+    }),
+  });
+  if (!r.ok) {
+    const txt = (await r.text()).slice(0, 300);
+    throw new Error(`Microsoft Graph refused the mail (${r.status}): ${txt}`);
+  }
+}
+
 async function sendMail(c, to, subject, html) {
+  if ((c.method || 'smtp') === 'graph') return sendGraph(c, to, subject, html);
   await transport(c).sendMail({ from: c.from || c.user, to, subject, html });
 }
 

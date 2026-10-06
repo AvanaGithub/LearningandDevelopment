@@ -19,9 +19,10 @@ const DEFAULTS = {
   // Outlook / Microsoft 365 notifications. The password is write-only:
   // it is stored here but never sent back to any client.
   smtp: {
-    enabled: false, host: 'smtp.office365.com', port: 587,
+    enabled: false, method: 'graph', host: 'smtp.office365.com', port: 587,
     user: 'lokshni@avanasurgical.com', from: 'lokshni@avanasurgical.com',
     notify: 'lokshni@avanasurgical.com', pass: '',
+    tenant_id: '', client_id: '', client_secret: '',
   },
 };
 
@@ -30,8 +31,12 @@ router.get('/', async (req, res, next) => {
     const { rows } = await query('SELECT key, value FROM settings');
     const out = { ...DEFAULTS };
     rows.forEach((r) => { if (r.key in DEFAULTS) out[r.key] = r.value; });
-    // Never expose the mailbox password; say only whether one is saved.
-    out.smtp = { ...out.smtp, pass: '', has_pass: Boolean(out.smtp?.pass) };
+    // Never expose the mailbox password or client secret; only whether saved.
+    out.smtp = {
+      ...DEFAULTS.smtp, ...out.smtp,
+      pass: '', has_pass: Boolean(out.smtp?.pass),
+      client_secret: '', has_secret: Boolean(out.smtp?.client_secret),
+    };
     res.json(out);
   } catch (e) { next(e); }
 });
@@ -47,13 +52,17 @@ router.put('/:key', requireRole('admin'), express.json(), async (req, res, next)
       const prev = cur.length ? cur[0].value : DEFAULTS.smtp;
       value = {
         enabled: Boolean(value.enabled),
+        method: value.method === 'graph' ? 'graph' : 'smtp',
         host: String(value.host || 'smtp.office365.com').trim(),
         port: Number(value.port) || 587,
         user: String(value.user || '').trim().toLowerCase(),
         from: String(value.from || value.user || '').trim(),
         notify: String(value.notify || '').trim().toLowerCase(),
-        // Blank password = keep the saved one.
+        tenant_id: String(value.tenant_id || '').trim(),
+        client_id: String(value.client_id || '').trim(),
+        // Blank secrets = keep the saved ones.
         pass: String(value.pass || '') || prev.pass || '',
+        client_secret: String(value.client_secret || '') || prev.client_secret || '',
       };
     }
     await query(
@@ -61,7 +70,7 @@ router.put('/:key', requireRole('admin'), express.json(), async (req, res, next)
        ON CONFLICT (key) DO UPDATE SET value=$2, updated_by=$3, updated_at=now()`,
       [key, JSON.stringify(value), req.user.id]);
     await audit(req.user.id, 'settings.update', 'setting', null,
-      { key, value: key === 'smtp' ? { ...value, pass: value.pass ? '(saved)' : '(none)' } : value });
+      { key, value: key === 'smtp' ? { ...value, pass: value.pass ? '(saved)' : '(none)', client_secret: value.client_secret ? '(saved)' : '(none)' } : value });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
