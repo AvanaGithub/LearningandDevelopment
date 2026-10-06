@@ -317,7 +317,7 @@ export default function Feedback() {
 
       {results && (
         <div className="modal-backdrop" onClick={() => setResults(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Results — {results.t.title}</h3>
             <p className="muted mini">{results.responses.length} response(s) · scale 1–5</p>
             {results.external_form_url && (
@@ -327,7 +327,7 @@ export default function Feedback() {
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead><tr><th>Respondent</th>{results.questions.map((q, i) =>
-                  <th key={i} title={q} style={{ textAlign: 'right' }}>Q{i + 1}</th>)}<th>Submitted at</th><th>Comment</th></tr></thead>
+                  <th key={i} style={{ textAlign: 'right', fontSize: 11, maxWidth: 150, minWidth: 70, whiteSpace: 'normal', verticalAlign: 'bottom' }}>{q}</th>)}<th>Submitted at</th><th>Comment</th></tr></thead>
                 <tbody>
                   {results.responses.map((r, ri) => (
                     <tr key={ri}><td>{r.respondent}</td>
@@ -349,9 +349,6 @@ export default function Feedback() {
                 </tbody>
               </table>
             </div>
-            <p className="muted mini" style={{ marginTop: 8 }}>
-              {results.questions.map((q, i) => `Q${i + 1}: ${q}`).join(' · ')}
-            </p>
             <div className="form-actions">
               {isAdmin && <button className="btn gold" onClick={() => exportResults(results)}>⬇ Excel</button>}
               <button className="btn" onClick={() => setResults(null)}>Close</button>
