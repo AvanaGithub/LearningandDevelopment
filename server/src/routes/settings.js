@@ -16,6 +16,13 @@ const DEFAULTS = {
   entity_budgets: { AMD: 700000, ASS: 450000, ATS: 250000 },
   required_employee_fields: ['name', 'entity'],
   joiner_steps: ['Induction training', 'Product training', 'Department orientation', 'Systems access set up'],
+  // Outlook / Microsoft 365 notifications. The password is write-only:
+  // it is stored here but never sent back to any client.
+  smtp: {
+    enabled: false, host: 'smtp.office365.com', port: 587,
+    user: 'lokshni@avanasurgical.com', from: 'lokshni@avanasurgical.com',
+    notify: 'lokshni@avanasurgical.com', pass: '',
+  },
 };
 
 router.get('/', async (req, res, next) => {
@@ -23,6 +30,8 @@ router.get('/', async (req, res, next) => {
     const { rows } = await query('SELECT key, value FROM settings');
     const out = { ...DEFAULTS };
     rows.forEach((r) => { if (r.key in DEFAULTS) out[r.key] = r.value; });
+    // Never expose the mailbox password; say only whether one is saved.
+    out.smtp = { ...out.smtp, pass: '', has_pass: Boolean(out.smtp?.pass) };
     res.json(out);
   } catch (e) { next(e); }
 });
@@ -31,15 +40,40 @@ router.put('/:key', requireRole('admin'), express.json(), async (req, res, next)
   try {
     const key = req.params.key;
     if (!(key in DEFAULTS)) return res.status(400).json({ error: 'Unknown setting' });
-    const value = req.body?.value;
+    let value = req.body?.value;
     if (value === undefined) return res.status(400).json({ error: 'value is required' });
+    if (key === 'smtp') {
+      const { rows: cur } = await query(`SELECT value FROM settings WHERE key='smtp'`);
+      const prev = cur.length ? cur[0].value : DEFAULTS.smtp;
+      value = {
+        enabled: Boolean(value.enabled),
+        host: String(value.host || 'smtp.office365.com').trim(),
+        port: Number(value.port) || 587,
+        user: String(value.user || '').trim().toLowerCase(),
+        from: String(value.from || value.user || '').trim(),
+        notify: String(value.notify || '').trim().toLowerCase(),
+        // Blank password = keep the saved one.
+        pass: String(value.pass || '') || prev.pass || '',
+      };
+    }
     await query(
       `INSERT INTO settings (key, value, updated_by) VALUES ($1,$2,$3)
        ON CONFLICT (key) DO UPDATE SET value=$2, updated_by=$3, updated_at=now()`,
       [key, JSON.stringify(value), req.user.id]);
-    await audit(req.user.id, 'settings.update', 'setting', null, { key, value });
+    await audit(req.user.id, 'settings.update', 'setting', null,
+      { key, value: key === 'smtp' ? { ...value, pass: value.pass ? '(saved)' : '(none)' } : value });
     res.json({ ok: true });
   } catch (e) { next(e); }
+});
+
+// Settings-screen "send test e-mail" button.
+router.post('/test-mail', requireRole('admin'), async (req, res, next) => {
+  try {
+    const to = await require('../mailer').sendTest();
+    res.json({ ok: true, to });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 module.exports = { router, DEFAULTS };

@@ -1,6 +1,7 @@
 const express = require('express');
 const { query } = require('../db');
 const { audit } = require('../auth');
+const mailer = require('../mailer');
 
 // The learner portal: a signed-in employee sees ONLY their own world —
 // their trainings, their attendance, their feedback, and trainings open
@@ -148,6 +149,7 @@ router.post('/nominate', express.json(), async (req, res, next) => {
          WHERE nominations.status='cancelled'`,
       [trainingId, me.id, slot, me.name]);
     await audit(null, 'nomination.self', 'training', trainingId, { employee_id: me.id, slot, via: 'learner_portal' });
+    mailer.notifyNomination({ trainingId, employeeIds: [me.id], source: 'self', byName: me.name, slot });
     res.status(201).json({ ok: true });
   } catch (e) { next(e); }
 });

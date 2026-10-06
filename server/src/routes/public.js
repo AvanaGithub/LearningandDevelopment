@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { query } = require('../db');
 const { audit } = require('../auth');
 const config = require('../config');
+const mailer = require('../mailer');
 
 // QR participant pages. The training's unguessable token opens the page;
 // the PERSON is identified by their own Zoho sign-in (participant session),
@@ -99,6 +100,7 @@ router.post('/nom/:token', express.json(), async (req, res, next) => {
          WHERE nominations.status='cancelled'`,
       [t.id, me.id, slot, me.name]);
     await audit(null, 'nomination.self', 'training', t.id, { employee_id: me.id, slot });
+    mailer.notifyNomination({ trainingId: t.id, employeeIds: [me.id], source: 'self', byName: me.name, slot });
     res.status(201).json({ ok: true, name: me.name, at: new Date().toISOString() });
   } catch (e) { next(e); }
 });

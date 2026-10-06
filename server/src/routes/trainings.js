@@ -1,6 +1,7 @@
 const express = require('express');
 const { query } = require('../db');
 const { requireRole, audit } = require('../auth');
+const mailer = require('../mailer');
 
 const router = express.Router();
 const STATUSES = ['planned', 'confirmed', 'in_progress', 'completed', 'postponed', 'cancelled'];
@@ -165,7 +166,7 @@ router.post('/:id/participants', requireRole('admin'), express.json(), async (re
     // Seats are informational only — org-wide trainings may exceed them.
     const { rows: t } = await query('SELECT seats FROM trainings WHERE id=$1', [id]);
     if (!t.length) return res.status(404).json({ error: 'Not found' });
-    await query(
+    const ins = await query(
       'INSERT INTO training_participants (training_id, employee_id, added_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
       [id, employeeId, req.user.id]);
     await query(
@@ -176,6 +177,9 @@ router.post('/:id/participants', requireRole('admin'), express.json(), async (re
          WHERE nominations.status='cancelled'`,
       [id, employeeId, req.user.name]);
     await audit(req.user.id, 'training.participant_add', 'training', id, { employee_id: employeeId });
+    if (ins.rowCount) {
+      mailer.notifyNomination({ trainingId: id, employeeIds: [employeeId], source: 'admin', byName: req.user.name, slot: null });
+    }
     res.status(201).json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -230,10 +234,12 @@ router.post('/:id/nominate', express.json(), async (req, res, next) => {
     }
     const slot = String(req.body?.slot || '').trim().slice(0, 80) || null;
     let added = 0;
+    const newIds = [];
     for (const empId of allowed) {
       const r = await query(
         'INSERT INTO training_participants (training_id, employee_id, added_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
         [id, empId, req.user.id]);
+      if (r.rowCount) newIds.push(empId);
       await query(
         `INSERT INTO nominations (training_id, employee_id, slot, source, nominated_by)
          VALUES ($1,$2,$3,$4,$5)
@@ -246,6 +252,9 @@ router.post('/:id/nominate', express.json(), async (req, res, next) => {
     }
     await audit(req.user.id, 'training.nominate', 'training', id,
       { source, slot, employee_ids: allowed, not_reportees: ids.length - allowed.length });
+    if (newIds.length) {
+      mailer.notifyNomination({ trainingId: id, employeeIds: newIds, source, byName: req.user.name, slot });
+    }
     res.status(201).json({ added, already: allowed.length - added, not_reportees: ids.length - allowed.length });
   } catch (e) { next(e); }
 });
