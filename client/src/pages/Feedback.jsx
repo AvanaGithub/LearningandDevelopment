@@ -27,19 +27,20 @@ function FbImport({ t, participants, onClose, onDone }) {
       if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
       const low = headers.map((h) => h.toLowerCase());
       const guessId = low.findIndex((h) => /emp|zoho|e-?mail|name|participant|respondent/.test(h));
-      const gc = low.findIndex((h) => /comment|improve|suggest|remark/.test(h));
-      // A column is a question when most of its filled cells are ratings 1–5.
-      const isRating = (i) => {
+      // Classify each column: rating (most filled cells are 1–5), text
+      // (open answers — imported verbatim), or empty.
+      const kinds = headers.map((h, i) => {
         const vals = rows.map((r) => String(r[i] ?? '').trim()).filter(Boolean);
-        if (!vals.length) return false;
+        if (!vals.length) return 'empty';
         const ok = vals.filter((v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 5).length;
-        return ok / vals.length >= 0.5;
-      };
-      const qSel = new Set(headers.map((h, i) => i)
-        .filter((i) => i !== guessId && i !== gc && !META.test(headers[i]) && isRating(i)));
+        return ok / vals.length >= 0.5 ? 'rating' : 'text';
+      });
+      const qSel = new Set(headers.map((h, i) => i).filter((i) =>
+        i !== guessId && !META.test(headers[i]) && kinds[i] !== 'empty' &&
+        (kinds[i] === 'rating' || /\?|^q\s*\d/i.test(headers[i]))));
       setIdCol(guessId >= 0 ? guessId : 0);
-      setCCol(gc >= 0 ? gc : '');
-      setSheet({ headers, rows, qSel });
+      setCCol('');
+      setSheet({ headers, rows, qSel, kinds });
     } catch (e2) { setErr(e2.message); }
   };
 
@@ -65,8 +66,11 @@ function FbImport({ t, participants, onClose, onDone }) {
         if (!p) { unmatched++; continue; }
         const scores = {};
         qIdx.forEach((col, i) => {
-          const v = Number(String(r[col]).trim());
-          if (Number.isInteger(v) && v >= 1 && v <= 5) scores[i] = v;
+          const raw = String(r[col] ?? '').trim();
+          if (!raw) return;
+          const v = Number(raw);
+          if (sheet.kinds[col] === 'rating' && Number.isInteger(v) && v >= 1 && v <= 5) scores[i] = v;
+          else if (sheet.kinds[col] !== 'rating') scores[i] = raw.slice(0, 1000);
         });
         out.push({ employee_id: p.id, respondent: p.name, scores,
           comment: cCol === '' ? null : String(r[cCol] || '').trim() || null });
@@ -104,14 +108,17 @@ function FbImport({ t, participants, onClose, onDone }) {
                 <select value={cCol} onChange={(e) => setCCol(e.target.value === '' ? '' : Number(e.target.value))}>{colOpts(true)}</select></div>
             </div>
             <p className="muted mini" style={{ margin: '10px 0 4px' }}>
-              These sheet columns become this training's questions — untick anything that isn't one:
+              These sheet columns become this training's questions — ratings count in averages,
+              text answers are imported word-for-word. Untick anything that isn't a question:
             </p>
             <div style={{ maxHeight: 220, overflowY: 'auto' }}>
               {sheet.headers.map((h, i) => (i === idCol || i === cCol) ? null : (
                 <label key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', fontSize: 13, cursor: 'pointer' }}>
                   <input type="checkbox" checked={sheet.qSel.has(i)} onChange={() => toggleQ(i)} />
                   <span style={{ flex: 1 }}>{h || `Column ${i + 1}`}</span>
-                  {!sheet.qSel.has(i) && <span className="muted mini">ignored</span>}
+                  {sheet.qSel.has(i)
+                    ? <span className={'pill mini ' + (sheet.kinds[i] === 'rating' ? 'good' : 'soft')}>{sheet.kinds[i] === 'rating' ? '1–5 rating' : 'text'}</span>
+                    : <span className="muted mini">{sheet.kinds[i] === 'empty' ? 'empty · ignored' : 'ignored'}</span>}
                 </label>
               ))}
             </div>
@@ -324,7 +331,12 @@ export default function Feedback() {
                 <tbody>
                   {results.responses.map((r, ri) => (
                     <tr key={ri}><td>{r.respondent}</td>
-                      {results.questions.map((q, i) => <td key={i} style={{ textAlign: 'right' }}>{r.scores[i] || '—'}</td>)}
+                      {results.questions.map((q, i) => (
+                        <td key={i} title={String(r.scores[i] ?? '')}
+                          style={{ textAlign: 'right', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.scores[i] ?? '—'}
+                        </td>
+                      ))}
                       <td className="muted" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleString('en-IN')}</td>
                       <td className="muted mini">{r.comment}</td></tr>
                   ))}

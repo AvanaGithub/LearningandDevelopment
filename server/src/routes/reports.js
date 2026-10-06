@@ -69,7 +69,7 @@ router.get('/feedback-summary', async (req, res, next) => {
     const { rows } = await query(
       `SELECT t.id, t.code, t.title, t.batch, t.trainer_type, t.trainer_name, t.agency, t.status,
               count(DISTINCT r.id)::int AS responses,
-              round(avg((v.value)::numeric), 2) AS avg_score,
+              round(avg(CASE WHEN v.value ~ '^\\s*[0-9]+(\\.[0-9]+)?\\s*$' THEN v.value::numeric END), 2) AS avg_score,
               (SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id) AS participant_count
        FROM trainings t
        LEFT JOIN feedback_responses r ON r.training_id = t.id

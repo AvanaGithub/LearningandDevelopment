@@ -90,8 +90,12 @@ router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '
       const scores = {};
       let any = false;
       questions.forEach((q, i) => {
-        const v = Number(r.scores?.[i]);
+        const raw = r.scores?.[i];
+        if (raw === undefined || raw === null || String(raw).trim() === '') return;
+        const v = Number(raw);
         if (Number.isInteger(v) && v >= 1 && v <= 5) { scores[i] = v; any = true; }
+        // Text answers (open questions) are kept verbatim.
+        else { scores[i] = String(raw).trim().slice(0, 1000); any = true; }
       });
       if (!empId || !partIds.has(empId) || !any) { skipped++; continue; }
       await query(
