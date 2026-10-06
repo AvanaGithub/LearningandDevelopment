@@ -4,17 +4,18 @@ import { useAuth, useToast } from '../App.jsx';
 import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
 
-// Excel import of feedback collected offline: one row per respondent, one
-// column per question (ratings 1–5). Rows map to this training's
-// participants by Zoho ID, name or e-mail; question columns are matched to
-// the training's form, adjustable before importing.
-function FbImport({ t, questions, participants, onClose, onDone }) {
-  const [sheet, setSheet] = useState(null);
+// Excel import of feedback collected offline (e.g. a Microsoft Forms
+// export). The sheet's own rating columns BECOME this training's
+// questions — each training keeps its own set. Rows are matched to the
+// training's participants by Zoho ID, name or e-mail.
+function FbImport({ t, participants, onClose, onDone }) {
+  const [sheet, setSheet] = useState(null);     // {headers, rows, qSel:Set(colIdx)}
   const [idCol, setIdCol] = useState(0);
-  const [qCols, setQCols] = useState([]);       // question index -> column index or ''
   const [cCol, setCCol] = useState('');         // comment column
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+
+  const META = /^(id|start ?time|completion ?time|last modified|e-?mail|name|employee|emp ?id|zoho|timestamp|total points|quiz feedback|points|grade)/i;
 
   const pick = async (e) => {
     const f = e.target.files[0];
@@ -25,24 +26,34 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
       const rows = aoa.slice(1).filter((r) => r.some((c) => String(c).trim() !== ''));
       if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
       const low = headers.map((h) => h.toLowerCase());
-      const guessId = low.findIndex((h) => /emp|zoho|id|name|participant|respondent|mail/.test(h));
-      // Match each form question to a column: by question text, then "Q<n>".
-      setQCols(questions.map((q, i) => {
-        const ql = q.toLowerCase();
-        let j = low.findIndex((h) => h.includes(ql.slice(0, 18)));
-        if (j < 0) j = low.findIndex((h) => new RegExp(`^q\\s*${i + 1}\\b`).test(h));
-        return j >= 0 ? j : '';
-      }));
+      const guessId = low.findIndex((h) => /emp|zoho|e-?mail|name|participant|respondent/.test(h));
       const gc = low.findIndex((h) => /comment|improve|suggest|remark/.test(h));
-      setCCol(gc >= 0 ? gc : '');
+      // A column is a question when most of its filled cells are ratings 1–5.
+      const isRating = (i) => {
+        const vals = rows.map((r) => String(r[i] ?? '').trim()).filter(Boolean);
+        if (!vals.length) return false;
+        const ok = vals.filter((v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 5).length;
+        return ok / vals.length >= 0.5;
+      };
+      const qSel = new Set(headers.map((h, i) => i)
+        .filter((i) => i !== guessId && i !== gc && !META.test(headers[i]) && isRating(i)));
       setIdCol(guessId >= 0 ? guessId : 0);
-      setSheet({ headers, rows });
+      setCCol(gc >= 0 ? gc : '');
+      setSheet({ headers, rows, qSel });
     } catch (e2) { setErr(e2.message); }
   };
+
+  const toggleQ = (i) => setSheet((s) => {
+    const qSel = new Set(s.qSel);
+    qSel.has(i) ? qSel.delete(i) : qSel.add(i);
+    return { ...s, qSel };
+  });
 
   const run = async () => {
     setBusy(true); setErr(null);
     try {
+      const qIdx = sheet.headers.map((h, i) => i).filter((i) => sheet.qSel.has(i));
+      const questions = qIdx.map((i) => sheet.headers[i] || `Question ${i + 1}`);
       const out = [];
       let unmatched = 0;
       for (const r of sheet.rows) {
@@ -53,17 +64,16 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
           (x.email || '').toLowerCase() === key);
         if (!p) { unmatched++; continue; }
         const scores = {};
-        questions.forEach((q, i) => {
-          if (qCols[i] === '') return;
-          const v = Number(String(r[qCols[i]]).trim());
+        qIdx.forEach((col, i) => {
+          const v = Number(String(r[col]).trim());
           if (Number.isInteger(v) && v >= 1 && v <= 5) scores[i] = v;
         });
         out.push({ employee_id: p.id, respondent: p.name, scores,
           comment: cCol === '' ? null : String(r[cCol] || '').trim() || null });
       }
       if (!out.length) throw new Error('No row matched the participant list — check the respondent column.');
-      const res = await api.post(`/api/feedback/${t.id}/import`, { rows: out });
-      onDone(`${res.ok} response(s) imported${res.skipped ? ` · ${res.skipped} skipped (no valid 1–5 ratings)` : ''}${unmatched ? ` · ${unmatched} row(s) skipped (not in the participant list)` : ''}.`);
+      const res = await api.post(`/api/feedback/${t.id}/import`, { questions, rows: out });
+      onDone(`${res.ok} response(s) imported with ${questions.length} question(s) from your sheet${res.skipped ? ` · ${res.skipped} skipped (no valid 1–5 ratings)` : ''}${unmatched ? ` · ${unmatched} row(s) skipped (not in the participant list)` : ''}.`);
     } catch (e2) { setErr(e2.message); setBusy(false); }
   };
 
@@ -76,12 +86,13 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <h3>Import feedback — {t.title}</h3>
         {!sheet ? (
           <>
-            <p className="muted mini">One row per respondent, one column per question with ratings 1–5, plus an optional
-              comment column. Rows are matched to this training's participants by Zoho ID, name or e-mail.</p>
+            <p className="muted mini">One row per respondent, one column per question with ratings 1–5 (a Microsoft Forms
+              Excel export works as-is). The sheet's question columns become this training's questions —
+              every training keeps its own set. Rows are matched to the participants by Zoho ID, name or e-mail.</p>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={pick} style={{ marginTop: 8 }} />
           </>
         ) : (
@@ -92,16 +103,18 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
               <div><label>Comment column (optional)</label>
                 <select value={cCol} onChange={(e) => setCCol(e.target.value === '' ? '' : Number(e.target.value))}>{colOpts(true)}</select></div>
             </div>
-            <p className="muted mini" style={{ margin: '10px 0 4px' }}>Map each question to its column:</p>
-            {questions.map((q, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', fontSize: 13 }}>
-                <span style={{ flex: 1 }}>Q{i + 1} · {q}</span>
-                <select value={qCols[i]} style={{ width: 200 }}
-                  onChange={(e) => { const c = [...qCols]; c[i] = e.target.value === '' ? '' : Number(e.target.value); setQCols(c); }}>
-                  {colOpts(true)}
-                </select>
-              </div>
-            ))}
+            <p className="muted mini" style={{ margin: '10px 0 4px' }}>
+              These sheet columns become this training's questions — untick anything that isn't one:
+            </p>
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {sheet.headers.map((h, i) => (i === idCol || i === cCol) ? null : (
+                <label key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={sheet.qSel.has(i)} onChange={() => toggleQ(i)} />
+                  <span style={{ flex: 1 }}>{h || `Column ${i + 1}`}</span>
+                  {!sheet.qSel.has(i) && <span className="muted mini">ignored</span>}
+                </label>
+              ))}
+            </div>
             {(() => {
               const matched = sheet.rows.filter((r) => {
                 const key = String(r[idCol] || '').trim().toLowerCase();
@@ -112,8 +125,8 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
               }).length;
               return (
                 <p className="muted mini" style={{ marginTop: 8 }}>
-                  <b>{matched}</b> of {sheet.rows.length} row(s) match this training's participant list —
-                  only those are imported; everyone else in the sheet is ignored.
+                  <b>{sheet.qSel.size}</b> question(s) selected · <b>{matched}</b> of {sheet.rows.length} row(s) match
+                  this training's participant list — only those are imported.
                 </p>
               );
             })()}
@@ -121,7 +134,7 @@ function FbImport({ t, questions, participants, onClose, onDone }) {
         )}
         {err && <p className="err">{err}</p>}
         <div className="form-actions">
-          {sheet && <button className="btn gold" disabled={busy || qCols.every((c) => c === '')} onClick={run}>
+          {sheet && <button className="btn gold" disabled={busy || !sheet.qSel.size} onClick={run}>
             {busy ? 'Importing…' : 'Import feedback'}</button>}
           <button className="btn" disabled={busy} onClick={onClose}>Cancel</button>
         </div>
@@ -258,7 +271,7 @@ export default function Feedback() {
       )}
 
       {importing && (
-        <FbImport t={importing.t} questions={importing.questions} participants={importing.participants}
+        <FbImport t={importing.t} participants={importing.participants}
           onClose={() => setImporting(null)}
           onDone={(msg) => { setImporting(null); toast(msg); load(); }} />
       )}

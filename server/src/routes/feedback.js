@@ -68,7 +68,17 @@ router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '
     const trainingId = Number(req.params.trainingId);
     const { rows: t } = await query('SELECT feedback_questions FROM trainings WHERE id=$1', [trainingId]);
     if (!t.length) return res.status(404).json({ error: 'Not found' });
-    const questions = t[0].feedback_questions || DEFAULT_QUESTIONS;
+    let questions = t[0].feedback_questions || DEFAULT_QUESTIONS;
+    // The sheet brings its own questions (each training has its own set):
+    // they become this training's feedback form.
+    if (Array.isArray(req.body?.questions)) {
+      const qs = req.body.questions.map((q) => String(q).trim().slice(0, 300)).filter(Boolean);
+      if (qs.length < 1 || qs.length > 20) return res.status(400).json({ error: 'Between 1 and 20 question columns' });
+      questions = qs;
+      await query('UPDATE trainings SET feedback_questions=$2, updated_at=now() WHERE id=$1',
+        [trainingId, JSON.stringify(qs)]);
+      await audit(req.user.id, 'feedback.form_update', 'training', trainingId, { questions: qs, via: 'import' });
+    }
     const { rows: parts } = await query(
       'SELECT employee_id FROM training_participants WHERE training_id=$1', [trainingId]);
     const partIds = new Set(parts.map((p) => p.employee_id));
