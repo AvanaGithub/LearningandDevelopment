@@ -25,7 +25,7 @@ const fyLabel = () => {
 
 const EMPTY = {
   training_id: '', training_label: '', dates: '', location: '', participants: '',
-  entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], training_type: 'Internal',
+  entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], accommodation: '', training_type: 'Internal',
   vendor: '', description: '', budget: '', actual: '', payments: [{ date: '', amt: '', invoices: [] }],
   invoices: '', approval: 'pending', payment_status: '', remark: '', reason: '',
 };
@@ -96,7 +96,7 @@ export default function Expenses() {
     setForm({
       id: r.id, training_id: r.training_id || '', training_label: r.training_label,
       dates: r.dates || '', location: r.location || '', participants: r.participants || '',
-      entity_split: split, category: r.category || EXP_CATEGORIES[0],
+      entity_split: split, category: r.category || EXP_CATEGORIES[0], accommodation: r.accommodation || '',
       training_type: r.training_type || 'Internal', vendor: r.vendor || '',
       description: r.description || '', budget: r.budget, actual: r.actual,
       payments: (r.payments || []).length ? r.payments.map((p) => ({ invoices: [], ...p })) : [{ date: '', amt: '', invoices: [] }],
@@ -166,12 +166,12 @@ export default function Expenses() {
         <h2>Expenses</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => toXlsx('Expense-Records.xlsx',
-            ['Training', 'Dates', 'Location', 'Participants', 'Entities', 'Category', 'Type', 'Vendor', 'Description',
+            ['Training', 'Dates', 'Location', 'Participants', 'Entities', 'Category', 'Accommodation at', 'Type', 'Vendor', 'Description',
               'Budget', 'Actual', 'Paid', 'Pending', 'Variance', 'Approval', 'Payment status', 'Payments', 'Invoices', 'Remark'],
             (rows || []).map((r) => {
               const paid = paidOf(r);
               return [r.training_label, r.dates || '', r.location || '', r.participants,
-                (r.entity_split || []).map((s) => `${entLabel(s.ent)} ${s.n}`).join(' | '), r.category || '', r.training_type || '',
+                (r.entity_split || []).map((s) => `${entLabel(s.ent)} ${s.n}`).join(' | '), r.category || '', r.accommodation || '', r.training_type || '',
                 r.vendor || '', r.description || '', Number(r.budget), Number(r.actual), paid,
                 Number(r.actual) - paid, Number(r.budget) - Number(r.actual), r.approval, payStatus(r)[0],
                 (r.payments || []).map((p) => `${p.date} ₹${p.amt}`).join(' | '),
@@ -205,6 +205,11 @@ export default function Expenses() {
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {EXP_CATEGORIES.map((x) => <option key={x}>{x}</option>)}
               </select></div>
+            {/accommodation/i.test(form.category || '') && (
+              <div><label>Accommodation at (hotel / place)</label>
+                <input value={form.accommodation} placeholder="e.g. Hotel Radisson Blu, Chennai"
+                  onChange={(e) => setForm({ ...form, accommodation: e.target.value })} /></div>
+            )}
             <div><label>Training type</label>
               <select value={form.training_type} onChange={(e) => setForm({ ...form, training_type: e.target.value })}>
                 <option>Internal</option><option>External</option>
@@ -374,6 +379,7 @@ export default function Expenses() {
               <dt>Location</dt><dd>{sel.location || '—'}</dd>
               <dt>Participants</dt><dd>{sel.participants}</dd>
               <dt>Type / Vendor</dt><dd>{sel.training_type}{sel.vendor ? ' · ' + sel.vendor : ''}</dd>
+              {sel.accommodation && <><dt>Accommodation at</dt><dd>{sel.accommodation}</dd></>}
               <dt>Description</dt><dd>{sel.description || '—'}</dd>
               <dt>Approved budget</dt><dd>₹{inr(sel.budget)}</dd>
               <dt>Actual expense</dt><dd>₹{inr(sel.actual)}</dd>
