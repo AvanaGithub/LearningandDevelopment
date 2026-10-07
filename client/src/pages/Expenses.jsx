@@ -114,17 +114,33 @@ export default function Expenses() {
     } catch (e2) { setErr(e2.message); }
   };
 
+  // Prefill the per-entity participant counts from the picked training's
+  // (or batch's) actual roster — still editable afterwards.
+  const prefillSplit = (people, stillCurrent) => {
+    const n = { AMD: 0, ASS: 0, ATS: 0 };
+    people.forEach((p) => { if (n[p.entity] !== undefined) n[p.entity] += 1; });
+    setForm((f) => (f && stillCurrent(f) ? {
+      ...f,
+      entity_split: { AMD: n.AMD || '', ASS: n.ASS || '', ATS: n.ATS || '' },
+      participants: '',
+    } : f));
+  };
+
   const pickTraining = (id) => {
     if (String(id).startsWith('mav-')) {
       const b = batches.find((x) => 'mav-' + x.id === id);
       if (b) {
-        return setForm({
+        setForm({
           ...form, training_id: '',
           training_label: 'Mavericks — ' + b.name,
           dates: b.start_date ? 'from ' + b.start_date.slice(0, 10) : '',
           participants: b.member_count || form.participants,
           training_type: 'Internal',
         });
+        api.get('/api/mavericks/' + b.id)
+          .then((d) => prefillSplit(d.members, (f) => f.training_label === 'Mavericks — ' + b.name))
+          .catch(() => {});
+        return;
       }
     }
     const t = trainings.find((x) => x.id === Number(id));
@@ -137,6 +153,9 @@ export default function Expenses() {
       training_type: t.trainer_type === 'external' ? 'External' : 'Internal',
       vendor: t.trainer_type === 'external' ? (t.agency || form.vendor) : form.vendor,
     });
+    api.get('/api/trainings/' + id)
+      .then((d) => prefillSplit(d.participants, (f) => String(f.training_id) === String(id)))
+      .catch(() => {});
   };
 
   const totalSplit = form ? ENTITIES.reduce((a, e) => a + (Number(form.entity_split[e]) || 0), 0) : 0;
