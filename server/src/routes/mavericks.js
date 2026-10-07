@@ -19,10 +19,18 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+const MAV_FIELD_LABELS = { mentor: 'Programme lead', start_date: 'Training start date', end_date: 'Training end date', notes: 'Notes' };
+async function missingMav(b) {
+  const req2 = await require('./settings').requiredFields('mavericks');
+  return req2.filter((k) => MAV_FIELD_LABELS[k] && !(b[k] && String(b[k]).trim())).map((k) => MAV_FIELD_LABELS[k]);
+}
+
 router.post('/', requireRole('admin'), express.json(), async (req, res, next) => {
   try {
     const b = req.body || {};
     if (!b.name?.trim()) return res.status(400).json({ error: 'Batch name is required' });
+    const miss = await missingMav(b);
+    if (miss.length) return res.status(400).json({ error: 'Mandatory field(s) missing: ' + miss.join(', ') });
     const { rows } = await query(
       'INSERT INTO mav_batches (name, mentor, start_date, end_date, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *',
       [b.name.trim(), b.mentor?.trim() || null, b.start_date || null, b.end_date || null, b.notes?.trim() || null]);

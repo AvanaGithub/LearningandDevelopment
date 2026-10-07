@@ -16,6 +16,9 @@ const DEFAULTS = {
   entity_budgets: { AMD: 700000, ASS: 450000, ATS: 250000 },
   required_employee_fields: ['name', 'entity'],
   joiner_steps: ['Induction training', 'Product training', 'Department orientation', 'Systems access set up'],
+  // Mandatory optional-fields per form, set from the Settings screen and
+  // enforced server-side (employees has its own legacy key).
+  required_fields: { trainings: [], expenses: [], mavericks: [] },
   // Outlook / Microsoft 365 notifications. The password is write-only:
   // it is stored here but never sent back to any client.
   smtp: {
@@ -86,4 +89,11 @@ router.post('/test-mail', requireRole('admin'), async (req, res, next) => {
   }
 });
 
-module.exports = { router, DEFAULTS };
+// Which optional fields of a form the admins promoted to mandatory.
+async function requiredFields(section) {
+  const { rows } = await query(`SELECT value FROM settings WHERE key='required_fields'`);
+  const v = rows.length ? rows[0].value : DEFAULTS.required_fields;
+  return Array.isArray(v?.[section]) ? v[section] : [];
+}
+
+module.exports = { router, DEFAULTS, requiredFields };

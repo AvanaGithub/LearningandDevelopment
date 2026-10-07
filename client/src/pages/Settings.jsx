@@ -3,20 +3,47 @@ import { api, ENTITIES, ENTITY_NAMES, inr } from '../api.js';
 import { useSettings, useToast } from '../App.jsx';
 
 const LISTS = [
-  { key: 'divisions', label: 'Divisions', hint: 'Business lines shown on employees, assessments and filters.' },
-  { key: 'departments', label: 'Departments', hint: 'Functions shown on employees and filters.' },
-  { key: 'emp_types', label: 'Employment types', hint: 'Options in the employee form.' },
-  { key: 'trn_categories', label: 'Training categories', hint: 'Options when planning a training.' },
-  { key: 'exp_categories', label: 'Expense categories', hint: 'Cost heads on expense records.' },
-  { key: 'joiner_steps', label: 'New-joiner checklist steps', hint: 'Tracked per joiner on the New Joiners tab.' },
+  { key: 'divisions', label: 'Divisions', icon: '🧭', hint: 'Business lines shown on employees, assessments and filters.' },
+  { key: 'departments', label: 'Departments', icon: '🏢', hint: 'Functions shown on employees and filters.' },
+  { key: 'emp_types', label: 'Employment types', icon: '🪪', hint: 'Options in the employee form.' },
+  { key: 'trn_categories', label: 'Training categories', icon: '📚', hint: 'Options when planning a training.' },
+  { key: 'exp_categories', label: 'Expense categories', icon: '🧾', hint: 'Cost heads on expense records.' },
+  { key: 'joiner_steps', label: 'New-joiner checklist steps', icon: '🧷', hint: 'Tracked per joiner on the New Joiners tab.' },
 ];
 
-// Optional employee-form fields an admin can promote to mandatory.
-const EMP_FIELDS = [
-  ['zoho_emp_id', 'Zoho employee ID'], ['email', 'Official e-mail'], ['mobile', 'Mobile'],
-  ['division', 'Division'], ['department', 'Department'], ['designation', 'Designation'],
-  ['manager', 'Reporting manager'], ['date_joined', 'Date of joining'], ['location', 'Location'],
+// Optional fields an admin can promote to mandatory, per form. Enforced
+// on the server, so the rule holds regardless of client.
+const MANDATE_GROUPS = [
+  {
+    section: 'employees', label: 'Employees', icon: '👤', legacy: true,
+    fields: [['zoho_emp_id', 'Zoho employee ID'], ['email', 'Official e-mail'], ['mobile', 'Mobile'],
+      ['division', 'Division'], ['department', 'Department'], ['designation', 'Designation'],
+      ['manager', 'Reporting manager'], ['date_joined', 'Date of joining'], ['location', 'Location']],
+    note: 'Name and entity are always required.',
+  },
+  {
+    section: 'trainings', label: 'Trainings', icon: '📚',
+    fields: [['batch', 'Batch'], ['category', 'Category'], ['department', 'Departments'], ['division', 'Divisions'],
+      ['mode', 'Mode'], ['validity_months', 'Re-training validity'], ['agenda_file', 'Training agenda']],
+    note: 'Title, dates and trainer are always required.',
+  },
+  {
+    section: 'expenses', label: 'Expenses', icon: '🧾',
+    fields: [['budget', 'Approved budget'], ['dates', 'Training dates'], ['location', 'Location'],
+      ['category', 'Category'], ['vendor', 'Vendor'], ['description', 'Description'],
+      ['remark', 'Remark'], ['payments', 'Payment rows']],
+    note: 'Training name, entity split and actual expense are always required.',
+  },
+  {
+    section: 'mavericks', label: 'Mavericks batches', icon: '🚀',
+    fields: [['mentor', 'Programme lead'], ['start_date', 'Start date'], ['end_date', 'End date'], ['notes', 'Notes']],
+    note: 'Batch name is always required.',
+  },
 ];
+
+const Strip = ({ icon, children }) => (
+  <div className="sect-strip"><span className="sicon">{icon}</span>{children}</div>
+);
 
 export default function Settings() {
   const { settings, reloadSettings } = useSettings();
@@ -27,7 +54,26 @@ export default function Settings() {
   const [err, setErr] = useState(null);
 
   if (!settings) return <p className="muted">Loading…</p>;
-  const sm = smtp || { ...settings.smtp, pass: '' };
+  const sm = smtp || { ...settings.smtp, pass: '', client_secret: '' };
+
+  const save = async (key, value, msg) => {
+    setErr(null);
+    try {
+      await api.put('/api/settings/' + key, { value });
+      reloadSettings();
+      toast(msg || 'Setting saved — applies across the application immediately.');
+    } catch (e) { setErr(e.message); }
+  };
+
+  const rf = settings.required_fields || { trainings: [], expenses: [], mavericks: [] };
+  const reqOf = (g) => (g.legacy ? (settings.required_employee_fields || []) : (rf[g.section] || []));
+  const toggleReq = (g, key, label) => {
+    const cur = reqOf(g);
+    const next = cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key];
+    const msg = `"${label}" is ${cur.includes(key) ? 'optional again' : 'now mandatory'} on the ${g.label} form.`;
+    if (g.legacy) save('required_employee_fields', next, msg);
+    else save('required_fields', { ...rf, [g.section]: next }, msg);
+  };
 
   const saveSmtp = async () => {
     setErr(null);
@@ -46,29 +92,19 @@ export default function Settings() {
     setTesting(false);
   };
 
-  const save = async (key, value, msg) => {
-    setErr(null);
-    try {
-      await api.put('/api/settings/' + key, { value });
-      reloadSettings();
-      toast(msg || 'Setting saved — applies across the application immediately.');
-    } catch (e) { setErr(e.message); }
-  };
-
-  const req = settings.required_employee_fields || [];
-
   return (
     <>
       <div className="page-head"><h2>Settings</h2></div>
-      <p className="muted" style={{ marginBottom: 16, fontSize: 13 }}>
+      <p className="muted" style={{ marginBottom: 6, fontSize: 13 }}>
         Customise the application without a code change. Every change is logged to the audit trail and applies immediately for everyone.
       </p>
       {err && <p className="err">{err}</p>}
 
+      <Strip icon="🗂">Master lists</Strip>
       <div className="cols2">
         {LISTS.map((l) => (
-          <div key={l.key} className="card" style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15 }}>{l.label} <span className="pill soft mini">{(settings[l.key] || []).length}</span></h3>
+          <div key={l.key} className="card scard" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15 }}><span className="sicon">{l.icon}</span>{l.label} <span className="pill soft mini">{(settings[l.key] || []).length}</span></h3>
             <p className="muted mini" style={{ margin: '4px 0 0' }}>{l.hint}</p>
             <div className="chiprow">
               {(settings[l.key] || []).map((item) => (
@@ -101,26 +137,33 @@ export default function Settings() {
             </div>
           </div>
         ))}
+      </div>
 
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15 }}>Mandatory employee fields</h3>
-          <p className="muted mini" style={{ margin: '4px 0 0' }}>
-            Name and entity are always required. Tap a chip to make that field mandatory (gold = mandatory).
-          </p>
-          <div className="chiprow">
-            {EMP_FIELDS.map(([key, label]) => (
-              <button key={key} className={'togglechip' + (req.includes(key) ? ' on' : '')}
-                onClick={() => save('required_employee_fields',
-                  req.includes(key) ? req.filter((x) => x !== key) : [...req, key],
-                  `"${label}" is ${req.includes(key) ? 'optional again' : 'now mandatory'} on the employee form.`)}>
-                {label}
-              </button>
-            ))}
+      <Strip icon="✅">Mandatory fields — per form</Strip>
+      <div className="cols2">
+        {MANDATE_GROUPS.map((g) => (
+          <div key={g.section} className="card scard" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15 }}><span className="sicon">{g.icon}</span>{g.label}
+              <span className="pill soft mini">{reqOf(g).length} mandatory</span></h3>
+            <p className="muted mini" style={{ margin: '4px 0 0' }}>
+              {g.note} Tap a chip to make that field mandatory (gold = mandatory) — enforced when saving, including imports.
+            </p>
+            <div className="chiprow">
+              {g.fields.map(([key, label]) => (
+                <button key={key} className={'togglechip' + (reqOf(g).includes(key) ? ' on' : '')}
+                  onClick={() => toggleReq(g, key, label)}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15 }}>Annual training budgets (₹, per entity)</h3>
+      <Strip icon="💰">Budgets</Strip>
+      <div className="cols2">
+        <div className="card scard" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15 }}><span className="sicon">💰</span>Annual training budgets (₹, per entity)</h3>
           <p className="muted mini" style={{ margin: '4px 0 10px' }}>
             Drives the Budget vs actual table on Expenses and the dashboard spend tile.
           </p>
@@ -141,9 +184,12 @@ export default function Settings() {
             Total: ₹{inr(ENTITIES.reduce((a, e) => a + (Number(settings.entity_budgets?.[e]) || 0), 0))} per financial year.
           </p>
         </div>
+      </div>
 
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15 }}>E-mail notifications (Outlook / Microsoft 365)</h3>
+      <Strip icon="✉">Integrations</Strip>
+      <div className="cols2">
+        <div className="card scard" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15 }}><span className="sicon">✉</span>E-mail notifications (Outlook / Microsoft 365)</h3>
           <p className="muted mini" style={{ margin: '4px 0 10px' }}>
             When someone is nominated or assigned to a training, they get an Outlook e-mail from the
             mailbox below, and a summary goes to the notify address. Mails never block the nomination —
@@ -184,7 +230,7 @@ export default function Settings() {
           </div>
           <p className="muted mini" style={{ marginTop: 8 }}>
             {(sm.method || 'graph') === 'graph'
-              ? 'The three values come from a one-time app registration at entra.microsoft.com (App registrations → New → copy tenant ID + client ID; Certificates & secrets → New client secret; API permissions → Microsoft Graph → Application → Mail.Send → Grant admin consent).'
+              ? 'The three values come from a one-time app registration at entra.microsoft.com (App registrations → New → copy tenant ID + client ID; Certificates or a client secret; API permissions → Microsoft Graph → Application → Mail.Send → Grant admin consent).'
               : 'Server: smtp.office365.com, port 587. Needs Authenticated SMTP enabled on the mailbox and an app password.'}
             {' '}Secrets are stored on your server only and never shown again.
           </p>

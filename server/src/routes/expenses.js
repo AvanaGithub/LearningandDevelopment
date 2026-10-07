@@ -51,20 +51,33 @@ function pick(b) {
   };
 }
 
-function validate(f) {
+// The baseline requirements; everything else is admin-configurable
+// mandatory via Settings → required_fields.expenses.
+const EXP_FIELD_LABELS = {
+  budget: 'Approved budget', dates: 'Training dates', location: 'Location',
+  category: 'Category', vendor: 'Vendor', description: 'Description',
+  remark: 'Remark', payments: 'Payment rows',
+};
+function validate(f, required = []) {
   if (!f.training_label) return 'Training name is required';
   if (!f.entity_split.length) return 'Tick at least one entity with its participant count';
-  if (f.budget <= 0) return 'Approved budget cannot be zero';
   if (f.actual <= 0) return 'Actual expense cannot be zero';
   const paid = f.payments.reduce((a, p) => a + p.amt, 0);
   if (paid > f.actual) return `Amount paid (${paid}) exceeds the actual expense (${f.actual})`;
+  const missing = required.filter((k) => {
+    if (!EXP_FIELD_LABELS[k]) return false;
+    if (k === 'budget') return !(f.budget > 0);
+    if (k === 'payments') return !f.payments.length;
+    return !f[k];
+  }).map((k) => EXP_FIELD_LABELS[k]);
+  if (missing.length) return 'Mandatory field(s) missing: ' + missing.join(', ');
   return null;
 }
 
 router.post('/', express.json(), async (req, res, next) => {
   try {
     const f = pick(req.body || {});
-    const bad = validate(f);
+    const bad = validate(f, await require('./settings').requiredFields('expenses'));
     if (bad) return res.status(400).json({ error: bad });
     const { rows } = await query(
       `INSERT INTO expenses (training_id, training_label, dates, location, participants, entity_split,         category, training_type, vendor, description, budget, actual, payments, invoices, approval, payment_status, remark)
@@ -91,7 +104,7 @@ router.patch('/:id', express.json(), async (req, res, next) => {
       return res.json(rows[0]);
     }
     const f = pick({ ...cur[0], ...b });
-    const bad = validate(f);
+    const bad = validate(f, await require('./settings').requiredFields('expenses'));
     if (bad) return res.status(400).json({ error: bad });
     const { rows } = await query(
       `UPDATE expenses SET training_id=$2, training_label=$3, dates=$4, location=$5, participants=$6,

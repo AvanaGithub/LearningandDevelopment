@@ -33,6 +33,8 @@ const EMPTY = {
 export default function Expenses() {
   const toast = useToast();
   const { settings } = useSettings();
+  const reqE = settings?.required_fields?.expenses || [];
+  const star = (k) => (reqE.includes(k) ? ' *' : '');
   const [rows, setRows] = useState(null);
   const [trainings, setTrainings] = useState([]);
   const [form, setForm] = useState(null);
@@ -176,11 +178,11 @@ export default function Expenses() {
               </select></div>
             <div><label>Training name (label) *</label>
               <input required value={form.training_label} onChange={(e) => setForm({ ...form, training_label: e.target.value })} /></div>
-            <div><label>Training dates</label>
+            <div><label>Training dates{star('dates')}</label>
               <input value={form.dates} onChange={(e) => setForm({ ...form, dates: e.target.value })} /></div>
-            <div><label>Training location</label>
+            <div><label>Training location{star('location')}</label>
               <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
-            <div><label>Category</label>
+            <div><label>Category{star('category')}</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {EXP_CATEGORIES.map((x) => <option key={x}>{x}</option>)}
               </select></div>
@@ -189,10 +191,10 @@ export default function Expenses() {
                 <option>Internal</option><option>External</option>
               </select></div>
             {form.training_type === 'External' &&
-              <div><label>Vendor name</label>
+              <div><label>Vendor name{star('vendor')}</label>
                 <input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} /></div>}
-            <div><label>Approved budget ₹ *</label>
-              <input required type="number" min="1" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} /></div>
+            <div><label>Approved budget ₹{star('budget')}</label>
+              <input required={reqE.includes('budget')} type="number" min="0" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} /></div>
             <div><label>Actual expense ₹ *</label>
               <input required type="number" min="1" value={form.actual} onChange={(e) => setForm({ ...form, actual: e.target.value })} /></div>
             <div><label>Approval status</label>
@@ -253,12 +255,12 @@ export default function Expenses() {
           <button className="btn" type="button" onClick={() => setForm({ ...form, payments: [...form.payments, { date: '', amt: '', invoices: [] }] })}>+ Add payment row</button>
 
           <div className="form-grid" style={{ marginTop: 12 }}>
-            <div><label>Description</label>
+            <div><label>Description{star('description')}</label>
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
             <div><label>Invoice file names (comma-separated)</label>
               <input value={form.invoices} placeholder="Invoice-4471.pdf, GST-2211.pdf"
                 onChange={(e) => setForm({ ...form, invoices: e.target.value })} /></div>
-            <div><label>Remark</label>
+            <div><label>Remark{star('remark')}</label>
               <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} /></div>
             {form.id && <div><label>Reason for this correction</label>
               <input value={form.reason} placeholder="Goes to the audit trail (optional)"

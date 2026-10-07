@@ -46,6 +46,8 @@ export default function Trainings() {
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
   const categories = settings?.trn_categories || TRN_CATEGORIES;
   const departments = settings?.departments || DEPARTMENTS;
+  const reqT = settings?.required_fields?.trainings || [];
+  const starT = (k) => (reqT.includes(k) ? ' *' : '');
   const divisions = settings?.divisions || DIVISIONS;
 
   const uploadAgenda = async (files) => {
@@ -259,24 +261,24 @@ export default function Trainings() {
           <h3 style={{ fontSize: 15, marginBottom: 12 }}>{form.id ? 'Edit training' : 'Plan a training'}</h3>
           <div className="form-grid">
             {F('Training title *', 'title', { required: true })}
-            {F('Batch (optional)', 'batch', { placeholder: 'e.g. Batch 2' })}
-            <div><label>Category</label>
+            {F(`Batch${starT('batch') || ' (optional)'}`, 'batch', { placeholder: 'e.g. Batch 2', required: reqT.includes('batch') })}
+            <div><label>Category{starT('category')}</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {categories.filter((x) => x !== 'Induction' || form.category === 'Induction')
                   .map((x) => <option key={x}>{x}</option>)}
               </select>
               <div className="muted" style={{ fontSize: 11 }}>Induction trainings are created under New Joiners.</div></div>
-            <div><label>Departments (optional)</label>
+            <div><label>Departments{starT('department') || ' (optional)'}</label>
               <MSel label="Departments" empty="All departments" allowAll
                 options={departments.map((x) => ({ v: x, t: x }))}
                 sel={form.department} onChange={(v) => setForm({ ...form, department: v })} />
             </div>
-            <div><label>Divisions (optional)</label>
+            <div><label>Divisions{starT('division') || ' (optional)'}</label>
               <MSel label="Divisions" empty="All divisions" allowAll
                 options={divisions.map((x) => ({ v: x, t: x }))}
                 sel={form.division} onChange={(v) => setForm({ ...form, division: v })} />
             </div>
-            <div><label>Mode</label>
+            <div><label>Mode{starT('mode')}</label>
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
                 {TRN_MODES.map((x) => <option key={x}>{x}</option>)}
               </select></div>
@@ -312,8 +314,8 @@ export default function Trainings() {
                 <option value="no">Optional</option>
                 <option value="yes">Mandatory</option>
               </select></div>
-            {F('Re-training validity (months, optional)', 'validity_months', { type: 'number', min: 1, placeholder: 'e.g. 12 — drives re-training due reports' })}
-            <div><label>Training agenda (optional)</label>
+            {F(`Re-training validity (months${starT('validity_months') || ', optional'})`, 'validity_months', { type: 'number', min: 1, placeholder: 'e.g. 12 — drives re-training due reports', required: reqT.includes('validity_months') })}
+            <div><label>Training agenda{starT('agenda_file') || ' (optional)'}</label>
               {form.agenda_file
                 ? <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, paddingTop: 6 }}>
                     <span>📄 {form.agenda_name || 'Attached'}</span>

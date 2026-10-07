@@ -88,6 +88,15 @@ tr:hover td{background:var(--panel2)}
 .kv dd{margin:0}
 tr.rowlink{cursor:pointer}
 
+/* ---- settings ---- */
+.sect-strip{display:flex;align-items:center;gap:10px;margin:22px 0 12px;font-family:'Fira Sans';font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.sect-strip::after{content:'';flex:1;height:1px;background:var(--line)}
+.sect-strip .sicon{font-size:13px}
+.sicon{width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#C8930A,#E3B23A);font-size:13px;flex:none}
+.scard{transition:box-shadow .15s ease}
+.scard:hover{box-shadow:0 6px 18px rgba(33,27,16,.08)}
+.scard h3{display:flex;align-items:center;gap:8px}
+
 /* ---- attendance grid ---- */
 .attcell{width:34px;height:28px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);font-weight:600;font-size:12px;color:var(--ink2)}
 .attcell.P{background:var(--good-soft);color:var(--good);border-color:transparent}

@@ -89,6 +89,8 @@ export default function Mavericks() {
   };
 
   const divisions = settings?.divisions || [];
+  const reqM = settings?.required_fields?.mavericks || [];
+  const starM = (k) => (reqM.includes(k) ? ' *' : '');
   const mentorsOf = () => {
     const g = {};
     (sel?.members || []).forEach((m) => {
@@ -115,14 +117,14 @@ export default function Mavericks() {
         <form className="card" onSubmit={saveBatch}>
           <div className="form-grid">
             <div><label>Batch name *</label><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Mavericks B-4" /></div>
-            <div><label>Programme lead</label><input value={form.mentor || ''} onChange={(e) => setForm({ ...form, mentor: e.target.value })} /></div>
-            <div><label>Training start date</label><input type="date" value={form.start_date || ''} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
-            <div><label>Training end date</label><input type="date" min={form.start_date || undefined} value={form.end_date || ''} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
+            <div><label>Programme lead{starM('mentor')}</label><input required={reqM.includes('mentor')} value={form.mentor || ''} onChange={(e) => setForm({ ...form, mentor: e.target.value })} /></div>
+            <div><label>Training start date{starM('start_date')}</label><input required={reqM.includes('start_date')} type="date" value={form.start_date || ''} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
+            <div><label>Training end date{starM('end_date')}</label><input required={reqM.includes('end_date')} type="date" min={form.start_date || undefined} value={form.end_date || ''} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
             {form.id && <div><label>Status</label>
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="active">Active</option><option value="completed">Completed</option><option value="closed">Closed</option>
               </select></div>}
-            <div style={{ gridColumn: '1/-1' }}><label>Notes</label><input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+            <div style={{ gridColumn: '1/-1' }}><label>Notes{starM('notes')}</label><input required={reqM.includes('notes')} value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
           <p className="muted mini" style={{ marginTop: 8 }}>
             The start→end range shows as blocked Mavericks dates on the Training Calendar.

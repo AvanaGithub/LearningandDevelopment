@@ -97,6 +97,16 @@ const nomFields = (b, cur, role) => (role === 'super_admin' ? {
   nom_deadline: cur.nom_deadline || null, completion_deadline: cur.completion_deadline || null,
 });
 
+// Admin-configurable mandatory fields (Settings → Mandatory fields).
+const TRN_FIELD_LABELS = {
+  batch: 'Batch', category: 'Category', department: 'Departments', division: 'Divisions',
+  mode: 'Mode', validity_months: 'Re-training validity (months)', agenda_file: 'Training agenda',
+};
+async function missingTrn(f) {
+  const req2 = await require('./settings').requiredFields('trainings');
+  return req2.filter((k) => TRN_FIELD_LABELS[k] && !f[k]).map((k) => TRN_FIELD_LABELS[k]);
+}
+
 const validDays = (days) =>
   Array.isArray(days) && days.length >= 1 && days.length <= 60 &&
   days.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
@@ -107,6 +117,8 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const nf = nomFields(req.body || {}, {}, req.user.role);
     const days = [...new Set(req.body.days || [])].sort();
     if (!f.title) return res.status(400).json({ error: 'Title is required' });
+    const miss = await missingTrn(f);
+    if (miss.length) return res.status(400).json({ error: 'Mandatory field(s) missing: ' + miss.join(', ') });
     if (!validDays(days)) return res.status(400).json({ error: 'Pick between 1 and 60 training dates' });
     if (f.trainer_type === 'external' && !f.agency) return res.status(400).json({ error: 'External agency name is required' });
     if (f.trainer_type === 'internal' && !f.trainer_name) return res.status(400).json({ error: 'Trainer name is required' });
@@ -135,6 +147,8 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     const f = pickFields({ ...cur[0], ...b });
     const nf = nomFields(b, cur[0], req.user.role);
     if (!f.title) return res.status(400).json({ error: 'Title is required' });
+    const miss = await missingTrn(f);
+    if (miss.length) return res.status(400).json({ error: 'Mandatory field(s) missing: ' + miss.join(', ') });
     const { rows } = await query(
       `UPDATE trainings SET title=$2, batch=$3, category=$4, department=$5, division=$6, mode=$7,
          trainer_type=$8, trainer_name=$9, agency=$10, hours_per_day=$11, seats=$12, mandatory=$13,
