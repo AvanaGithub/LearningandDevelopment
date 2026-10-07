@@ -168,9 +168,14 @@ export default function Settings() {
                 <input value={sm.tenant_id} onChange={(e) => setSmtp({ ...sm, tenant_id: e.target.value })} placeholder="xxxxxxxx-xxxx-…" /></div>
               <div><label>Application (client) ID</label>
                 <input value={sm.client_id} onChange={(e) => setSmtp({ ...sm, client_id: e.target.value })} placeholder="xxxxxxxx-xxxx-…" /></div>
-              <div><label>Client secret {settings.smtp?.has_secret ? '(saved — leave blank to keep)' : '*'}</label>
+              <div><label>Client secret {settings.smtp?.has_secret ? '(saved — leave blank to keep)' : '(optional)'}</label>
                 <input type="password" value={sm.client_secret} onChange={(e) => setSmtp({ ...sm, client_secret: e.target.value })}
-                  placeholder={settings.smtp?.has_secret ? '••••••••' : 'paste the secret Value'} autoComplete="new-password" /></div>
+                  placeholder={settings.smtp?.has_secret ? '••••••••' : 'leave blank to use the server certificate'} autoComplete="new-password" />
+                <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                  Server certificate: {settings.smtp?.cert_available
+                    ? <b style={{ color: 'var(--good)' }}>ready ✓ — upload its public .cer in Entra → Certificates</b>
+                    : 'not generated yet'}
+                </div></div>
             </>) : (
               <div><label>App password {settings.smtp?.has_pass ? '(saved — leave blank to keep)' : '*'}</label>
                 <input type="password" value={sm.pass} onChange={(e) => setSmtp({ ...sm, pass: e.target.value })}

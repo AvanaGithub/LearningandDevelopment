@@ -36,6 +36,7 @@ router.get('/', async (req, res, next) => {
       ...DEFAULTS.smtp, ...out.smtp,
       pass: '', has_pass: Boolean(out.smtp?.pass),
       client_secret: '', has_secret: Boolean(out.smtp?.client_secret),
+      cert_available: require('../mailer').certAvailable(),
     };
     res.json(out);
   } catch (e) { next(e); }

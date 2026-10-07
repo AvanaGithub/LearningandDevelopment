@@ -1,5 +1,40 @@
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { query } = require('./db');
+
+// Certificate credentials for Microsoft Graph (used when the tenant blocks
+// client secrets). The private key lives ONLY on the server, outside git;
+// the matching public certificate is uploaded to the app registration.
+const CERT_DIR = process.env.GRAPH_CERT_DIR || path.join(__dirname, '..', 'graphcert');
+const certFiles = () => ({ key: path.join(CERT_DIR, 'key.pem'), crt: path.join(CERT_DIR, 'cert.pem') });
+function certAvailable() {
+  const f = certFiles();
+  try { return fs.existsSync(f.key) && fs.existsSync(f.crt); } catch { return false; }
+}
+
+const b64u = (b) => Buffer.from(b).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+// Signed JWT client assertion (RS256, x5t thumbprint header) per the
+// Microsoft identity platform certificate-credential spec.
+function clientAssertion(c) {
+  const f = certFiles();
+  const key = fs.readFileSync(f.key, 'utf8');
+  const pem = fs.readFileSync(f.crt, 'utf8');
+  const der = Buffer.from(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, ''), 'base64');
+  const x5t = b64u(crypto.createHash('sha1').update(der).digest());
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT', x5t }));
+  const payload = b64u(JSON.stringify({
+    aud: `https://login.microsoftonline.com/${c.tenant_id}/oauth2/v2.0/token`,
+    iss: c.client_id, sub: c.client_id,
+    jti: crypto.randomUUID(), nbf: now - 60, exp: now + 600,
+  }));
+  const data = header + '.' + payload;
+  const sig = crypto.createSign('RSA-SHA256').update(data).sign(key);
+  return data + '.' + b64u(sig);
+}
 
 // Outlook / Microsoft 365 notifications. The SMTP settings (incl. the app
 // password) live in the settings table, managed from the admin Settings
@@ -11,7 +46,7 @@ async function cfg() {
   const c = rows.length ? rows[0].value : null;
   if (!c || !c.enabled) return null;
   if ((c.method || 'smtp') === 'graph') {
-    return c.tenant_id && c.client_id && c.client_secret ? c : null;
+    return c.tenant_id && c.client_id && (c.client_secret || certAvailable()) ? c : null;
   }
   return c.user && c.pass ? c : null;
 }
@@ -29,9 +64,15 @@ function transport(c) {
 // app passwords / SMTP AUTH disabled by security policy.
 async function graphToken(c) {
   const body = new URLSearchParams({
-    client_id: c.client_id, client_secret: c.client_secret,
+    client_id: c.client_id,
     scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials',
   });
+  if (c.client_secret) {
+    body.set('client_secret', c.client_secret);
+  } else {
+    body.set('client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
+    body.set('client_assertion', clientAssertion(c));
+  }
   const r = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(c.tenant_id)}/oauth2/v2.0/token`, { method: 'POST', body });
   const d = await r.json();
   if (!d.access_token) throw new Error(d.error_description || 'Microsoft sign-in failed — check tenant ID, client ID and secret');
@@ -130,4 +171,4 @@ async function sendTest() {
   return to;
 }
 
-module.exports = { notifyNomination, sendTest };
+module.exports = { notifyNomination, sendTest, certAvailable };
