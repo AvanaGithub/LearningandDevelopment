@@ -172,11 +172,6 @@ export default function Dashboard() {
               <div className="sub">across active batches</div>
             </div>
             <div className="tile">
-              <div className="lbl">Attendance %</div>
-              <div className="val">{data.mavericks.att_pct === null ? '—' : data.mavericks.att_pct + '%'}</div>
-              <div className="sub">classroom + field, all marked days</div>
-            </div>
-            <div className="tile">
               <div className="lbl">Average Assessment Score</div>
               <div className="val">{data.mavericks.avg_score === null ? '—' : data.mavericks.avg_score}</div>
               <div className="sub">normalised to /100 · pass mark 80</div>
