@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, fmtDay, inr, toISODay } from '../api.js';
-import { useAuth } from '../App.jsx';
+import { useAuth, useSettings } from '../App.jsx';
 import MSel from '../components/MSel.jsx';
 
 export default function Dashboard() {
   const nav = useNavigate();
   const { user: me } = useAuth();
+  const { settings } = useSettings();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
@@ -129,15 +130,24 @@ export default function Dashboard() {
           <div className="val">{calc.avgHours.toFixed(1)}</div>
           <div className="sub" style={{ color: 'var(--good)' }}>Target 16 h per year</div>
         </div>
-        {(isAdmin || me.role === 'leader') && calc.spend !== null && (
-          <div className="tile">
-            <div className="lbl">Actual spend (FY)</div>
-            <div className="val">₹{inr(calc.spend)}</div>
-            <div className="sub" style={{ color: 'var(--good)' }}>
-              of ₹{inr(ANNUAL_BUDGET)} annual budget ({Math.round(calc.spend / ANNUAL_BUDGET * 100)}% used)
+        {(isAdmin || me.role === 'leader') && calc.spend !== null && (() => {
+          // Annual budget = the per-entity budgets set under Settings
+          // (scoped to the entity filter when one is ticked).
+          const budgets = settings?.entity_budgets || {};
+          const ents = f.ent.length ? f.ent : ENTITIES;
+          const budget = ents.reduce((a, e) => a + (Number(budgets[e]) || 0), 0);
+          return (
+            <div className="tile">
+              <div className="lbl">Actual spend (FY)</div>
+              <div className="val">₹{inr(calc.spend)}</div>
+              <div className="sub" style={{ color: budget && calc.spend > budget ? 'var(--crit)' : 'var(--good)' }}>
+                {budget
+                  ? <>of ₹{inr(budget)} annual budget ({Math.round(calc.spend / budget * 100)}% used)</>
+                  : 'set entity budgets under Settings'}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         <div className="tile">
           <div className="lbl">Trainings planned</div>
           <div className="val">{calc.trns.length}</div>
@@ -223,9 +233,6 @@ export default function Dashboard() {
     </>
   );
 }
-
-// Annual training budget (checklist A6 — final figure pending sign-off).
-const ANNUAL_BUDGET = 1400000;
 
 // "15–16 Sep" for a same-month block, else "29 Sep → 02 Oct".
 function dayRange(days) {
