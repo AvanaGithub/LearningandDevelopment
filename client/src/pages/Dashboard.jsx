@@ -56,17 +56,22 @@ export default function Dashboard() {
     }, 0);
     const avgHours = emps.length ? emps.reduce((s, e) => s + hoursOf(e), 0) / emps.length : 0;
 
-    let spend = null, pendingExp = 0;
+    let spend = null, mavSpend = null, pendingExp = 0;
     if (data.expenses) {
+      // Mavericks programme costs are tracked on their own card, not
+      // inside the general training spend.
+      const isMav = (x) => /^mavericks\b/i.test(x.training_label || '');
       const scoped = (f.trn.length || f.from || f.to)
         ? data.expenses.filter((x) => x.training_id && trnIds.has(x.training_id))
         : data.expenses;
-      spend = scoped.reduce((s, x) => {
+      const amount = (list) => list.reduce((s, x) => {
         if (!f.ent.length) return s + Number(x.actual);
         const split = x.entity_split || [];
         const tot = split.reduce((a, y) => a + y.n, 0) || 1;
         return s + split.filter((y) => f.ent.includes(y.ent)).reduce((a, y) => a + Number(x.actual) * y.n / tot, 0);
       }, 0);
+      spend = amount(scoped.filter((x) => !isMav(x)));
+      mavSpend = amount(data.expenses.filter(isMav));
       pendingExp = scoped.filter((x) => x.approval === 'pending').length;
     }
 
@@ -80,7 +85,7 @@ export default function Dashboard() {
     const running = trns.filter((t) => ['planned', 'confirmed', 'in_progress'].includes(t.status)).length;
     const sheetsPending = trns.filter((t) => t.status === 'completed' && t.mode === 'Classroom').length;
 
-    return { emps, trns, trained, gaps, compPct, avgHours, spend, pendingExp, upcoming, fbPending, done, running, sheetsPending };
+    return { emps, trns, trained, gaps, compPct, avgHours, spend, mavSpend, pendingExp, upcoming, fbPending, done, running, sheetsPending };
   }, [data, f]);
 
   if (err) return <p className="err">{err}</p>;
@@ -142,8 +147,8 @@ export default function Dashboard() {
               <div className="val">₹{inr(calc.spend)}</div>
               <div className="sub" style={{ color: budget && calc.spend > budget ? 'var(--crit)' : 'var(--good)' }}>
                 {budget
-                  ? <>of ₹{inr(budget)} annual budget ({Math.round(calc.spend / budget * 100)}% used)</>
-                  : 'set entity budgets under Settings'}
+                  ? <>of ₹{inr(budget)} annual budget ({Math.round(calc.spend / budget * 100)}% used) · excl. Mavericks</>
+                  : 'set entity budgets under Settings · excl. Mavericks'}
               </div>
             </div>
           );
@@ -181,6 +186,13 @@ export default function Dashboard() {
               <div className="val">{data.mavericks.completion_pct === null ? '—' : data.mavericks.completion_pct + '%'}</div>
               <div className="sub">trainees who completed the programme</div>
             </div>
+            {calc.mavSpend !== null && (
+              <div className="tile">
+                <div className="lbl">Mavericks spend (FY)</div>
+                <div className="val">₹{inr(calc.mavSpend)}</div>
+                <div className="sub">expense records labelled "Mavericks — …", kept out of the general spend</div>
+              </div>
+            )}
           </div>
         </>
       )}
