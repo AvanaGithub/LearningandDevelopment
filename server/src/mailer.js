@@ -41,10 +41,10 @@ function clientAssertion(c) {
 // screen — never in git. Every send is fire-and-forget: a mail failure
 // must never fail the nomination itself.
 
-async function cfg() {
+async function cfg(ignoreEnabled = false) {
   const { rows } = await query(`SELECT value FROM settings WHERE key='smtp'`);
   const c = rows.length ? rows[0].value : null;
-  if (!c || !c.enabled) return null;
+  if (!c || (!c.enabled && !ignoreEnabled)) return null;
   if ((c.method || 'smtp') === 'graph') {
     return c.tenant_id && c.client_id && (c.client_secret || certAvailable()) ? c : null;
   }
@@ -161,10 +161,13 @@ async function notifyNomination({ trainingId, employeeIds, source, byName, slot 
   } catch (e) { console.error('[mail]', e.message); }
 }
 
-// Settings-screen test button.
+// Settings-screen test button — works even before sending is enabled, so
+// credentials can be verified first.
 async function sendTest() {
-  const c = await cfg();
-  if (!c) throw new Error('E-mail is not enabled or the password is missing — save the SMTP settings first.');
+  const c = await cfg(true);
+  if (!c) {
+    throw new Error('Credentials are incomplete — for Graph: tenant ID + client ID plus a client secret or the server certificate; for SMTP: mailbox + app password.');
+  }
   const to = c.notify || c.user;
   await sendMail(c, to, 'Avana Learning Hub — test e-mail',
     '<p>This is a test from the Avana Learning Hub. Outlook notifications are working. ✓</p>');
