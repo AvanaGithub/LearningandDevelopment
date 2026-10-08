@@ -2,37 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { api, ENTITIES, ROLES, entLabel } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
 
-const EMPTY = { email: '', name: '', role: 'manager', entity: 'AMD' };
-
 export default function Users() {
   const { user: me } = useAuth();
   const toast = useToast();
   const [rows, setRows] = useState(null);
-  const [form, setForm] = useState(null); // null = closed, EMPTY-shaped = add form
   const [editU, setEditU] = useState(null); // user being edited (super admin only)
   const [showDisabled, setShowDisabled] = useState(false);
-  const [emps, setEmps] = useState([]);
+  const [q, setQ] = useState('');
   const [err, setErr] = useState(null);
 
   const load = () => api.get('/api/users').then(setRows).catch((e) => setErr(e.message));
-  useEffect(() => { load(); api.get('/api/employees?active=true').then(setEmps).catch(() => {}); }, []);
-
-  const pickEmployee = (id) => {
-    const e = emps.find((x) => x.id === Number(id));
-    if (e) setForm({ ...form, email: e.email || '', name: e.name, entity: e.entity, _emp: id });
-    else setForm({ ...form, _emp: id });
-  };
-
-  const save = async (e) => {
-    e.preventDefault();
-    setErr(null);
-    try {
-      await api.post('/api/users', form);
-      toast(`${form.name} added — they can now sign in with Zoho (${form.email}).`);
-      setForm(null);
-      load();
-    } catch (e2) { setErr(e2.message); }
-  };
+  useEffect(() => { load(); }, []);
 
   const saveEdit = async (e) => {
     e.preventDefault();
@@ -64,73 +44,27 @@ export default function Users() {
     <>
       <div className="page-head">
         <h2>Users &amp; Access</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {me.role === 'super_admin' && (
-            <button className="btn" onClick={async () => {
-              if (!window.confirm('Add every active employee (with an e-mail) as a Learner user? Existing users are untouched — you can promote managers/leaders afterwards.')) return;
-              try {
-                const r = await api.post('/api/users/bulk-learners', {});
-                toast(`${r.created} learner account(s) created${r.no_email ? ` · ${r.no_email} active employee(s) skipped (no e-mail on record)` : ''}.`);
-                load();
-              } catch (e2) { toast(e2.message); }
-            }}>＋ All employees as learners</button>
-          )}
-          <button className="btn gold" onClick={() => setForm(EMPTY)}>Add user</button>
-        </div>
       </div>
       <div className="toolbar">
+        <input placeholder="Search name / e-mail / role…" value={q} onChange={(e) => setQ(e.target.value)}
+          style={{ minWidth: 260 }} />
         <label className="muted mini" style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={showDisabled} onChange={(e) => setShowDisabled(e.target.checked)} />
           Show disabled accounts ({rows.filter((u) => !u.active).length})
         </label>
         <span className="muted mini">
-          Employees added with an e-mail get a Learner login automatically; deactivating an employee disables it.
+          Accounts sync from the Employees tab automatically — new employees become Learners;
+          deactivating an employee disables their login. Promote managers/leaders via Edit.
         </span>
       </div>
-      {form && (
-        <form className="card" onSubmit={save}>
-          <div className="form-grid">
-            <div style={{ gridColumn: '1/-1' }}><label>Pick from employees (auto-fills the details)</label>
-              <select value={form._emp || ''} onChange={(e) => pickEmployee(e.target.value)}>
-                <option value="">— type the details manually below —</option>
-                {emps.filter((e) => e.email).map((e) => (
-                  <option key={e.id} value={e.id}>{e.name} — {e.email} ({entLabel(e.entity)})</option>
-                ))}
-              </select></div>
-            <div><label>Zoho e-mail ID</label>
-              <input required type="email" value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="name@avanasurgical.com" /></div>
-            <div><label>Name</label>
-              <input required value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div><label>Role</label>
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {Object.entries(ROLES).map(([k, v]) =>
-                  (k !== 'super_admin' || me.role === 'super_admin') && <option key={k} value={k}>{v}</option>)}
-              </select></div>
-            <div><label>Entity</label>
-              <select value={form.entity} onChange={(e) => setForm({ ...form, entity: e.target.value })}>
-                {ENTITIES.map((x) => <option key={x} value={x}>{entLabel(x)}</option>)}
-              </select></div>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-            The e-mail must be the address they use to sign in to Zoho (Zoho People for AMD/ATS, Zoho One for ASS).
-          </p>
-          {err && <p className="err">{err}</p>}
-          <div className="form-actions">
-            <button className="btn gold" type="submit">Save</button>
-            <button className="btn" type="button" onClick={() => { setForm(null); setErr(null); }}>Cancel</button>
-          </div>
-        </form>
-      )}
       <div className="card" style={{ padding: 0 }}>
         <table>
           <thead><tr>
             <th>Name</th><th>Zoho e-mail</th><th>Role</th><th>Entity</th><th>Status</th><th>Last login</th><th></th>
           </tr></thead>
           <tbody>
-            {rows.filter((u) => showDisabled || u.active).map((u) => (
+            {rows.filter((u) => (showDisabled || u.active) &&
+              (!q.trim() || [u.name, u.email, ROLES[u.role]].join(' ').toLowerCase().includes(q.trim().toLowerCase()))).map((u) => (
               <tr key={u.id}>
                 <td>{u.name}{u.id === me.id && <span className="muted"> (you)</span>}</td>
                 <td>{u.email}</td>
