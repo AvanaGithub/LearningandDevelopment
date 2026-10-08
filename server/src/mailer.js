@@ -3,6 +3,9 @@ const path = require('path');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { query } = require('./db');
+const config = require('./config');
+
+const SITE = config.baseUrl || 'https://academy.avanasurgical.com';
 
 // Certificate credentials for Microsoft Graph (used when the tenant blocks
 // client secrets). The private key lives ONLY on the server, outside git;
@@ -88,6 +91,7 @@ async function sendGraph(c, to, subject, html) {
     body: JSON.stringify({
       message: {
         subject,
+        from: { emailAddress: { address: sender, name: c.from_name || 'Avana Academy' } },
         body: { contentType: 'HTML', content: html },
         toRecipients: [{ emailAddress: { address: to } }],
       },
@@ -102,29 +106,39 @@ async function sendGraph(c, to, subject, html) {
 
 async function sendMail(c, to, subject, html) {
   if ((c.method || 'smtp') === 'graph') return sendGraph(c, to, subject, html);
-  await transport(c).sendMail({ from: c.from || c.user, to, subject, html });
+  await transport(c).sendMail({ from: `"${c.from_name || 'Avana Academy'}" <${c.from || c.user}>`, to, subject, html });
 }
 
 const esc = (s) => String(s || '').replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 
+const fmtD = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
+const FOOT = `<p style="color:#8a7a5c;font-size:12px">Avana Academy · Learning &amp; Development · Avana Group · <a href="${SITE}">${SITE.replace('https://', '')}</a></p>`;
+const SITE_BTN = `<p><a href="${SITE}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Open the Avana Learning Hub</a></p>`;
+const row = (k, v) => `<tr><td style="padding:3px 14px 3px 0;color:#8a7a5c;vertical-align:top">${k}</td><td>${v}</td></tr>`;
+
+async function loadTraining(trainingId) {
+  const { rows } = await query(
+    `SELECT t.*, (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
+            (SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id) AS last_day,
+            (SELECT count(*)::int FROM training_days d WHERE d.training_id=t.id) AS day_count
+     FROM trainings t WHERE t.id=$1`, [trainingId]);
+  if (!rows.length) return null;
+  const t = rows[0];
+  t._label = `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
+  t._dates = fmtD(t.first_day)
+    ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} → ${fmtD(t.last_day)}`)
+    : 'dates to be announced';
+  return t;
+}
+
 // One mail to every newly nominated/assigned employee (who has an e-mail),
-// plus a summary copy to the L&D notify address.
+// with a sign-in link to the hub.
 async function notifyNomination({ trainingId, employeeIds, source, byName, slot }) {
   try {
     const c = await cfg();
     if (!c || !employeeIds.length) return;
-    const { rows: t } = await query(
-      `SELECT t.code, t.title, t.batch, t.mode,
-              (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
-              (SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id) AS last_day
-       FROM trainings t WHERE t.id=$1`, [trainingId]);
-    if (!t.length) return;
-    const tr = t[0];
-    const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
-    const dates = fmt(tr.first_day)
-      ? (tr.first_day === tr.last_day ? fmt(tr.first_day) : `${fmt(tr.first_day)} → ${fmt(tr.last_day)}`)
-      : 'dates to be announced';
-    const label = `${tr.title}${tr.batch ? ' — ' + tr.batch : ''}`;
+    const tr = await loadTraining(trainingId);
+    if (!tr) return;
     const verb = source === 'admin' ? 'assigned to' : 'nominated for';
     const bySrc = { self: 'Self-nomination', manager: `Nominated by your manager${byName ? `, ${byName}` : ''}`,
       leader: `Nominated by your leader${byName ? `, ${byName}` : ''}`, admin: `Assigned by L&D${byName ? ` (${byName})` : ''}` }[source] || '';
@@ -135,30 +149,202 @@ async function notifyNomination({ trainingId, employeeIds, source, byName, slot 
         <p>Dear ${esc(name)},</p>
         <p>You have been <b>${verb}</b> the training below:</p>
         <table style="border-collapse:collapse;font-size:14px">
-          <tr><td style="padding:3px 14px 3px 0;color:#8a7a5c">Training</td><td><b>${esc(label)}</b> (${esc(tr.code)})</td></tr>
-          <tr><td style="padding:3px 14px 3px 0;color:#8a7a5c">Dates</td><td>${esc(dates)}</td></tr>
-          ${tr.mode ? `<tr><td style="padding:3px 14px 3px 0;color:#8a7a5c">Mode</td><td>${esc(tr.mode)}</td></tr>` : ''}
-          ${slot ? `<tr><td style="padding:3px 14px 3px 0;color:#8a7a5c">Preferred slot</td><td>${esc(slot)}</td></tr>` : ''}
-          <tr><td style="padding:3px 14px 3px 0;color:#8a7a5c">How</td><td>${esc(bySrc)}</td></tr>
+          ${row('Training', `<b>${esc(tr._label)}</b> (${esc(tr.code)})`)}
+          ${row('Dates', esc(tr._dates))}
+          ${tr.mode ? row('Mode', esc(tr.mode)) : ''}
+          ${slot ? row('Preferred slot', esc(slot)) : ''}
+          ${row('How', esc(bySrc))}
         </table>
         <p>Please block the dates in your calendar. Attendance is recorded on the training day.</p>
-        <p style="color:#8a7a5c;font-size:12px">Avana Learning Hub · Learning &amp; Development · Avana Group</p>
+        ${SITE_BTN}
+        ${FOOT}
       </div>`;
     for (const e of emps) {
-      if (e.email) sendMail(c, e.email, `Training ${source === 'admin' ? 'assignment' : 'nomination'} — ${label}`, html(e.name))
+      if (e.email) sendMail(c, e.email, `Training ${source === 'admin' ? 'assignment' : 'nomination'} — ${tr._label}`, html(e.name))
         .catch((err) => console.error('[mail]', e.email, err.message));
     }
-    if (c.notify) {
-      const list = emps.map((e) => `<li>${esc(e.name)}${e.email ? ` &lt;${esc(e.email)}&gt;` : ' (no e-mail on record)'}</li>`).join('');
-      sendMail(c, c.notify, `Nomination update — ${label}`,
-        `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px">
-           <p>${emps.length} employee(s) ${verb} <b>${esc(label)}</b> (${esc(dates)}) — ${esc(bySrc)}.</p>
-           <ul>${list}</ul>
-           <p style="color:#8a7a5c;font-size:12px">Avana Learning Hub</p>
-         </div>`)
-        .catch((err) => console.error('[mail notify]', err.message));
-    }
   } catch (e) { console.error('[mail]', e.message); }
+}
+
+const inScope = (listStr, val) => {
+  if (!listStr) return true;
+  const list = listStr.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return list.includes(String(val || '').trim().toLowerCase());
+};
+
+// When the super admin opens self-nomination on a training, every eligible
+// employee is invited with the nomination link.
+async function announceSelfNomination(trainingId) {
+  try {
+    const c = await cfg();
+    if (!c) return;
+    const tr = await loadTraining(trainingId);
+    if (!tr || !tr.nom_self || !tr.public_token) return;
+    const { rows: emps } = await query(
+      `SELECT e.id, e.name, e.email, e.department, e.division FROM employees e
+       WHERE e.active AND e.email IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM training_participants p WHERE p.training_id=$1 AND p.employee_id=e.id)`,
+      [trainingId]);
+    const eligible = emps.filter((e) => inScope(tr.department, e.department) && inScope(tr.division, e.division));
+    const link = `${SITE}/p/nom/${tr.public_token}`;
+    const html = (name) => `
+      <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+        <p>Dear ${esc(name)},</p>
+        <p>Nominations are now <b>open</b> for the training below — you can nominate yourself:</p>
+        <table style="border-collapse:collapse;font-size:14px">
+          ${row('Training', `<b>${esc(tr._label)}</b> (${esc(tr.code)})`)}
+          ${row('Dates', esc(tr._dates))}
+          ${tr.mode ? row('Mode', esc(tr.mode)) : ''}
+          ${tr.nom_deadline ? row('Nominate by', esc(fmtD(tr.nom_deadline))) : ''}
+        </table>
+        <p><a href="${link}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Nominate myself</a></p>
+        <p style="color:#8a7a5c;font-size:12px">You will sign in with your Zoho account so the nomination is recorded in your name.</p>
+        ${FOOT}
+      </div>`;
+    for (const e of eligible) {
+      await sendMail(c, e.email, `Nominations open — ${tr._label}`, html(e.name))
+        .catch((err) => console.error('[mail announce]', e.email, err.message));
+    }
+    console.log(`[mail] nomination announcement for ${tr.code} sent to ${eligible.length} employee(s)`);
+  } catch (e) { console.error('[mail announce]', e.message); }
+}
+
+// Shared recipient mapping: managers get their own reportees on the
+// training; leaders get the participants of their division.
+async function recipientsFor(trainingId) {
+  const { rows: parts } = await query(
+    `SELECT e.id, e.name, e.email, e.zoho_emp_id, e.department, e.division, e.manager,
+            n.slot, n.source
+     FROM training_participants p JOIN employees e ON e.id = p.employee_id
+     LEFT JOIN nominations n ON n.training_id = p.training_id AND n.employee_id = p.employee_id AND n.status='confirmed'
+     WHERE p.training_id=$1 ORDER BY e.name`, [trainingId]);
+  const { rows: dir } = await query(`SELECT name, email FROM employees WHERE active AND email IS NOT NULL`);
+  const emailByName = {};
+  dir.forEach((e) => { emailByName[e.name.trim().toLowerCase()] = e.email; });
+  const mgrOf = (m) => String(m || '').replace(/^Mentor:\s*/i, '').trim();
+  const managers = {};
+  parts.forEach((p) => {
+    const m = mgrOf(p.manager);
+    if (m) (managers[m] = managers[m] || []).push(p);
+  });
+  const { rows: leaders } = await query(
+    `SELECT u.name, u.email, e.division FROM users u
+     LEFT JOIN employees e ON e.email = u.email
+     WHERE u.role='leader' AND u.active`);
+  return { parts, managers, emailByName, leaders };
+}
+
+const SRC_LABEL = { self: 'Self', manager: 'Manager', leader: 'Leader', admin: 'Admin' };
+
+// After the nomination deadline: consolidated participant list to each
+// manager (their team) and each leader (their division).
+async function nominationDigest(trainingId) {
+  const c = await cfg();
+  if (!c) return false;
+  const tr = await loadTraining(trainingId);
+  if (!tr) return false;
+  const { parts, managers, emailByName, leaders } = await recipientsFor(trainingId);
+  const table = (list) => `
+    <table style="border-collapse:collapse;font-size:13px;border:1px solid #e7ddc8">
+      <tr style="background:#f6f0e2"><th style="padding:5px 10px;text-align:left">Employee</th>
+        <th style="padding:5px 10px;text-align:left">ID</th><th style="padding:5px 10px;text-align:left">Department</th>
+        <th style="padding:5px 10px;text-align:left">Slot</th><th style="padding:5px 10px;text-align:left">Nominated via</th></tr>
+      ${list.map((p) => `<tr><td style="padding:4px 10px">${esc(p.name)}</td><td style="padding:4px 10px">${esc(p.zoho_emp_id || '—')}</td>
+        <td style="padding:4px 10px">${esc(p.department || '—')}</td><td style="padding:4px 10px">${esc(p.slot || 'Any')}</td>
+        <td style="padding:4px 10px">${SRC_LABEL[p.source] || 'Admin'}</td></tr>`).join('')}
+    </table>`;
+  const wrap = (who, intro, list) => `
+    <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+      <p>Dear ${esc(who)},</p>
+      <p>${intro} <b>${esc(tr._label)}</b> (${esc(tr.code)}, ${esc(tr._dates)}):</p>
+      ${table(list)}
+      <p>Please make sure they attend — attendance is recorded on the training day.</p>
+      ${SITE_BTN}${FOOT}
+    </div>`;
+  for (const [mgr, list] of Object.entries(managers)) {
+    const to = emailByName[mgr.toLowerCase()];
+    if (to) await sendMail(c, to, `Your team on ${tr._label} — ${list.length} participant(s)`,
+      wrap(mgr, 'Nominations have closed. These members of your team are confirmed for', list))
+      .catch((err) => console.error('[mail digest]', to, err.message));
+  }
+  for (const l of leaders) {
+    if (!l.email) continue;
+    const list = l.division ? parts.filter((p) => p.division === l.division) : parts;
+    if (!list.length) continue;
+    await sendMail(c, l.email, `${l.division || 'All divisions'} on ${tr._label} — ${list.length} participant(s)`,
+      wrap(l.name, `Nominations have closed. Confirmed participants from ${l.division ? 'your division (' + esc(l.division) + ')' : 'all divisions'} for`, list))
+      .catch((err) => console.error('[mail digest]', l.email, err.message));
+  }
+  await query('UPDATE trainings SET nom_digest_sent=TRUE WHERE id=$1', [trainingId]);
+  console.log(`[mail] nomination digest sent for ${tr.code}`);
+  return true;
+}
+
+// After the training completes: attendance status per participant to the
+// managers (their team) and leaders (their division).
+async function attendanceDigest(trainingId) {
+  const c = await cfg();
+  if (!c) return false;
+  const tr = await loadTraining(trainingId);
+  if (!tr) return false;
+  const { rows: att } = await query(
+    `SELECT employee_id, sum(CASE mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::float AS units,
+            count(*)::int AS marked
+     FROM attendance WHERE training_id=$1 GROUP BY employee_id`, [trainingId]);
+  const attMap = {};
+  att.forEach((a) => { attMap[a.employee_id] = a; });
+  const { parts, managers, emailByName, leaders } = await recipientsFor(trainingId);
+  const statusOf = (p) => {
+    const a = attMap[p.id];
+    if (!a || a.units <= 0) return ['Not attended', '#B3261E'];
+    const pct = tr.day_count ? Math.round((a.units / tr.day_count) * 100) : 100;
+    return [`Attended · ${pct}%${pct < 75 ? ' (below 75%)' : ''}`, pct >= 75 ? '#2E7D32' : '#A8720E'];
+  };
+  const table = (list) => `
+    <table style="border-collapse:collapse;font-size:13px;border:1px solid #e7ddc8">
+      <tr style="background:#f6f0e2"><th style="padding:5px 10px;text-align:left">Employee</th>
+        <th style="padding:5px 10px;text-align:left">ID</th><th style="padding:5px 10px;text-align:left">Department</th>
+        <th style="padding:5px 10px;text-align:left">Attendance</th></tr>
+      ${list.map((p) => { const [s, col] = statusOf(p); return `<tr><td style="padding:4px 10px">${esc(p.name)}</td>
+        <td style="padding:4px 10px">${esc(p.zoho_emp_id || '—')}</td><td style="padding:4px 10px">${esc(p.department || '—')}</td>
+        <td style="padding:4px 10px;color:${col};font-weight:600">${s}</td></tr>`; }).join('')}
+    </table>`;
+  const wrap = (who, scope, list) => `
+    <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+      <p>Dear ${esc(who)},</p>
+      <p><b>${esc(tr._label)}</b> (${esc(tr.code)}, ${esc(tr._dates)}) is completed. Attendance for ${scope}:</p>
+      ${table(list)}
+      <p>Please follow up with anyone who did not attend.</p>
+      ${SITE_BTN}${FOOT}
+    </div>`;
+  for (const [mgr, list] of Object.entries(managers)) {
+    const to = emailByName[mgr.toLowerCase()];
+    if (to) await sendMail(c, to, `Attendance — ${tr._label} (your team)`, wrap(mgr, 'your team', list))
+      .catch((err) => console.error('[mail att]', to, err.message));
+  }
+  for (const l of leaders) {
+    if (!l.email) continue;
+    const list = l.division ? parts.filter((p) => p.division === l.division) : parts;
+    if (!list.length) continue;
+    await sendMail(c, l.email, `Attendance — ${tr._label} (${l.division || 'all divisions'})`,
+      wrap(l.name, l.division ? `your division (${esc(l.division)})` : 'all divisions', list))
+      .catch((err) => console.error('[mail att]', l.email, err.message));
+  }
+  await query('UPDATE trainings SET att_digest_sent=TRUE WHERE id=$1', [trainingId]);
+  console.log(`[mail] attendance digest sent for ${tr.code}`);
+  return true;
+}
+
+// Hourly: send the nomination digest for every training whose deadline has
+// passed and that has not had one yet.
+async function runDigests() {
+  const c = await cfg();
+  if (!c) return;
+  const { rows } = await query(
+    `SELECT id FROM trainings
+     WHERE (nom_self OR nom_manager OR nom_leader) AND nom_deadline IS NOT NULL
+       AND nom_deadline < current_date AND NOT nom_digest_sent AND status <> 'cancelled'`);
+  for (const r of rows) await nominationDigest(r.id).catch((e) => console.error('[digest]', e.message));
 }
 
 // Settings-screen test button — works even before sending is enabled, so
@@ -174,4 +360,7 @@ async function sendTest() {
   return to;
 }
 
-module.exports = { notifyNomination, sendTest, certAvailable };
+module.exports = {
+  notifyNomination, announceSelfNomination, nominationDigest, attendanceDigest,
+  runDigests, sendTest, certAvailable,
+};

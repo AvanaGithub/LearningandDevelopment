@@ -24,6 +24,7 @@ const DEFAULTS = {
   smtp: {
     enabled: false, method: 'graph', host: 'smtp.office365.com', port: 587,
     user: 'lokshni@avanasurgical.com', from: 'lokshni@avanasurgical.com',
+    from_name: 'Avana Academy',
     notify: 'lokshni@avanasurgical.com', pass: '',
     tenant_id: '', client_id: '', client_secret: '',
   },
@@ -61,6 +62,7 @@ router.put('/:key', requireRole('admin'), express.json(), async (req, res, next)
         port: Number(value.port) || 587,
         user: String(value.user || '').trim().toLowerCase(),
         from: String(value.from || value.user || '').trim(),
+        from_name: String(value.from_name || 'Avana Academy').trim(),
         notify: String(value.notify || '').trim().toLowerCase(),
         tenant_id: String(value.tenant_id || '').trim(),
         client_id: String(value.client_id || '').trim(),

@@ -119,7 +119,7 @@ export default function LearnerPortal() {
             })}
 
             <div className="page-head" style={{ marginTop: 18 }}><h2>Open for nomination</h2></div>
-            {!data.open.length && <p className="muted">Nothing is open for self-nomination right now.</p>}
+            {!data.open.length && <p className="muted">Nothing is open for self-nomination right now — trainings you are already on don't appear here.</p>}
             {data.open.map((t) => (
               <div key={t.id} className="card">
                 <div className="toolbar" style={{ marginBottom: 0, alignItems: 'center' }}>

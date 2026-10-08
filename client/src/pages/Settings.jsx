@@ -191,9 +191,10 @@ export default function Settings() {
         <div className="card scard" style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: 15 }}><span className="sicon">✉</span>E-mail notifications (Outlook / Microsoft 365)</h3>
           <p className="muted mini" style={{ margin: '4px 0 10px' }}>
-            When someone is nominated or assigned to a training, they get an Outlook e-mail from the
-            mailbox below, and a summary goes to the notify address. Mails never block the nomination —
-            failures are only logged.
+            Automatic Outlook e-mails: nominees/assignees get the details with a sign-in link; opening
+            self-nomination invites every eligible employee; after the nomination deadline managers and
+            leaders get the consolidated participant list; when a training is marked completed they get
+            the attendance status. Mails never block the action — failures are only logged.
           </p>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
             <input type="checkbox" checked={sm.enabled} onChange={(e) => setSmtp({ ...sm, enabled: e.target.checked })} />
@@ -207,7 +208,9 @@ export default function Settings() {
               </select></div>
             <div><label>Send as (From mailbox)</label>
               <input value={sm.from} onChange={(e) => setSmtp({ ...sm, from: e.target.value, user: e.target.value })} placeholder="lokshni@avanasurgical.com" /></div>
-            <div><label>Notify L&amp;D copy to</label>
+            <div><label>Sender display name</label>
+              <input value={sm.from_name || ''} onChange={(e) => setSmtp({ ...sm, from_name: e.target.value })} placeholder="Avana Academy" /></div>
+            <div><label>Test e-mails go to</label>
               <input value={sm.notify} onChange={(e) => setSmtp({ ...sm, notify: e.target.value })} placeholder="lokshni@avanasurgical.com" /></div>
             {(sm.method || 'graph') === 'graph' ? (<>
               <div><label>Directory (tenant) ID</label>

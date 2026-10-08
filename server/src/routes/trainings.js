@@ -134,6 +134,7 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
+    if (nf.nom_self) mailer.announceSelfNomination(rows[0].id);
     res.status(201).json({ ...rows[0], days });
   } catch (e) { next(e); }
 });
@@ -169,6 +170,12 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
       }
     }
     await audit(req.user.id, 'training.update', 'training', id, { changes: b }, b.reason);
+    // Self-nomination just switched on -> invite every eligible employee.
+    if (!cur[0].nom_self && rows[0].nom_self) mailer.announceSelfNomination(id);
+    // Training just completed -> attendance digest to managers and leaders.
+    if (cur[0].status !== 'completed' && rows[0].status === 'completed' && !cur[0].att_digest_sent) {
+      mailer.attendanceDigest(id).catch(() => {});
+    }
     res.json(rows[0]);
   } catch (e) { next(e); }
 });

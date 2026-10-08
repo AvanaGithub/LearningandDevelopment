@@ -60,6 +60,10 @@ migrate().then(() => {
   app.listen(config.port, () => {
     console.log(`Learning Hub API on :${config.port} — Zoho SSO ${config.zoho.configured ? 'configured' : 'NOT configured'}`);
   });
+  // Consolidated nomination digests go out once the deadline passes.
+  const mailer = require('./mailer');
+  setTimeout(() => mailer.runDigests().catch(() => {}), 30 * 1000);
+  setInterval(() => mailer.runDigests().catch(() => {}), 60 * 60 * 1000);
 }).catch(e => {
   console.error('[startup] migration failed:', e.message);
   process.exit(1);
