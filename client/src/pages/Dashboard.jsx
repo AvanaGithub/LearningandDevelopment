@@ -41,10 +41,27 @@ export default function Dashboard() {
 
     const trained = emps.filter((e) => trns.some((t) => partOf(t).includes(e.id)));
     const mand = trns.filter((t) => t.mandatory && !['postponed', 'cancelled'].includes(t.status));
-    const gaps = mand.reduce((s, t) => s + emps.filter((e) => !partOf(t).includes(e.id)).length, 0);
-    const compPct = mand.length && emps.length
-      ? Math.round(mand.reduce((s, t) => s + Math.min(1, partOf(t).filter((id) => empIds.has(id)).length / emps.length), 0) / mand.length * 100)
-      : 0;
+    // Mandatory compliance: batches of the same training (same title) are
+    // ONE requirement — any batch covers the employee — and only employees
+    // inside the training's department/division targeting are expected.
+    const inList = (listStr, val) => !listStr ||
+      listStr.split(',').map((s) => s.trim().toLowerCase()).includes(String(val || '').trim().toLowerCase());
+    const mandGroups = Object.values(mand.reduce((g, t) => {
+      const k = t.title.trim().toLowerCase();
+      (g[k] = g[k] || []).push(t);
+      return g;
+    }, {}));
+    let gaps = 0, pctSum = 0, pctN = 0;
+    mandGroups.forEach((group) => {
+      const scopeEmps = emps.filter((e) => group.some((t) =>
+        inList(t.department, e.department) && inList(t.division, e.division)));
+      if (!scopeEmps.length) return;
+      const covered = scopeEmps.filter((e) => group.some((t) => partOf(t).includes(e.id))).length;
+      gaps += scopeEmps.length - covered;
+      pctSum += covered / scopeEmps.length;
+      pctN += 1;
+    });
+    const compPct = pctN ? Math.round((pctSum / pctN) * 100) : 0;
 
     const attMap = {};
     data.attendance.forEach((a) => { attMap[a.training_id + ':' + a.employee_id] = a.units; });

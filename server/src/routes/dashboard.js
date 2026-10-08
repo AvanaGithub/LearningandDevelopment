@@ -42,7 +42,7 @@ router.get('/full', async (req, res, next) => {
     const [emps, trns, att, exp, mav] = await Promise.all([
       query(`SELECT id, name, entity, division, department, manager FROM employees WHERE active ORDER BY name`),
       query(`SELECT t.id, t.code, t.title, t.batch, t.status, t.mandatory, t.trainer_type, t.mode,
-               t.hours_per_day, t.seats,
+               t.hours_per_day, t.seats, t.department, t.division,
                (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days,
                (SELECT json_agg(p.employee_id) FROM training_participants p WHERE p.training_id=t.id) AS participant_ids,
                (SELECT count(*)::int FROM feedback_responses f WHERE f.training_id=t.id) AS response_count
