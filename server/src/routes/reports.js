@@ -19,21 +19,38 @@ router.get('/manhours', async (req, res, next) => {
 });
 
 // Mandatory-training compliance: enrolment status per active employee.
+// Batches with the same title are ONE training — any batch covers the
+// employee — and department/division targeting scopes who is expected.
 router.get('/compliance', async (req, res, next) => {
   try {
     const { rows: mand } = await query(
-      `SELECT id, code, title, batch, status FROM trainings
+      `SELECT id, code, title, batch, status, department, division FROM trainings
        WHERE mandatory AND status NOT IN ('postponed','cancelled') ORDER BY id`);
     const { rows: emps } = await query(
-      `SELECT id, name, entity FROM employees WHERE active ORDER BY name`);
+      `SELECT id, name, entity, department, division FROM employees WHERE active ORDER BY name`);
     const { rows: parts } = await query('SELECT training_id, employee_id FROM training_participants');
     const inTraining = new Set(parts.map((p) => p.training_id + ':' + p.employee_id));
+    const inList = (listStr, val) => !listStr ||
+      listStr.split(',').map((s) => s.trim().toLowerCase()).includes(String(val || '').trim().toLowerCase());
+    const groups = Object.values(mand.reduce((g, t) => {
+      const k = t.title.trim().toLowerCase();
+      (g[k] = g[k] || []).push(t);
+      return g;
+    }, {}));
     res.json({
-      trainings: mand,
+      trainings: groups.map((grp) => ({
+        id: grp[0].id, code: grp[0].code, title: grp[0].title,
+        batch: grp.length > 1 ? `${grp.length} batches` : grp[0].batch,
+        status: grp.every((t) => t.status === 'completed') ? 'completed' : grp[0].status,
+      })),
       employees: emps.map((e) => ({
-        ...e,
-        status: mand.map((t) =>
-          inTraining.has(t.id + ':' + e.id) ? (t.status === 'completed' ? 'done' : 'booked') : 'due'),
+        id: e.id, name: e.name, entity: e.entity,
+        status: groups.map((grp) => {
+          const inScope = grp.some((t) => inList(t.department, e.department) && inList(t.division, e.division));
+          if (!inScope) return 'na';
+          const batch = grp.find((t) => inTraining.has(t.id + ':' + e.id));
+          return batch ? (batch.status === 'completed' ? 'done' : 'booked') : 'due';
+        }),
       })),
     });
   } catch (e) { next(e); }

@@ -167,8 +167,9 @@ export default function Reports() {
     if (!r.trainings.length) return show('Mandatory training compliance', ['Info'], [['No mandatory trainings planned yet.']]);
     show('Mandatory training compliance',
       ['Employee', 'Entity', ...r.trainings.map((t) => t.title + (t.batch ? ' — ' + t.batch : ''))],
-      r.employees.map((e) => [e.name, entLabel(e.entity), ...e.status.map((s) => s === 'done' ? 'Done' : s === 'booked' ? 'Booked' : 'Due')]),
-      '"Due" = active employee not enrolled on the mandatory training.');
+      r.employees.map((e) => [e.name, entLabel(e.entity),
+        ...e.status.map((s) => s === 'done' ? 'Done' : s === 'booked' ? 'Booked' : s === 'na' ? '—' : 'Due')]),
+      'Batches with the same title count as one training (any batch covers the employee). "Due" = in-scope employee not enrolled; "—" = outside the training\'s department/division targeting.');
   });
 
   const feedbackSummary = guard(async () => {
