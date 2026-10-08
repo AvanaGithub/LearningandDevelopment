@@ -113,6 +113,7 @@ const esc = (s) => String(s || '').replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<'
 
 const fmtD = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
 const FOOT = `<p style="color:#8a7a5c;font-size:12px">Avana Academy · Learning &amp; Development · Avana Group · <a href="${SITE}">${SITE.replace('https://', '')}</a></p>`;
+const LOGO = `<p style="margin:0 0 12px"><img src="${SITE}/logo.png" alt="Avana Academy" height="44" style="display:block;border:0"></p>`;
 const SITE_BTN = `<p><a href="${SITE}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Open the Avana Learning Hub</a></p>`;
 const row = (k, v) => `<tr><td style="padding:3px 14px 3px 0;color:#8a7a5c;vertical-align:top">${k}</td><td>${v}</td></tr>`;
 
@@ -146,6 +147,7 @@ async function notifyNomination({ trainingId, employeeIds, source, byName, slot 
       'SELECT name, email FROM employees WHERE id = ANY($1::int[])', [employeeIds]);
     const html = (name) => `
       <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+        ${LOGO}
         <p>Dear ${esc(name)},</p>
         <p>You have been <b>${verb}</b> the training below:</p>
         <table style="border-collapse:collapse;font-size:14px">
@@ -189,6 +191,7 @@ async function announceSelfNomination(trainingId) {
     const link = `${SITE}/p/nom/${tr.public_token}`;
     const html = (name) => `
       <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+        ${LOGO}
         <p>Dear ${esc(name)},</p>
         <p>Nominations are now <b>open</b> for the training below — you can nominate yourself:</p>
         <table style="border-collapse:collapse;font-size:14px">
@@ -255,6 +258,7 @@ async function nominationDigest(trainingId) {
     </table>`;
   const wrap = (who, intro, list) => `
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+      ${LOGO}
       <p>Dear ${esc(who)},</p>
       <p>${intro} <b>${esc(tr._label)}</b> (${esc(tr.code)}, ${esc(tr._dates)}):</p>
       ${table(list)}
@@ -311,6 +315,7 @@ async function attendanceDigest(trainingId) {
     </table>`;
   const wrap = (who, scope, list) => `
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+      ${LOGO}
       <p>Dear ${esc(who)},</p>
       <p><b>${esc(tr._label)}</b> (${esc(tr.code)}, ${esc(tr._dates)}) is completed. Attendance for ${scope}:</p>
       ${table(list)}
@@ -355,8 +360,9 @@ async function sendTest() {
     throw new Error('Credentials are incomplete — for Graph: tenant ID + client ID plus a client secret or the server certificate; for SMTP: mailbox + app password.');
   }
   const to = c.notify || c.user;
-  await sendMail(c, to, 'Avana Learning Hub — test e-mail',
-    '<p>This is a test from the Avana Learning Hub. Outlook notifications are working. ✓</p>');
+  await sendMail(c, to, 'Avana Academy — test e-mail',
+    `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">${LOGO}
+     <p>This is a test from the Avana Learning Hub. Outlook notifications are working. ✓</p>${FOOT}</div>`);
   return to;
 }
 
