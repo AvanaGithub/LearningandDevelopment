@@ -9,6 +9,7 @@ const FIELD_LABELS = {
   zoho_emp_id: 'Zoho employee ID', email: 'Official e-mail', mobile: 'Mobile',
   division: 'Division', department: 'Department', designation: 'Designation',
   manager: 'Reporting manager', date_joined: 'Date of joining', location: 'Location',
+  employment_type: 'Employment type',
 };
 
 // The Settings screen decides which optional fields are mandatory — enforced

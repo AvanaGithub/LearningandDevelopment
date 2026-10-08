@@ -113,7 +113,7 @@ const esc = (s) => String(s || '').replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<'
 
 const fmtD = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
 const FOOT = `<p style="color:#8a7a5c;font-size:12px">Avana Academy · Learning &amp; Development · Avana Group · <a href="${SITE}">${SITE.replace('https://', '')}</a></p>`;
-const LOGO = `<p style="margin:0 0 12px"><img src="${SITE}/logo.png" alt="Avana Academy" height="44" style="display:block;border:0"></p>`;
+const LOGO = ''; // logo removed from e-mails by request
 const SITE_BTN = `<p><a href="${SITE}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Open the Avana Learning Hub</a></p>`;
 const row = (k, v) => `<tr><td style="padding:3px 14px 3px 0;color:#8a7a5c;vertical-align:top">${k}</td><td>${v}</td></tr>`;
 

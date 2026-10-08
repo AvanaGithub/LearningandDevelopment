@@ -34,6 +34,7 @@ export default function Expenses() {
   const toast = useToast();
   const { settings } = useSettings();
   const reqE = settings?.required_fields?.expenses || [];
+  const expCats = settings?.exp_categories || EXP_CATEGORIES;
   const star = (k) => (reqE.includes(k) ? ' *' : '');
   const [rows, setRows] = useState(null);
   const [trainings, setTrainings] = useState([]);
@@ -203,7 +204,7 @@ export default function Expenses() {
               <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
             <div><label>Category{star('category')}</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {EXP_CATEGORIES.map((x) => <option key={x}>{x}</option>)}
+                {[...new Set([...expCats, ...(form.category ? [form.category] : [])])].map((x) => <option key={x}>{x}</option>)}
               </select></div>
             {/accommodation/i.test(form.category || '') && (
               <div><label>Accommodation at (hotel / place)</label>

@@ -47,6 +47,7 @@ export default function Trainings() {
   const categories = settings?.trn_categories || TRN_CATEGORIES;
   const departments = settings?.departments || DEPARTMENTS;
   const reqT = settings?.required_fields?.trainings || [];
+  const modes = settings?.trn_modes || TRN_MODES;
   const starT = (k) => (reqT.includes(k) ? ' *' : '');
   const divisions = settings?.divisions || DIVISIONS;
 
@@ -280,7 +281,7 @@ export default function Trainings() {
             </div>
             <div><label>Mode{starT('mode')}</label>
               <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
-                {TRN_MODES.map((x) => <option key={x}>{x}</option>)}
+                {[...new Set([...modes, ...(form.mode ? [form.mode] : [])])].map((x) => <option key={x}>{x}</option>)}
               </select></div>
             <div><label>Trainer type</label>
               <select value={form.trainer_type} onChange={(e) => setForm({ ...form, trainer_type: e.target.value })}>

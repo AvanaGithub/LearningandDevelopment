@@ -244,7 +244,7 @@ export default function Employees() {
             <MgrPicker label={`Reporting manager${isReq('manager') ? ' *' : ''}`} required={isReq('manager')}
               value={form.manager} onChange={(v) => setForm({ ...form, manager: v })}
               options={allEmps.filter((x) => x.id !== form.id)} />
-            {Sel('Employment type', 'employment_type', empTypes, false)}
+            {Sel(`Employment type${isReq('employment_type') ? ' *' : ''}`, 'employment_type', empTypes, !isReq('employment_type'))}
             {F(`Official e-mail${isReq('email') ? ' *' : ''}`, 'email', { type: 'email', placeholder: 'name@avanasurgical.com', required: isReq('email') })}
             {F(`Mobile${isReq('mobile') ? ' *' : ''}`, 'mobile', { placeholder: '+91 …', required: isReq('mobile') })}
             {F(`Date of joining${isReq('date_joined') ? ' *' : ''}`, 'date_joined', { type: 'date', required: isReq('date_joined') })}

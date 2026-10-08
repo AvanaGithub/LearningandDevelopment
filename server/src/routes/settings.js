@@ -16,6 +16,14 @@ const DEFAULTS = {
   entity_budgets: { AMD: 700000, ASS: 450000, ATS: 250000 },
   required_employee_fields: ['name', 'entity'],
   joiner_steps: ['Induction training', 'Product training', 'Department orientation', 'Systems access set up'],
+  trn_modes: ['Classroom', 'Online', 'On-the-job', 'Field', 'External seminar'],
+  fb_std_questions: ['Relevance of content to my job', "Trainer's subject knowledge", "Trainer's delivery and clarity",
+    'Quality of material handed out', 'Duration was adequate', 'Confidence to apply this at work',
+    'Overall rating', 'Would you recommend this training (NPS)'],
+  // Options switched off on the Settings screen: kept on old records but
+  // hidden from every form/filter (the GET below filters them out).
+  disabled_options: { divisions: [], departments: [], emp_types: [], trn_categories: [],
+    exp_categories: [], joiner_steps: [], trn_modes: [], fb_std_questions: [] },
   // Mandatory optional-fields per form, set from the Settings screen and
   // enforced server-side (employees has its own legacy key).
   required_fields: { trainings: [], expenses: [], mavericks: [] },
@@ -43,6 +51,17 @@ router.get('/', async (req, res, next) => {
     const { rows } = await query('SELECT key, value FROM settings');
     const out = { ...DEFAULTS };
     rows.forEach((r) => { if (r.key in DEFAULTS) out[r.key] = r.value; });
+    // Each list is served minus its disabled options; the full list goes
+    // in _all for the Settings screen's toggles.
+    const LIST_KEYS = ['divisions', 'departments', 'emp_types', 'trn_categories',
+      'exp_categories', 'joiner_steps', 'trn_modes', 'fb_std_questions'];
+    const dis = { ...DEFAULTS.disabled_options, ...(out.disabled_options || {}) };
+    out._all = {};
+    LIST_KEYS.forEach((k) => {
+      out._all[k] = out[k] || [];
+      out[k] = (out[k] || []).filter((x) => !(dis[k] || []).includes(x));
+    });
+    out.disabled_options = dis;
     // Never expose the mailbox password or client secret; only whether saved.
     out.smtp = {
       ...DEFAULTS.smtp, ...out.smtp,

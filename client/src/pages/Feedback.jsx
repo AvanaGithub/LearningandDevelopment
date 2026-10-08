@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, fmtRange } from '../api.js';
-import { useAuth, useToast } from '../App.jsx';
+import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
 
@@ -158,8 +158,10 @@ const STD_QS = [
 
 export default function Feedback() {
   const { user: me } = useAuth();
+  const { settings } = useSettings();
   const toast = useToast();
   const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+  const stdQs = settings?.fb_std_questions || STD_QS;
   const [list, setList] = useState(null);
   const [respond, setRespond] = useState(null);   // {t, questions, scores, comment}
   const [results, setResults] = useState(null);   // {t, questions, responses}
@@ -217,8 +219,8 @@ export default function Feedback() {
       const current = d.questions || [];
       setBuilder({
         t,
-        checked: new Set(STD_QS.filter((q) => current.includes(q))),
-        custom: current.filter((q) => !STD_QS.includes(q)),
+        checked: new Set(stdQs.filter((q) => current.includes(q))),
+        custom: current.filter((q) => !stdQs.includes(q)),
         newQ: '',
         ext: d.external_form_url || '',
       });
@@ -226,7 +228,7 @@ export default function Feedback() {
   };
   const saveForm = async () => {
     try {
-      const questions = [...STD_QS.filter((q) => builder.checked.has(q)), ...builder.custom];
+      const questions = [...stdQs.filter((q) => builder.checked.has(q)), ...builder.custom];
       await api.put(`/api/feedback/${builder.t.id}/form`, { questions, external_form_url: builder.ext.trim() || null });
       toast(builder.ext.trim()
         ? 'Saved — the QR/link now sends participants to the Microsoft Form.'
@@ -362,7 +364,7 @@ export default function Feedback() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Feedback form — {builder.t.title}</h3>
             <p className="muted mini">Standard questions — untick what you don't need:</p>
-            {STD_QS.map((q) => (
+            {stdQs.map((q) => (
               <label key={q} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: 13, cursor: 'pointer' }}>
                 <input type="checkbox" checked={builder.checked.has(q)} onChange={(e) => {
                   const c = new Set(builder.checked);

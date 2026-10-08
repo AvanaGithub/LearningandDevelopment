@@ -125,8 +125,8 @@ export default function Dashboard() {
             <MSel label="Entities" options={ENTITIES.map((e) => ({ v: e, t: ENTITY_NAMES[e] }))} sel={f.ent} onChange={(v) => setF({ ...f, ent: v })} />
             <MSel label="Employees" options={data.employees.map((e) => ({ v: e.id, t: e.name }))} sel={f.emp} onChange={(v) => setF({ ...f, emp: v })} />
             <MSel label="Trainings" options={data.trainings.map((t) => ({ v: t.id, t: t.title + (t.batch ? ' — ' + t.batch : '') }))} sel={f.trn} onChange={(v) => setF({ ...f, trn: v })} />
-            <MSel label="Divisions" options={[...new Set([...DIVISIONS, ...data.employees.map((e) => e.division).filter(Boolean)])].map((v) => ({ v, t: v }))} sel={f.div} onChange={(v) => setF({ ...f, div: v })} />
-            <MSel label="Departments" options={[...new Set([...DEPARTMENTS, ...data.employees.map((e) => e.department).filter(Boolean)])].map((v) => ({ v, t: v }))} sel={f.dept} onChange={(v) => setF({ ...f, dept: v })} />
+            <MSel label="Divisions" options={[...new Set([...(settings?.divisions || DIVISIONS), ...data.employees.map((e) => e.division).filter(Boolean)])].map((v) => ({ v, t: v }))} sel={f.div} onChange={(v) => setF({ ...f, div: v })} />
+            <MSel label="Departments" options={[...new Set([...(settings?.departments || DEPARTMENTS), ...data.employees.map((e) => e.department).filter(Boolean)])].map((v) => ({ v, t: v }))} sel={f.dept} onChange={(v) => setF({ ...f, dept: v })} />
             <MSel label="Teams" options={mgrs.map((v) => ({ v, t: v }))} sel={f.mgr} onChange={(v) => setF({ ...f, mgr: v })} />
             <label className="muted mini">From <input type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
             <label className="muted mini">To <input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>

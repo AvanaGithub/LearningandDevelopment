@@ -7,9 +7,21 @@ const LISTS = [
   { key: 'departments', label: 'Departments', icon: '🏢', hint: 'Functions shown on employees and filters.' },
   { key: 'emp_types', label: 'Employment types', icon: '🪪', hint: 'Options in the employee form.' },
   { key: 'trn_categories', label: 'Training categories', icon: '📚', hint: 'Options when planning a training.' },
+  { key: 'trn_modes', label: 'Training modes', icon: '🎓', hint: 'Delivery modes when planning a training.' },
   { key: 'exp_categories', label: 'Expense categories', icon: '🧾', hint: 'Cost heads on expense records.' },
+  { key: 'fb_std_questions', label: 'Feedback standard questions', icon: '⭐', hint: 'Question bank offered on every feedback form.' },
   { key: 'joiner_steps', label: 'New-joiner checklist steps', icon: '🧷', hint: 'Tracked per joiner on the New Joiners tab.' },
 ];
+
+// Lists whose matching form field can be made mandatory straight from the
+// list card (same keys the "Mandatory fields" section drives).
+const MANDATE_OF = {
+  divisions: { legacy: true, field: 'division', form: 'employee' },
+  departments: { legacy: true, field: 'department', form: 'employee' },
+  emp_types: { legacy: true, field: 'employment_type', form: 'employee' },
+  trn_categories: { section: 'trainings', field: 'category', form: 'training' },
+  exp_categories: { section: 'expenses', field: 'category', form: 'expense' },
+};
 
 // Optional fields an admin can promote to mandatory, per form. Enforced
 // on the server, so the rule holds regardless of client.
@@ -18,7 +30,8 @@ const MANDATE_GROUPS = [
     section: 'employees', label: 'Employees', icon: '👤', legacy: true,
     fields: [['zoho_emp_id', 'Zoho employee ID'], ['email', 'Official e-mail'], ['mobile', 'Mobile'],
       ['division', 'Division'], ['department', 'Department'], ['designation', 'Designation'],
-      ['manager', 'Reporting manager'], ['date_joined', 'Date of joining'], ['location', 'Location']],
+      ['manager', 'Reporting manager'], ['employment_type', 'Employment type'],
+      ['date_joined', 'Date of joining'], ['location', 'Location']],
     note: 'Name and entity are always required.',
   },
   {
@@ -103,41 +116,78 @@ export default function Settings() {
 
       <Strip icon="🗂">Master lists</Strip>
       <div className="cols2">
-        {LISTS.map((l) => (
-          <div key={l.key} className="card scard" style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15 }}><span className="sicon">{l.icon}</span>{l.label} <span className="pill soft mini">{(settings[l.key] || []).length}</span></h3>
-            <p className="muted mini" style={{ margin: '4px 0 0' }}>{l.hint}</p>
-            <div className="chiprow">
-              {(settings[l.key] || []).map((item) => (
-                <span key={item} className="tagchip">{item}
-                  <button title={`Remove "${item}"`}
-                    onClick={() => save(l.key, settings[l.key].filter((x) => x !== item), `"${item}" removed from ${l.label}. Existing records keep their old value.`)}>✕</button>
-                </span>
-              ))}
-              {!(settings[l.key] || []).length && <span className="muted mini">Empty — add the first item below.</span>}
-            </div>
-            <div className="addrow">
-              <input placeholder={`Add to ${l.label.toLowerCase()}…`} value={newItem[l.key] || ''}
-                onChange={(e) => setNewItem({ ...newItem, [l.key]: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return;
-                  e.preventDefault();
-                  const v = (newItem[l.key] || '').trim();
-                  if (!v) return;
-                  if ((settings[l.key] || []).includes(v)) return setErr(`"${v}" is already in ${l.label}.`);
-                  save(l.key, [...(settings[l.key] || []), v], `"${v}" added to ${l.label}.`);
-                  setNewItem({ ...newItem, [l.key]: '' });
-                }} />
-              <button className="btn gold" disabled={!(newItem[l.key] || '').trim()}
-                onClick={() => {
-                  const v = newItem[l.key].trim();
-                  if ((settings[l.key] || []).includes(v)) return setErr(`"${v}" is already in ${l.label}.`);
-                  save(l.key, [...(settings[l.key] || []), v], `"${v}" added to ${l.label}.`);
-                  setNewItem({ ...newItem, [l.key]: '' });
-                }}>+ Add</button>
-            </div>
-          </div>
-        ))}
+        {LISTS.map((l) => {
+          const all = settings._all?.[l.key] || settings[l.key] || [];
+          const dis = settings.disabled_options?.[l.key] || [];
+          const enabled = all.filter((x) => !dis.includes(x));
+          const toggleOption = (item) => {
+            const next = dis.includes(item) ? dis.filter((x) => x !== item) : [...dis, item];
+            save('disabled_options', { ...settings.disabled_options, [l.key]: next },
+              dis.includes(item)
+                ? `"${item}" enabled — available again in forms and filters.`
+                : `"${item}" disabled — hidden from forms; existing records keep it.`);
+          };
+          const addItem = () => {
+            const v = (newItem[l.key] || '').trim();
+            if (!v) return;
+            if (all.includes(v)) return setErr(`"${v}" is already in ${l.label}.`);
+            save(l.key, [...all, v], `"${v}" added to ${l.label}.`);
+            setNewItem({ ...newItem, [l.key]: '' });
+          };
+          const m = MANDATE_OF[l.key];
+          const mandated = m ? (m.legacy
+            ? (settings.required_employee_fields || []).includes(m.field)
+            : (rf[m.section] || []).includes(m.field)) : false;
+          const toggleMandate = () => {
+            if (m.legacy) {
+              const cur = settings.required_employee_fields || [];
+              save('required_employee_fields',
+                mandated ? cur.filter((x) => x !== m.field) : [...cur, m.field],
+                `${l.label.replace(/s$/, '')} is ${mandated ? 'optional again' : 'now mandatory'} on the ${m.form} form.`);
+            } else {
+              const cur = rf[m.section] || [];
+              save('required_fields',
+                { ...rf, [m.section]: mandated ? cur.filter((x) => x !== m.field) : [...cur, m.field] },
+                `${l.label.replace(/s$/, '')} is ${mandated ? 'optional again' : 'now mandatory'} on the ${m.form} form.`);
+            }
+          };
+          return (
+            <details key={l.key} className="card scard setcard" style={{ marginBottom: 16 }}>
+              <summary>
+                <span className="sicon">{l.icon}</span>{l.label}
+                <span className="pill soft mini">{enabled.length}{dis.length ? ` of ${all.length}` : ''}</span>
+              </summary>
+              <p className="muted mini" style={{ margin: '6px 0 2px' }}>{l.hint} Toggle an option off to hide it from forms without touching old records.</p>
+              {m && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer', margin: '6px 0' }}>
+                  <input type="checkbox" checked={mandated} onChange={toggleMandate} />
+                  Mandatory on the {m.form} form
+                </label>
+              )}
+              <div style={{ marginTop: 6 }}>
+                {all.map((item) => {
+                  const on = !dis.includes(item);
+                  return (
+                    <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
+                      <button type="button" className={'swt' + (on ? ' on' : '')} onClick={() => toggleOption(item)}
+                        title={on ? 'Enabled — click to disable' : 'Disabled — click to enable'}><span /></button>
+                      <span style={{ flex: 1, color: on ? 'inherit' : 'var(--ink2)', textDecoration: on ? 'none' : 'line-through' }}>{item}</span>
+                      <button className="btn link" title={`Remove "${item}" permanently`}
+                        onClick={() => save(l.key, all.filter((x) => x !== item), `"${item}" removed from ${l.label}. Existing records keep their old value.`)}>✕</button>
+                    </div>
+                  );
+                })}
+                {!all.length && <p className="muted mini">Empty — add the first item below.</p>}
+              </div>
+              <div className="addrow">
+                <input placeholder={`Add to ${l.label.toLowerCase()}…`} value={newItem[l.key] || ''}
+                  onChange={(e) => setNewItem({ ...newItem, [l.key]: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }} />
+                <button className="btn gold" disabled={!(newItem[l.key] || '').trim()} onClick={addItem}>+ Add</button>
+              </div>
+            </details>
+          );
+        })}
       </div>
 
       <Strip icon="✅">Mandatory fields — per form</Strip>
