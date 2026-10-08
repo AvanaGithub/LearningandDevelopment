@@ -3,7 +3,12 @@ import { api, apiUpload, ENTITIES, ENTITY_NAMES, entLabel, EXP_CATEGORIES, fmtRa
 import { useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 
-const paidOf = (r) => (r.payments || []).reduce((a, p) => a + Number(p.amt), 0);
+// Paid = payment rows; a manual "Paid" status counts the full actual as
+// settled even without payment rows (so Pending reads 0).
+const paidOf = (r) => {
+  const fromRows = (r.payments || []).reduce((a, p) => a + Number(p.amt), 0);
+  return r.payment_status === 'paid' ? Math.max(fromRows, Number(r.actual) || 0) : fromRows;
+};
 // Manual override (payment_status) wins; otherwise computed from payments.
 const payStatus = (r) => {
   if (r.payment_status === 'paid') return ['Paid', 'good'];

@@ -263,7 +263,8 @@ export default function Reports() {
     show('Expense report',
       ['Training', 'Dates', 'Category', 'Type', 'Vendor', 'Budget (₹)', 'Actual (₹)', 'Paid (₹)', 'Pending (₹)', 'Variance (₹)', 'Approval', 'Payment status'],
       r.map((x) => {
-        const paid = (x.payments || []).reduce((a, p) => a + Number(p.amt), 0);
+        const fromRows = (x.payments || []).reduce((a, p) => a + Number(p.amt), 0);
+        const paid = x.payment_status === 'paid' ? Math.max(fromRows, Number(x.actual) || 0) : fromRows;
         const status = x.payment_status || (paid >= Number(x.actual) ? 'paid' : paid > 0 ? 'partial' : 'unpaid');
         return [x.training_label, x.dates || '', x.category || '', x.training_type || '', x.vendor || '',
           Number(x.budget), Number(x.actual), paid, Number(x.actual) - paid, Number(x.budget) - Number(x.actual),
