@@ -10,6 +10,7 @@ export default function Users() {
   const [rows, setRows] = useState(null);
   const [form, setForm] = useState(null); // null = closed, EMPTY-shaped = add form
   const [editU, setEditU] = useState(null); // user being edited (super admin only)
+  const [showDisabled, setShowDisabled] = useState(false);
   const [emps, setEmps] = useState([]);
   const [err, setErr] = useState(null);
 
@@ -77,6 +78,15 @@ export default function Users() {
           <button className="btn gold" onClick={() => setForm(EMPTY)}>Add user</button>
         </div>
       </div>
+      <div className="toolbar">
+        <label className="muted mini" style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+          <input type="checkbox" checked={showDisabled} onChange={(e) => setShowDisabled(e.target.checked)} />
+          Show disabled accounts ({rows.filter((u) => !u.active).length})
+        </label>
+        <span className="muted mini">
+          Employees added with an e-mail get a Learner login automatically; deactivating an employee disables it.
+        </span>
+      </div>
       {form && (
         <form className="card" onSubmit={save}>
           <div className="form-grid">
@@ -120,7 +130,7 @@ export default function Users() {
             <th>Name</th><th>Zoho e-mail</th><th>Role</th><th>Entity</th><th>Status</th><th>Last login</th><th></th>
           </tr></thead>
           <tbody>
-            {rows.map((u) => (
+            {rows.filter((u) => showDisabled || u.active).map((u) => (
               <tr key={u.id}>
                 <td>{u.name}{u.id === me.id && <span className="muted"> (you)</span>}</td>
                 <td>{u.email}</td>

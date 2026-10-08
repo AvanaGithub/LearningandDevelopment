@@ -12,6 +12,40 @@ const FIELD_LABELS = {
   employment_type: 'Employment type',
 };
 
+// Employees and Users & Access stay in sync: a new/updated employee with an
+// e-mail gets a learner login automatically; deactivating the employee
+// disables the login (sessions revoked); reactivating restores it.
+// Super admin logins are never touched automatically.
+async function syncUserForEmployee(emp, becameInactive, becameActive, actorId) {
+  try {
+    if (!emp.email) return;
+    const email = String(emp.email).toLowerCase();
+    if (becameInactive) {
+      const { rows } = await query(
+        `UPDATE users SET active=FALSE, updated_at=now()
+         WHERE email=$1 AND role <> 'super_admin' AND active RETURNING id`, [email]);
+      for (const u of rows) await query('DELETE FROM sessions WHERE user_id=$1', [u.id]);
+      if (rows.length) await audit(actorId, 'user.auto_disable', 'user', rows[0].id, { email, reason: 'employee deactivated' });
+      return;
+    }
+    if (becameActive) {
+      const { rows } = await query(
+        `UPDATE users SET active=TRUE, updated_at=now()
+         WHERE email=$1 AND NOT active RETURNING id`, [email]);
+      if (rows.length) {
+        await audit(actorId, 'user.auto_enable', 'user', rows[0].id, { email, reason: 'employee reactivated' });
+        return;
+      }
+    }
+    if (emp.active === false) return;
+    const { rows: created } = await query(
+      `INSERT INTO users (email, name, role, entity)
+       VALUES ($1,$2,'learner',$3) ON CONFLICT (email) DO NOTHING RETURNING id`,
+      [email, emp.name, emp.entity]);
+    if (created.length) await audit(actorId, 'user.auto_learner', 'user', created[0].id, { email, name: emp.name });
+  } catch (e) { console.error('[user-sync]', e.message); }
+}
+
 // The Settings screen decides which optional fields are mandatory — enforced
 // here so the rule holds regardless of client.
 async function missingRequired(f) {
@@ -83,6 +117,7 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [f.zoho_emp_id, f.name, f.email, f.entity, f.division, f.department, f.designation, f.manager, f.employment_type, f.mobile, f.location, f.date_joined]);
     await audit(req.user.id, 'employee.create', 'employee', rows[0].id, { name: f.name, entity: f.entity });
+    await syncUserForEmployee(rows[0], false, false, req.user.id);
     res.status(201).json(rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'An employee with this e-mail already exists' });
@@ -109,6 +144,7 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
       [id, f.zoho_emp_id, f.name, f.email, f.entity, f.division, f.department, f.designation,
        f.manager, f.employment_type, f.mobile, f.location, f.date_joined, active]);
     await audit(req.user.id, 'employee.update', 'employee', id, { changes: b }, b.reason);
+    await syncUserForEmployee(rows[0], cur[0].active && !active, !cur[0].active && active, req.user.id);
     res.json(rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'An employee with this e-mail already exists' });
