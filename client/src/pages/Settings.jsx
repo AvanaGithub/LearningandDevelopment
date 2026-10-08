@@ -50,6 +50,7 @@ export default function Settings() {
   const toast = useToast();
   const [newItem, setNewItem] = useState({});
   const [smtp, setSmtp] = useState(null);   // local draft of the e-mail settings
+  const [tplDraft, setTplDraft] = useState(null); // local draft of e-mail templates
   const [testing, setTesting] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -242,6 +243,44 @@ export default function Settings() {
             <button className="btn" disabled={testing} onClick={testMail}>{testing ? 'Sending…' : '✉ Send test e-mail'}</button>
           </div>
         </div>
+
+        {(() => {
+          const td = tplDraft || settings.email_templates || {};
+          const set = (k, v) => setTplDraft({ ...td, [k]: v });
+          const blocks = [
+            { sKey: 'nominee_subject', bKey: 'nominee_body', title: 'Nomination / assignment mail (to the employee)',
+              ph: '{name} {kind} {verb} {training} {code} {dates} {mode} {slot} {how}' },
+            { sKey: 'announce_subject', bKey: 'announce_body', title: 'Nominations-open invitation (to eligible employees)',
+              ph: '{name} {training} {code} {dates} {mode} {deadline} {link}' },
+          ];
+          return (
+            <div className="card scard" style={{ marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15 }}><span className="sicon">📝</span>E-mail templates</h3>
+              <p className="muted mini" style={{ margin: '4px 0 10px' }}>
+                Edit the wording; the {'{placeholders}'} are filled in automatically per mail, and the logo,
+                "Open the Learning Hub" button and footer are always added. A "Label: {'{value}'}" line whose
+                value is empty is dropped from the mail.
+              </p>
+              {blocks.map((b) => (
+                <div key={b.sKey} style={{ marginBottom: 14 }}>
+                  <b style={{ fontSize: 13 }}>{b.title}</b>
+                  <div className="muted" style={{ fontSize: 11, margin: '2px 0 6px' }}>Placeholders: {b.ph}</div>
+                  <input style={{ width: '100%', marginBottom: 6 }} value={td[b.sKey] || ''}
+                    placeholder="Subject" onChange={(e) => set(b.sKey, e.target.value)} />
+                  <textarea rows={6} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
+                    value={td[b.bKey] || ''} onChange={(e) => set(b.bKey, e.target.value)} />
+                </div>
+              ))}
+              <div className="form-actions">
+                <button className="btn gold" disabled={!tplDraft}
+                  onClick={() => { save('email_templates', td, 'E-mail templates saved — used from the next mail onwards.'); setTplDraft(null); }}>
+                  Save templates
+                </button>
+                {tplDraft && <button className="btn" onClick={() => setTplDraft(null)}>Discard changes</button>}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </>
   );

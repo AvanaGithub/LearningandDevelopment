@@ -19,6 +19,14 @@ const DEFAULTS = {
   // Mandatory optional-fields per form, set from the Settings screen and
   // enforced server-side (employees has its own legacy key).
   required_fields: { trainings: [], expenses: [], mavericks: [] },
+  // Editable e-mail wording. Placeholders in {braces} are filled per mail;
+  // the logo, "open the hub" button and footer are added automatically.
+  email_templates: {
+    nominee_subject: 'Training {kind} — {training}',
+    nominee_body: 'Dear {name},\n\nYou have been {verb} the training below:\n\nTraining: {training} ({code})\nDates: {dates}\nMode: {mode}\nPreferred slot: {slot}\nHow: {how}\n\nPlease block the dates in your calendar. Attendance is recorded on the training day.',
+    announce_subject: 'Nominations open — {training}',
+    announce_body: 'Dear {name},\n\nNominations are now open for the training below — you can nominate yourself.\n\nTraining: {training} ({code})\nDates: {dates}\nMode: {mode}\nNominate by: {deadline}\n\nUse the button below — you will sign in with Zoho so the nomination is recorded in your name.',
+  },
   // Outlook / Microsoft 365 notifications. The password is write-only:
   // it is stored here but never sent back to any client.
   smtp: {

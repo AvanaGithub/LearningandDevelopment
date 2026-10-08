@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [err, setErr] = useState(null);
   const [showF, setShowF] = useState(false);
   const [f, setF] = useState({ ent: [], emp: [], trn: [], div: [], dept: [], mgr: [], from: '', to: '' });
+  const [mavSel, setMavSel] = useState([]);   // Mavericks batch filter
 
   useEffect(() => { api.get('/api/dashboard/full').then(setData).catch((e) => setErr(e.message)); }, []);
 
@@ -73,7 +74,7 @@ export default function Dashboard() {
     }, 0);
     const avgHours = emps.length ? emps.reduce((s, e) => s + hoursOf(e), 0) / emps.length : 0;
 
-    let spend = null, mavSpend = null, pendingExp = 0;
+    let spend = null, pendingExp = 0;
     if (data.expenses) {
       // Mavericks programme costs are tracked on their own card, not
       // inside the general training spend.
@@ -88,7 +89,6 @@ export default function Dashboard() {
         return s + split.filter((y) => f.ent.includes(y.ent)).reduce((a, y) => a + Number(x.actual) * y.n / tot, 0);
       }, 0);
       spend = amount(scoped.filter((x) => !isMav(x)));
-      mavSpend = amount(data.expenses.filter(isMav));
       pendingExp = scoped.filter((x) => x.approval === 'pending').length;
     }
 
@@ -102,7 +102,7 @@ export default function Dashboard() {
     const running = trns.filter((t) => ['planned', 'confirmed', 'in_progress'].includes(t.status)).length;
     const sheetsPending = trns.filter((t) => t.status === 'completed' && t.mode === 'Classroom').length;
 
-    return { emps, trns, trained, gaps, compPct, avgHours, spend, mavSpend, pendingExp, upcoming, fbPending, done, running, sheetsPending };
+    return { emps, trns, trained, gaps, compPct, avgHours, spend, pendingExp, upcoming, fbPending, done, running, sheetsPending };
   }, [data, f]);
 
   if (err) return <p className="err">{err}</p>;
@@ -177,37 +177,62 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {data.mavericks && data.mavericks.trainees > 0 && (
-        <>
-          <h3 style={{ fontSize: 15, margin: '4px 0 10px' }} className="rowlink" onClick={() => nav('/mavericks')}>
-            MedTech Mavericks →
-          </h3>
-          <div className="tiles">
-            <div className="tile">
-              <div className="lbl">Total Trainees</div>
-              <div className="val">{data.mavericks.trainees}</div>
-              <div className="sub">across active batches</div>
+      {data.mavericks && data.mavericks.batches?.length > 0 && (() => {
+        const all = data.mavericks.batches;
+        const sel = mavSel.length ? all.filter((b) => mavSel.includes(b.id)) : all;
+        const trainees = sel.reduce((a, b) => a + b.trainees, 0);
+        const completed = sel.reduce((a, b) => a + b.completed, 0);
+        const scored = sel.filter((b) => b.avg_score !== null && b.score_count > 0);
+        const wn = scored.reduce((a, b) => a + b.score_count, 0);
+        const avg = wn ? Math.round(scored.reduce((a, b) => a + b.avg_score * b.score_count, 0) / wn * 10) / 10 : null;
+        let spend = null;
+        if (data.expenses) {
+          const names = sel.map((b) => b.name.toLowerCase());
+          const list = data.expenses.filter((x) => /^mavericks\b/i.test(x.training_label || '') &&
+            (!mavSel.length || names.some((n) => (x.training_label || '').toLowerCase().includes(n))));
+          spend = list.reduce((s, x) => {
+            if (!f.ent.length) return s + Number(x.actual);
+            const split = x.entity_split || [];
+            const tot = split.reduce((a, y) => a + y.n, 0) || 1;
+            return s + split.filter((y) => f.ent.includes(y.ent)).reduce((a, y) => a + Number(x.actual) * y.n / tot, 0);
+          }, 0);
+        }
+        return (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 10px' }}>
+              <h3 style={{ fontSize: 15, margin: 0 }} className="rowlink" onClick={() => nav('/mavericks')}>
+                MedTech Mavericks →
+              </h3>
+              <MSel label="Batches" options={all.map((b) => ({ v: b.id, t: b.name }))}
+                sel={mavSel} onChange={setMavSel} />
             </div>
-            <div className="tile">
-              <div className="lbl">Average Assessment Score</div>
-              <div className="val">{data.mavericks.avg_score === null ? '—' : data.mavericks.avg_score}</div>
-              <div className="sub">normalised to /100 · pass mark 80</div>
-            </div>
-            <div className="tile">
-              <div className="lbl">Training Completion %</div>
-              <div className="val">{data.mavericks.completion_pct === null ? '—' : data.mavericks.completion_pct + '%'}</div>
-              <div className="sub">trainees who completed the programme</div>
-            </div>
-            {calc.mavSpend !== null && (
+            <div className="tiles">
               <div className="tile">
-                <div className="lbl">Mavericks spend (FY)</div>
-                <div className="val">₹{inr(calc.mavSpend)}</div>
-                <div className="sub">expense records labelled "Mavericks — …", kept out of the general spend</div>
+                <div className="lbl">Total Trainees</div>
+                <div className="val">{trainees}</div>
+                <div className="sub">{mavSel.length ? `${sel.length} batch(es) selected` : 'across active batches'}</div>
               </div>
-            )}
-          </div>
-        </>
-      )}
+              <div className="tile">
+                <div className="lbl">Average Assessment Score</div>
+                <div className="val">{avg === null ? '—' : avg}</div>
+                <div className="sub">normalised to /100 · pass mark 80</div>
+              </div>
+              <div className="tile">
+                <div className="lbl">Training Completion %</div>
+                <div className="val">{trainees ? Math.round(completed / trainees * 100) + '%' : '—'}</div>
+                <div className="sub">trainees who completed the programme</div>
+              </div>
+              {spend !== null && (
+                <div className="tile">
+                  <div className="lbl">Mavericks spend (FY)</div>
+                  <div className="val">₹{inr(spend)}</div>
+                  <div className="sub">expense records labelled "Mavericks — …", kept out of the general spend</div>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
       <div className="cols2">
         <div className="card" style={{ marginBottom: 0 }}>

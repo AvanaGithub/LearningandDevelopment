@@ -117,6 +117,23 @@ const LOGO = `<p style="margin:0 0 12px"><img src="${SITE}/logo.png" alt="Avana 
 const SITE_BTN = `<p><a href="${SITE}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Open the Avana Learning Hub</a></p>`;
 const row = (k, v) => `<tr><td style="padding:3px 14px 3px 0;color:#8a7a5c;vertical-align:top">${k}</td><td>${v}</td></tr>`;
 
+// Editable wording from Settings (merged over the defaults there).
+async function templates() {
+  const { DEFAULTS } = require('./routes/settings');
+  const { rows } = await query(`SELECT value FROM settings WHERE key='email_templates'`);
+  return { ...DEFAULTS.email_templates, ...(rows.length ? rows[0].value : {}) };
+}
+
+// Fill {placeholders}; drop "Label: " lines whose value came up empty;
+// escape HTML and convert newlines for the mail body.
+function fill(tpl, map, asHtml) {
+  let out = String(tpl || '');
+  for (const [k, v] of Object.entries(map)) out = out.split(`{${k}}`).join(v || '');
+  if (!asHtml) return out;
+  out = out.split('\n').filter((line) => !/^[^:\n]{1,40}:\s*$/.test(line.trim())).join('\n');
+  return esc(out).replace(/\n/g, '<br>');
+}
+
 async function loadTraining(trainingId) {
   const { rows } = await query(
     `SELECT t.*, (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
@@ -145,24 +162,19 @@ async function notifyNomination({ trainingId, employeeIds, source, byName, slot 
       leader: `Nominated by your leader${byName ? `, ${byName}` : ''}`, admin: `Assigned by L&D${byName ? ` (${byName})` : ''}` }[source] || '';
     const { rows: emps } = await query(
       'SELECT name, email FROM employees WHERE id = ANY($1::int[])', [employeeIds]);
-    const html = (name) => `
-      <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
-        ${LOGO}
-        <p>Dear ${esc(name)},</p>
-        <p>You have been <b>${verb}</b> the training below:</p>
-        <table style="border-collapse:collapse;font-size:14px">
-          ${row('Training', `<b>${esc(tr._label)}</b> (${esc(tr.code)})`)}
-          ${row('Dates', esc(tr._dates))}
-          ${tr.mode ? row('Mode', esc(tr.mode)) : ''}
-          ${slot ? row('Preferred slot', esc(slot)) : ''}
-          ${row('How', esc(bySrc))}
-        </table>
-        <p>Please block the dates in your calendar. Attendance is recorded on the training day.</p>
-        ${SITE_BTN}
-        ${FOOT}
-      </div>`;
+    const tpl = await templates();
+    const mapFor = (name) => ({
+      name, kind: source === 'admin' ? 'assignment' : 'nomination', verb,
+      training: tr._label, code: tr.code, dates: tr._dates, mode: tr.mode || '',
+      slot: slot || '', how: bySrc,
+    });
     for (const e of emps) {
-      if (e.email) sendMail(c, e.email, `Training ${source === 'admin' ? 'assignment' : 'nomination'} — ${tr._label}`, html(e.name))
+      if (!e.email) continue;
+      const map = mapFor(e.name);
+      sendMail(c, e.email, fill(tpl.nominee_subject, map, false),
+        `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+           ${LOGO}<p>${fill(tpl.nominee_body, map, true)}</p>${SITE_BTN}${FOOT}
+         </div>`)
         .catch((err) => console.error('[mail]', e.email, err.message));
     }
   } catch (e) { console.error('[mail]', e.message); }
@@ -189,23 +201,18 @@ async function announceSelfNomination(trainingId) {
       [trainingId]);
     const eligible = emps.filter((e) => inScope(tr.department, e.department) && inScope(tr.division, e.division));
     const link = `${SITE}/p/nom/${tr.public_token}`;
-    const html = (name) => `
-      <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
-        ${LOGO}
-        <p>Dear ${esc(name)},</p>
-        <p>Nominations are now <b>open</b> for the training below — you can nominate yourself:</p>
-        <table style="border-collapse:collapse;font-size:14px">
-          ${row('Training', `<b>${esc(tr._label)}</b> (${esc(tr.code)})`)}
-          ${row('Dates', esc(tr._dates))}
-          ${tr.mode ? row('Mode', esc(tr.mode)) : ''}
-          ${tr.nom_deadline ? row('Nominate by', esc(fmtD(tr.nom_deadline))) : ''}
-        </table>
-        <p><a href="${link}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Nominate myself</a></p>
-        <p style="color:#8a7a5c;font-size:12px">You will sign in with your Zoho account so the nomination is recorded in your name.</p>
-        ${FOOT}
-      </div>`;
+    const tpl = await templates();
     for (const e of eligible) {
-      await sendMail(c, e.email, `Nominations open — ${tr._label}`, html(e.name))
+      const map = {
+        name: e.name, training: tr._label, code: tr.code, dates: tr._dates,
+        mode: tr.mode || '', deadline: tr.nom_deadline ? fmtD(tr.nom_deadline) : '', link,
+      };
+      await sendMail(c, e.email, fill(tpl.announce_subject, map, false),
+        `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
+           ${LOGO}<p>${fill(tpl.announce_body, map, true)}</p>
+           <p><a href="${link}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Nominate myself</a></p>
+           ${FOOT}
+         </div>`)
         .catch((err) => console.error('[mail announce]', e.email, err.message));
     }
     console.log(`[mail] nomination announcement for ${tr.code} sent to ${eligible.length} employee(s)`);

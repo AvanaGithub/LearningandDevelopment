@@ -53,25 +53,24 @@ router.get('/full', async (req, res, next) => {
       isAdmin
         ? query(`SELECT training_id, training_label, entity_split, budget, actual, approval FROM expenses WHERE active`)
         : Promise.resolve({ rows: null }),
-      query(`SELECT
-          (SELECT count(*)::int FROM mav_members m JOIN mav_batches b ON b.id=m.batch_id WHERE b.active) AS trainees,
-          (SELECT count(*)::int FROM mav_members m JOIN mav_batches b ON b.id=m.batch_id WHERE b.active AND m.status='completed') AS completed,
-          (SELECT coalesce(
-             (SELECT round(avg(CASE a.mark WHEN 'P' THEN 100 WHEN 'H' THEN 50 ELSE 0 END)::numeric, 0)
-                FROM attendance a JOIN trainings t2 ON t2.id = a.training_id WHERE t2.category = 'Mavericks'),
-             (SELECT round(avg(CASE mark WHEN 'P' THEN 100 WHEN 'H' THEN 50 ELSE 0 END)::numeric, 0) FROM mav_attendance))) AS att_pct,
-          (SELECT round(avg(s.score / a.max_marks * 100)::numeric, 1)
-             FROM mav_scores s JOIN mav_assessments a ON a.id=s.assessment_id) AS avg_score`),
+      query(`SELECT b.id, b.name,
+               (SELECT count(*)::int FROM mav_members m WHERE m.batch_id=b.id) AS trainees,
+               (SELECT count(*)::int FROM mav_members m WHERE m.batch_id=b.id AND m.status='completed') AS completed,
+               (SELECT round(avg(s.score / a.max_marks * 100)::numeric, 1)
+                  FROM mav_scores s JOIN mav_assessments a ON a.id=s.assessment_id
+                  WHERE a.batch_id=b.id) AS avg_score,
+               (SELECT count(*)::int FROM mav_scores s JOIN mav_assessments a ON a.id=s.assessment_id
+                  WHERE a.batch_id=b.id) AS score_count
+             FROM mav_batches b WHERE b.active ORDER BY b.id DESC`),
     ]);
-    const m = mav.rows[0];
-    // Mavericks stats follow the module's access: leaders and above.
+    // Mavericks stats follow the module's access: leaders and above; the
+    // client filters/aggregates per batch.
     res.json({
       employees: emps.rows, trainings: trns.rows, attendance: att.rows, expenses: exp.rows,
       mavericks: isAdmin ? {
-        trainees: m.trainees,
-        att_pct: m.att_pct === null ? null : Number(m.att_pct),
-        avg_score: m.avg_score === null ? null : Number(m.avg_score),
-        completion_pct: m.trainees ? Math.round(m.completed / m.trainees * 100) : null,
+        batches: mav.rows.map((b) => ({
+          ...b, avg_score: b.avg_score === null ? null : Number(b.avg_score),
+        })),
       } : null,
     });
   } catch (e) { next(e); }
