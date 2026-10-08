@@ -38,6 +38,25 @@ router.post('/', express.json(), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Bulk: every active employee with an e-mail becomes a learner user
+// (existing users are untouched — promote managers/leaders manually).
+router.post('/bulk-learners', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `INSERT INTO users (email, name, role, entity)
+       SELECT lower(e.email), e.name, 'learner', e.entity
+       FROM employees e
+       WHERE e.active AND e.email IS NOT NULL AND e.email <> ''
+         AND lower(e.email) NOT IN (SELECT email FROM users)
+       RETURNING id`);
+    await audit(req.user.id, 'user.bulk_learners', 'user', null, { created: rows.length });
+    const { rows: skipped } = await query(
+      `SELECT count(*)::int AS n FROM employees e
+       WHERE e.active AND (e.email IS NULL OR e.email = '')`);
+    res.status(201).json({ created: rows.length, no_email: skipped[0].n });
+  } catch (e) { next(e); }
+});
+
 router.patch('/:id', express.json(), async (req, res, next) => {
   try {
     const id = Number(req.params.id);

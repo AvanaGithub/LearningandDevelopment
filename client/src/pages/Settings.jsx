@@ -121,6 +121,14 @@ export default function Settings() {
           const enabled = all.filter((x) => !dis.includes(x));
           const m = MANDATE_OF[l.key];
           const mandated = m ? isMandated(m) : false;
+          const mo = settings.mandatory_options?.[l.key] || [];
+          const tickOption = (item) => {
+            const next = mo.includes(item) ? mo.filter((x) => x !== item) : [...mo, item];
+            save('mandatory_options', { ...settings.mandatory_options, [l.key]: next },
+              `"${item}" ${mo.includes(item) ? 'un-marked' : 'marked'} as mandatory.`);
+            // Any ticked option => the form field itself becomes mandatory.
+            if (m && (next.length > 0) !== mandated) toggleMandate(m, l.label.replace(/s$/, ''));
+          };
           const toggleOption = (item) => {
             const next = dis.includes(item) ? dis.filter((x) => x !== item) : [...dis, item];
             save('disabled_options', { ...settings.disabled_options, [l.key]: next },
@@ -144,7 +152,7 @@ export default function Settings() {
               </summary>
               <p className="muted mini" style={{ margin: '6px 0 2px' }}>
                 {l.hint} Toggle an option off to hide it from forms without touching old records.
-                {m && <> The <b>Mandatory</b> tick makes the {m.form} form's field required — it is one setting, so every row shows the same state.</>}
+                {m && <> Tick <b>Mandatory</b> on the options that matter — as soon as any option is ticked, the {m.form} form's field becomes required.</>}
               </p>
               <div style={{ marginTop: 6 }}>
                 {all.length > 0 && (
@@ -161,8 +169,8 @@ export default function Settings() {
                         title={on ? 'Enabled — click to disable' : 'Disabled — click to enable'}><span /></button>
                       <span style={{ flex: 1, color: on ? 'inherit' : 'var(--ink2)', textDecoration: on ? 'none' : 'line-through' }}>{item}</span>
                       {m && (
-                        <input type="checkbox" checked={mandated} title={`Make the ${m.form} form's field mandatory`}
-                          onChange={() => toggleMandate(m, l.label.replace(/s$/, ''))}
+                        <input type="checkbox" checked={mo.includes(item)} title={`Mark "${item}" as mandatory`}
+                          onChange={() => tickOption(item)}
                           style={{ marginRight: 14 }} />
                       )}
                       <button className="btn link" title={`Remove "${item}" permanently`}

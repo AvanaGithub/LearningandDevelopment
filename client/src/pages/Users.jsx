@@ -63,7 +63,19 @@ export default function Users() {
     <>
       <div className="page-head">
         <h2>Users &amp; Access</h2>
-        <button className="btn gold" onClick={() => setForm(EMPTY)}>Add user</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {me.role === 'super_admin' && (
+            <button className="btn" onClick={async () => {
+              if (!window.confirm('Add every active employee (with an e-mail) as a Learner user? Existing users are untouched — you can promote managers/leaders afterwards.')) return;
+              try {
+                const r = await api.post('/api/users/bulk-learners', {});
+                toast(`${r.created} learner account(s) created${r.no_email ? ` · ${r.no_email} active employee(s) skipped (no e-mail on record)` : ''}.`);
+                load();
+              } catch (e2) { toast(e2.message); }
+            }}>＋ All employees as learners</button>
+          )}
+          <button className="btn gold" onClick={() => setForm(EMPTY)}>Add user</button>
+        </div>
       </div>
       {form && (
         <form className="card" onSubmit={save}>

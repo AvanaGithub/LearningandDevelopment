@@ -24,6 +24,11 @@ const DEFAULTS = {
   // hidden from every form/filter (the GET below filters them out).
   disabled_options: { divisions: [], departments: [], emp_types: [], trn_categories: [],
     exp_categories: [], joiner_steps: [], trn_modes: [], fb_std_questions: [] },
+  // Per-option "mandatory" ticks on the Settings list cards. When a list
+  // has any ticked option, its form field is made mandatory (the client
+  // syncs the required_* keys on save).
+  mandatory_options: { divisions: [], departments: [], emp_types: [], trn_categories: [],
+    exp_categories: [], joiner_steps: [], trn_modes: [], fb_std_questions: [] },
   // Mandatory optional-fields per form, set from the Settings screen and
   // enforced server-side (employees has its own legacy key).
   required_fields: { trainings: [], expenses: [], mavericks: [] },
