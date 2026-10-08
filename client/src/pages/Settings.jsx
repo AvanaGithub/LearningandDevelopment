@@ -13,8 +13,8 @@ const LISTS = [
   { key: 'joiner_steps', label: 'New-joiner checklist steps', icon: '🧷', hint: 'Tracked per joiner on the New Joiners tab.' },
 ];
 
-// Lists whose matching form field can be made mandatory straight from the
-// list card (same keys the "Mandatory fields" section drives).
+// Lists that feed a form field which can be made mandatory. The tick on a
+// row applies to the FIELD (one setting), so all rows move together.
 const MANDATE_OF = {
   divisions: { legacy: true, field: 'division', form: 'employee' },
   departments: { legacy: true, field: 'department', form: 'employee' },
@@ -23,34 +23,27 @@ const MANDATE_OF = {
   exp_categories: { section: 'expenses', field: 'category', form: 'expense' },
 };
 
-// Optional fields an admin can promote to mandatory, per form. Enforced
-// on the server, so the rule holds regardless of client.
-const MANDATE_GROUPS = [
+// Mandatory controls for fields that are NOT backed by a master list.
+const OTHER_MANDATE = [
   {
-    section: 'employees', label: 'Employees', icon: '👤', legacy: true,
+    section: 'employees', label: 'Employee form', legacy: true,
     fields: [['zoho_emp_id', 'Zoho employee ID'], ['email', 'Official e-mail'], ['mobile', 'Mobile'],
-      ['division', 'Division'], ['department', 'Department'], ['designation', 'Designation'],
-      ['manager', 'Reporting manager'], ['employment_type', 'Employment type'],
+      ['designation', 'Designation'], ['manager', 'Reporting manager'],
       ['date_joined', 'Date of joining'], ['location', 'Location']],
-    note: 'Name and entity are always required.',
   },
   {
-    section: 'trainings', label: 'Trainings', icon: '📚',
-    fields: [['batch', 'Batch'], ['category', 'Category'], ['department', 'Departments'], ['division', 'Divisions'],
+    section: 'trainings', label: 'Training form',
+    fields: [['batch', 'Batch'], ['department', 'Departments'], ['division', 'Divisions'],
       ['mode', 'Mode'], ['validity_months', 'Re-training validity'], ['agenda_file', 'Training agenda']],
-    note: 'Title, dates and trainer are always required.',
   },
   {
-    section: 'expenses', label: 'Expenses', icon: '🧾',
+    section: 'expenses', label: 'Expense form',
     fields: [['budget', 'Approved budget'], ['dates', 'Training dates'], ['location', 'Location'],
-      ['category', 'Category'], ['vendor', 'Vendor'], ['description', 'Description'],
-      ['remark', 'Remark'], ['payments', 'Payment rows']],
-    note: 'Training name, entity split and actual expense are always required.',
+      ['vendor', 'Vendor'], ['description', 'Description'], ['remark', 'Remark'], ['payments', 'Payment rows']],
   },
   {
-    section: 'mavericks', label: 'Mavericks batches', icon: '🚀',
+    section: 'mavericks', label: 'Mavericks batch form',
     fields: [['mentor', 'Programme lead'], ['start_date', 'Start date'], ['end_date', 'End date'], ['notes', 'Notes']],
-    note: 'Batch name is always required.',
   },
 ];
 
@@ -69,6 +62,7 @@ export default function Settings() {
 
   if (!settings) return <p className="muted">Loading…</p>;
   const sm = smtp || { ...settings.smtp, pass: '', client_secret: '' };
+  const rf = settings.required_fields || { trainings: [], expenses: [], mavericks: [] };
 
   const save = async (key, value, msg) => {
     setErr(null);
@@ -79,14 +73,19 @@ export default function Settings() {
     } catch (e) { setErr(e.message); }
   };
 
-  const rf = settings.required_fields || { trainings: [], expenses: [], mavericks: [] };
-  const reqOf = (g) => (g.legacy ? (settings.required_employee_fields || []) : (rf[g.section] || []));
-  const toggleReq = (g, key, label) => {
-    const cur = reqOf(g);
-    const next = cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key];
-    const msg = `"${label}" is ${cur.includes(key) ? 'optional again' : 'now mandatory'} on the ${g.label} form.`;
-    if (g.legacy) save('required_employee_fields', next, msg);
-    else save('required_fields', { ...rf, [g.section]: next }, msg);
+  const isMandated = (m) => (m.legacy
+    ? (settings.required_employee_fields || []).includes(m.field)
+    : (rf[m.section] || []).includes(m.field));
+  const toggleMandate = (m, label) => {
+    const on = isMandated(m);
+    const msg = `"${label}" is ${on ? 'optional again' : 'now mandatory'} on the ${m.form || m.section} form.`;
+    if (m.legacy) {
+      const cur = settings.required_employee_fields || [];
+      save('required_employee_fields', on ? cur.filter((x) => x !== m.field) : [...cur, m.field], msg);
+    } else {
+      const cur = rf[m.section] || [];
+      save('required_fields', { ...rf, [m.section]: on ? cur.filter((x) => x !== m.field) : [...cur, m.field] }, msg);
+    }
   };
 
   const saveSmtp = async () => {
@@ -120,6 +119,8 @@ export default function Settings() {
           const all = settings._all?.[l.key] || settings[l.key] || [];
           const dis = settings.disabled_options?.[l.key] || [];
           const enabled = all.filter((x) => !dis.includes(x));
+          const m = MANDATE_OF[l.key];
+          const mandated = m ? isMandated(m) : false;
           const toggleOption = (item) => {
             const next = dis.includes(item) ? dis.filter((x) => x !== item) : [...dis, item];
             save('disabled_options', { ...settings.disabled_options, [l.key]: next },
@@ -134,37 +135,24 @@ export default function Settings() {
             save(l.key, [...all, v], `"${v}" added to ${l.label}.`);
             setNewItem({ ...newItem, [l.key]: '' });
           };
-          const m = MANDATE_OF[l.key];
-          const mandated = m ? (m.legacy
-            ? (settings.required_employee_fields || []).includes(m.field)
-            : (rf[m.section] || []).includes(m.field)) : false;
-          const toggleMandate = () => {
-            if (m.legacy) {
-              const cur = settings.required_employee_fields || [];
-              save('required_employee_fields',
-                mandated ? cur.filter((x) => x !== m.field) : [...cur, m.field],
-                `${l.label.replace(/s$/, '')} is ${mandated ? 'optional again' : 'now mandatory'} on the ${m.form} form.`);
-            } else {
-              const cur = rf[m.section] || [];
-              save('required_fields',
-                { ...rf, [m.section]: mandated ? cur.filter((x) => x !== m.field) : [...cur, m.field] },
-                `${l.label.replace(/s$/, '')} is ${mandated ? 'optional again' : 'now mandatory'} on the ${m.form} form.`);
-            }
-          };
           return (
             <details key={l.key} className="card scard setcard" style={{ marginBottom: 16 }}>
               <summary>
                 <span className="sicon">{l.icon}</span>{l.label}
                 <span className="pill soft mini">{enabled.length}{dis.length ? ` of ${all.length}` : ''}</span>
+                {m && mandated && <span className="pill warn mini">mandatory field</span>}
               </summary>
-              <p className="muted mini" style={{ margin: '6px 0 2px' }}>{l.hint} Toggle an option off to hide it from forms without touching old records.</p>
-              {m && (
-                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer', margin: '6px 0' }}>
-                  <input type="checkbox" checked={mandated} onChange={toggleMandate} />
-                  Mandatory on the {m.form} form
-                </label>
-              )}
+              <p className="muted mini" style={{ margin: '6px 0 2px' }}>
+                {l.hint} Toggle an option off to hide it from forms without touching old records.
+                {m && <> The <b>Mandatory</b> tick makes the {m.form} form's field required — it is one setting, so every row shows the same state.</>}
+              </p>
               <div style={{ marginTop: 6 }}>
+                {all.length > 0 && (
+                  <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--ink2)', padding: '0 0 2px' }}>
+                    <span style={{ width: 34 }}>On</span><span style={{ flex: 1 }}></span>
+                    {m && <span>Mandatory</span>}<span style={{ width: 24 }}></span>
+                  </div>
+                )}
                 {all.map((item) => {
                   const on = !dis.includes(item);
                   return (
@@ -172,6 +160,11 @@ export default function Settings() {
                       <button type="button" className={'swt' + (on ? ' on' : '')} onClick={() => toggleOption(item)}
                         title={on ? 'Enabled — click to disable' : 'Disabled — click to enable'}><span /></button>
                       <span style={{ flex: 1, color: on ? 'inherit' : 'var(--ink2)', textDecoration: on ? 'none' : 'line-through' }}>{item}</span>
+                      {m && (
+                        <input type="checkbox" checked={mandated} title={`Make the ${m.form} form's field mandatory`}
+                          onChange={() => toggleMandate(m, l.label.replace(/s$/, ''))}
+                          style={{ marginRight: 14 }} />
+                      )}
                       <button className="btn link" title={`Remove "${item}" permanently`}
                         onClick={() => save(l.key, all.filter((x) => x !== item), `"${item}" removed from ${l.label}. Existing records keep their old value.`)}>✕</button>
                     </div>
@@ -190,33 +183,43 @@ export default function Settings() {
         })}
       </div>
 
-      <Strip icon="✅">Mandatory fields — per form</Strip>
+      <Strip icon="✅">Other mandatory fields</Strip>
       <div className="cols2">
-        {MANDATE_GROUPS.map((g) => (
-          <div key={g.section} className="card scard" style={{ marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15 }}><span className="sicon">{g.icon}</span>{g.label}
-              <span className="pill soft mini">{reqOf(g).length} mandatory</span></h3>
-            <p className="muted mini" style={{ margin: '4px 0 0' }}>
-              {g.note} Tap a chip to make that field mandatory (gold = mandatory) — enforced when saving, including imports.
-            </p>
-            <div className="chiprow">
-              {g.fields.map(([key, label]) => (
-                <button key={key} className={'togglechip' + (reqOf(g).includes(key) ? ' on' : '')}
-                  onClick={() => toggleReq(g, key, label)}>
-                  {label}
-                </button>
-              ))}
+        <details className="card scard setcard" style={{ marginBottom: 16 }}>
+          <summary><span className="sicon">✅</span>Fields without a master list
+            <span className="pill soft mini">
+              {(settings.required_employee_fields || []).length + Object.values(rf).reduce((a, x) => a + (x || []).length, 0)} mandatory
+            </span>
+          </summary>
+          <p className="muted mini" style={{ margin: '6px 0 4px' }}>
+            Division, department, employment type and the category fields are mandated from their list cards above.
+            Everything else is here — gold = mandatory, enforced when saving, including imports.
+          </p>
+          {OTHER_MANDATE.map((g) => (
+            <div key={g.section} style={{ marginBottom: 8 }}>
+              <b style={{ fontSize: 12.5 }}>{g.label}</b>
+              <div className="chiprow" style={{ marginTop: 4 }}>
+                {g.fields.map(([key, label]) => {
+                  const m = { legacy: g.legacy, section: g.section, field: key, form: g.label.replace(' form', '') };
+                  return (
+                    <button key={key} className={'togglechip' + (isMandated(m) ? ' on' : '')}
+                      onClick={() => toggleMandate(m, label)}>{label}</button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </details>
       </div>
 
       <Strip icon="💰">Budgets</Strip>
       <div className="cols2">
-        <div className="card scard" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15 }}><span className="sicon">💰</span>Annual training budgets (₹, per entity)</h3>
-          <p className="muted mini" style={{ margin: '4px 0 10px' }}>
-            Drives the Budget vs actual table on Expenses and the dashboard spend tile.
+        <details className="card scard setcard" style={{ marginBottom: 16 }}>
+          <summary><span className="sicon">💰</span>Annual training budgets
+            <span className="pill soft mini">₹{inr(ENTITIES.reduce((a, e) => a + (Number(settings.entity_budgets?.[e]) || 0), 0))}</span>
+          </summary>
+          <p className="muted mini" style={{ margin: '6px 0 10px' }}>
+            Per entity, per financial year — drives the Budget vs actual table on Expenses and the dashboard spend tile.
           </p>
           {ENTITIES.map((e) => (
             <div key={e} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', fontSize: 13 }}>
@@ -231,17 +234,16 @@ export default function Settings() {
                 }} />
             </div>
           ))}
-          <p className="muted mini" style={{ marginTop: 8 }}>
-            Total: ₹{inr(ENTITIES.reduce((a, e) => a + (Number(settings.entity_budgets?.[e]) || 0), 0))} per financial year.
-          </p>
-        </div>
+        </details>
       </div>
 
       <Strip icon="✉">Integrations</Strip>
       <div className="cols2">
-        <div className="card scard" style={{ marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15 }}><span className="sicon">✉</span>E-mail notifications (Outlook / Microsoft 365)</h3>
-          <p className="muted mini" style={{ margin: '4px 0 10px' }}>
+        <details className="card scard setcard" style={{ marginBottom: 16 }}>
+          <summary><span className="sicon">✉</span>E-mail notifications (Outlook / Microsoft 365)
+            <span className={'pill mini ' + (settings.smtp?.enabled ? 'good' : 'neutral')}>{settings.smtp?.enabled ? 'on' : 'off'}</span>
+          </summary>
+          <p className="muted mini" style={{ margin: '6px 0 10px' }}>
             Automatic Outlook e-mails: nominees/assignees get the details with a sign-in link; opening
             self-nomination invites every eligible employee; after the nomination deadline managers and
             leaders get the consolidated participant list; when a training is marked completed they get
@@ -258,7 +260,7 @@ export default function Settings() {
                 <option value="smtp">SMTP app password (only if your company allows it)</option>
               </select></div>
             <div><label>Send as (From mailbox)</label>
-              <input value={sm.from} onChange={(e) => setSmtp({ ...sm, from: e.target.value, user: e.target.value })} placeholder="lokshni@avanasurgical.com" /></div>
+              <input value={sm.from} onChange={(e) => setSmtp({ ...sm, from: e.target.value, user: e.target.value })} placeholder="academy@avanasurgical.com" /></div>
             <div><label>Sender display name</label>
               <input value={sm.from_name || ''} onChange={(e) => setSmtp({ ...sm, from_name: e.target.value })} placeholder="Avana Academy" /></div>
             <div><label>Test e-mails go to</label>
@@ -273,7 +275,7 @@ export default function Settings() {
                   placeholder={settings.smtp?.has_secret ? '••••••••' : 'leave blank to use the server certificate'} autoComplete="new-password" />
                 <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
                   Server certificate: {settings.smtp?.cert_available
-                    ? <b style={{ color: 'var(--good)' }}>ready ✓ — upload its public .cer in Entra → Certificates</b>
+                    ? <b style={{ color: 'var(--good)' }}>ready ✓</b>
                     : 'not generated yet'}
                 </div></div>
             </>) : (
@@ -282,17 +284,11 @@ export default function Settings() {
                   placeholder={settings.smtp?.has_pass ? '••••••••' : 'paste the app password'} autoComplete="new-password" /></div>
             )}
           </div>
-          <p className="muted mini" style={{ marginTop: 8 }}>
-            {(sm.method || 'graph') === 'graph'
-              ? 'The three values come from a one-time app registration at entra.microsoft.com (App registrations → New → copy tenant ID + client ID; Certificates or a client secret; API permissions → Microsoft Graph → Application → Mail.Send → Grant admin consent).'
-              : 'Server: smtp.office365.com, port 587. Needs Authenticated SMTP enabled on the mailbox and an app password.'}
-            {' '}Secrets are stored on your server only and never shown again.
-          </p>
           <div className="form-actions">
             <button className="btn gold" onClick={saveSmtp}>Save e-mail settings</button>
             <button className="btn" disabled={testing} onClick={testMail}>{testing ? 'Sending…' : '✉ Send test e-mail'}</button>
           </div>
-        </div>
+        </details>
 
         {(() => {
           const td = tplDraft || settings.email_templates || {};
@@ -304,10 +300,12 @@ export default function Settings() {
               ph: '{name} {training} {code} {dates} {mode} {deadline} {link}' },
           ];
           return (
-            <div className="card scard" style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: 15 }}><span className="sicon">📝</span>E-mail templates</h3>
-              <p className="muted mini" style={{ margin: '4px 0 10px' }}>
-                Edit the wording; the {'{placeholders}'} are filled in automatically per mail, and the logo,
+            <details className="card scard setcard" style={{ marginBottom: 16 }}>
+              <summary><span className="sicon">📝</span>E-mail templates
+                {tplDraft && <span className="pill warn mini">unsaved changes</span>}
+              </summary>
+              <p className="muted mini" style={{ margin: '6px 0 10px' }}>
+                Edit the wording; the {'{placeholders}'} are filled in automatically per mail, and the
                 "Open the Learning Hub" button and footer are always added. A "Label: {'{value}'}" line whose
                 value is empty is dropped from the mail.
               </p>
@@ -328,7 +326,7 @@ export default function Settings() {
                 </button>
                 {tplDraft && <button className="btn" onClick={() => setTplDraft(null)}>Discard changes</button>}
               </div>
-            </div>
+            </details>
           );
         })()}
       </div>
