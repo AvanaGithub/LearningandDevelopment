@@ -39,6 +39,7 @@ function pick(b) {
     entity_split: split,
     category: b.category?.trim() || null,
     accommodation: b.accommodation?.trim() || null,
+    venue: b.venue?.trim() || null,
     training_type: b.training_type === 'External' ? 'External' : 'Internal',
     vendor: b.vendor?.trim() || null,
     description: b.description?.trim() || null,
@@ -81,10 +82,10 @@ router.post('/', express.json(), async (req, res, next) => {
     const bad = validate(f, await require('./settings').requiredFields('expenses'));
     if (bad) return res.status(400).json({ error: bad });
     const { rows } = await query(
-      `INSERT INTO expenses (training_id, training_label, dates, location, participants, entity_split,         category, accommodation, training_type, vendor, description, budget, actual, payments, invoices, approval, payment_status, remark)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+      `INSERT INTO expenses (training_id, training_label, dates, location, participants, entity_split,         category, accommodation, venue, training_type, vendor, description, budget, actual, payments, invoices, approval, payment_status, remark)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [f.training_id, f.training_label, f.dates, f.location, f.participants, JSON.stringify(f.entity_split),
-       f.category, f.accommodation, f.training_type, f.vendor, f.description, f.budget, f.actual,
+       f.category, f.accommodation, f.venue, f.training_type, f.vendor, f.description, f.budget, f.actual,
        JSON.stringify(f.payments), JSON.stringify(f.invoices), f.approval, f.payment_status, f.remark]);
     await audit(req.user.id, 'expense.create', 'expense', rows[0].id, { training: f.training_label, actual: f.actual });
     res.status(201).json(rows[0]);
@@ -109,11 +110,12 @@ router.patch('/:id', express.json(), async (req, res, next) => {
     if (bad) return res.status(400).json({ error: bad });
     const { rows } = await query(
       `UPDATE expenses SET training_id=$2, training_label=$3, dates=$4, location=$5, participants=$6,
-         entity_split=$7, category=$8, accommodation=$9, training_type=$10, vendor=$11, description=$12,
-         budget=$13, actual=$14, payments=$15, invoices=$16, approval=$17, payment_status=$18, remark=$19, updated_at=now()
+         entity_split=$7, category=$8, accommodation=$9, venue=$10, training_type=$11, vendor=$12,
+         description=$13, budget=$14, actual=$15, payments=$16, invoices=$17, approval=$18,
+         payment_status=$19, remark=$20, updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, f.training_id, f.training_label, f.dates, f.location, f.participants, JSON.stringify(f.entity_split),
-       f.category, f.accommodation, f.training_type, f.vendor, f.description, f.budget, f.actual,
+       f.category, f.accommodation, f.venue, f.training_type, f.vendor, f.description, f.budget, f.actual,
        JSON.stringify(f.payments), JSON.stringify(f.invoices), f.approval, f.payment_status, f.remark]);
     await audit(req.user.id, 'expense.update', 'expense', id, { changes: b }, b.reason);
     res.json(rows[0]);
