@@ -48,20 +48,22 @@ export default function MSel({ label, options, sel, onChange, empty = 'All', all
           </label>
         )}
         <hr style={{ border: 0, borderTop: '1px solid var(--line)' }} />
-        {shown.map((o) => (
-          <label key={o.v}>
-            {/* "All" (empty selection) shows every box ticked; unticking one
-                then means "everything except this". Ticking the last missing
-                option collapses back to All. */}
-            <input type="checkbox" checked={!n || sel.includes(o.v)}
-              onChange={(e) => {
-                if (!n) return onChange(options.filter((x) => x.v !== o.v).map((x) => x.v));
-                const next = e.target.checked ? [...sel, o.v] : sel.filter((x) => x !== o.v);
-                onChange(next.length >= options.length ? [] : next);
-              }} />
-            {o.t}
-          </label>
-        ))}
+        {shown.map((o) => {
+          // Only FILTER dropdowns (empty = "All") show every box ticked when
+          // nothing is selected; pickers ("none picked") keep plain toggles.
+          const emptyMeansAll = empty === 'All';
+          return (
+            <label key={o.v}>
+              <input type="checkbox" checked={(emptyMeansAll && !n) || sel.includes(o.v)}
+                onChange={(e) => {
+                  if (emptyMeansAll && !n) return onChange(options.filter((x) => x.v !== o.v).map((x) => x.v));
+                  const next = e.target.checked ? [...sel, o.v] : sel.filter((x) => x !== o.v);
+                  onChange(emptyMeansAll && next.length >= options.length ? [] : next);
+                }} />
+              {o.t}
+            </label>
+          );
+        })}
         {!shown.length && <div className="muted mini" style={{ padding: '4px 2px' }}>No match.</div>}
       </div>
     </details>
