@@ -12,7 +12,7 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [showF, setShowF] = useState(false);
-  const [f, setF] = useState({ ent: [], emp: [], trn: [], div: [], dept: [], mgr: [], from: '', to: '' });
+  const [f, setF] = useState({ ent: [], emp: [], trn: [], div: [], dept: [], mgr: [], cat: [], from: '', to: '' });
   const [mavSel, setMavSel] = useState([]);   // Mavericks batch filter
 
   useEffect(() => { api.get('/api/dashboard/full').then(setData).catch((e) => setErr(e.message)); }, []);
@@ -79,9 +79,10 @@ export default function Dashboard() {
       // Mavericks programme costs are tracked on their own card, not
       // inside the general training spend.
       const isMav = (x) => /^mavericks\b/i.test(x.training_label || '');
-      const scoped = (f.trn.length || f.from || f.to)
+      const catOk = (x) => !f.cat.length || f.cat.includes(x.category);
+      const scoped = ((f.trn.length || f.from || f.to)
         ? data.expenses.filter((x) => x.training_id && trnIds.has(x.training_id))
-        : data.expenses;
+        : data.expenses).filter(catOk);
       const amount = (list) => list.reduce((s, x) => {
         if (!f.ent.length) return s + Number(x.actual);
         const split = x.entity_split || [];
@@ -108,7 +109,7 @@ export default function Dashboard() {
   if (err) return <p className="err">{err}</p>;
   if (!data || !calc) return <p className="muted">Loading…</p>;
 
-  const nFilters = ['ent', 'emp', 'trn', 'div', 'dept', 'mgr'].filter((k) => f[k].length).length + (f.from ? 1 : 0) + (f.to ? 1 : 0);
+  const nFilters = ['ent', 'emp', 'trn', 'div', 'dept', 'mgr', 'cat'].filter((k) => f[k].length).length + (f.from ? 1 : 0) + (f.to ? 1 : 0);
   const mgrs = [...new Set(data.employees.map((e) => (e.manager || '').replace(/^Mentor: /, '')).filter(Boolean))].sort();
 
   return (
@@ -128,9 +129,14 @@ export default function Dashboard() {
             <MSel label="Divisions" options={[...new Set([...(settings?.divisions || DIVISIONS), ...data.employees.map((e) => e.division).filter(Boolean)])].map((v) => ({ v, t: v }))} sel={f.div} onChange={(v) => setF({ ...f, div: v })} />
             <MSel label="Departments" options={[...new Set([...(settings?.departments || DEPARTMENTS), ...data.employees.map((e) => e.department).filter(Boolean)])].map((v) => ({ v, t: v }))} sel={f.dept} onChange={(v) => setF({ ...f, dept: v })} />
             <MSel label="Teams" options={mgrs.map((v) => ({ v, t: v }))} sel={f.mgr} onChange={(v) => setF({ ...f, mgr: v })} />
+            {data.expenses && (
+              <MSel label="Expense category"
+                options={[...new Set([...(settings?.exp_categories || []), ...data.expenses.map((x) => x.category).filter(Boolean)])].map((v) => ({ v, t: v }))}
+                sel={f.cat} onChange={(v) => setF({ ...f, cat: v })} />
+            )}
             <label className="muted mini">From <input type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
             <label className="muted mini">To <input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
-            <button className="btn" onClick={() => setF({ ent: [], emp: [], trn: [], div: [], dept: [], mgr: [], from: '', to: '' })}>✕ Clear all</button>
+            <button className="btn" onClick={() => setF({ ent: [], emp: [], trn: [], div: [], dept: [], mgr: [], cat: [], from: '', to: '' })}>✕ Clear all</button>
           </div>
           <p className="muted mini" style={{ margin: '8px 0 0' }}>Tick any combination — every tile below recomputes for the selection.</p>
         </div>
@@ -189,6 +195,7 @@ export default function Dashboard() {
         if (data.expenses) {
           const names = sel.map((b) => b.name.toLowerCase());
           const list = data.expenses.filter((x) => /^mavericks\b/i.test(x.training_label || '') &&
+            (!f.cat.length || f.cat.includes(x.category)) &&
             (!mavSel.length || names.some((n) => (x.training_label || '').toLowerCase().includes(n))));
           spend = list.reduce((s, x) => {
             if (!f.ent.length) return s + Number(x.actual);
