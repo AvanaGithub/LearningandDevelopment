@@ -50,8 +50,15 @@ export default function MSel({ label, options, sel, onChange, empty = 'All', all
         <hr style={{ border: 0, borderTop: '1px solid var(--line)' }} />
         {shown.map((o) => (
           <label key={o.v}>
-            <input type="checkbox" checked={sel.includes(o.v)}
-              onChange={(e) => onChange(e.target.checked ? [...sel, o.v] : sel.filter((x) => x !== o.v))} />
+            {/* "All" (empty selection) shows every box ticked; unticking one
+                then means "everything except this". Ticking the last missing
+                option collapses back to All. */}
+            <input type="checkbox" checked={!n || sel.includes(o.v)}
+              onChange={(e) => {
+                if (!n) return onChange(options.filter((x) => x.v !== o.v).map((x) => x.v));
+                const next = e.target.checked ? [...sel, o.v] : sel.filter((x) => x !== o.v);
+                onChange(next.length >= options.length ? [] : next);
+              }} />
             {o.t}
           </label>
         ))}
