@@ -6,14 +6,17 @@ const router = express.Router();
 // Training hours per employee: hours_per_day × (P=1, H=0.5) over marked days.
 router.get('/manhours', async (req, res, next) => {
   try {
+    // Deactivated employees keep their history: they stay in the report
+    // whenever they have recorded hours.
     const { rows } = await query(
-      `SELECT e.id, e.name, e.entity, e.division, e.department,
+      `SELECT e.id, e.name, e.entity, e.division, e.department, e.active,
               coalesce(round(sum(t.hours_per_day * CASE a.mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::numeric, 1), 0) AS hours
        FROM employees e
        LEFT JOIN attendance a ON a.employee_id = e.id
        LEFT JOIN trainings t ON t.id = a.training_id
-       WHERE e.active
-       GROUP BY e.id ORDER BY e.name`);
+       GROUP BY e.id
+       HAVING e.active OR sum(CASE a.mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END) > 0
+       ORDER BY e.name`);
     res.json(rows);
   } catch (e) { next(e); }
 });

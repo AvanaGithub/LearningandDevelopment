@@ -88,7 +88,9 @@ export default function Reports() {
   const [err, setErr] = useState(null);
 
   useEffect(() => {
-    api.get('/api/employees?active=true').then(setEmps).catch(() => {});
+    // Include deactivated employees so their training history stays
+    // reachable (tagged "inactive" in the picker).
+    api.get('/api/employees').then(setEmps).catch(() => {});
     api.get('/api/trainings').then(setTrns).catch(() => {});
   }, []);
 
@@ -167,9 +169,9 @@ export default function Reports() {
 
   const manhours = guard(async () => {
     const r = await api.get('/api/reports/manhours');
-    show('Training man-hours per employee', ['Employee', 'Entity', 'Division', 'Department', 'Hours'],
-      r.map((x) => [x.name, entLabel(x.entity), x.division || '', x.department || '', Number(x.hours)]),
-      'Hours = hours per day × attendance (P = full, H = half). Target: 16 h per employee per year.');
+    show('Training man-hours per employee', ['Employee', 'Entity', 'Division', 'Department', 'Status', 'Hours'],
+      r.map((x) => [x.name, entLabel(x.entity), x.division || '', x.department || '', x.active ? 'Active' : 'Inactive', Number(x.hours)]),
+      'Hours = hours per day × attendance (P = full, H = half). Deactivated employees stay listed while they have recorded hours. Target: 16 h per employee per year.');
   });
 
   const compliance = guard(async () => {
@@ -302,7 +304,7 @@ export default function Reports() {
   });
 
   const CARDS = [
-    { name: 'Individual employee training hours (passport)', desc: 'Type to search, tick one or several employees — full history with attendance-weighted hours.', picker: { options: emps.map((e) => ({ v: e.id, t: e.name })), onPick: passport } },
+    { name: 'Individual employee training hours (passport)', desc: 'Type to search, tick one or several employees — full history with attendance-weighted hours (former employees included).', picker: { options: emps.map((e) => ({ v: e.id, t: e.active ? e.name : `${e.name} (inactive)` })), onPick: passport } },
     { name: 'Report by training', desc: 'Tick one training for its day-wise grid, or several for a combined summary.', picker: { options: trns.map((t) => ({ v: t.id, t: `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}` })), onPick: byTraining } },
     { name: 'Training register', desc: 'One row per training: batch, location, dates, head-count and the participant name list.', run: register },
     { name: 'Training man-hours per employee', desc: 'Hours per person across all trainings, from real attendance.', run: manhours },
