@@ -28,11 +28,15 @@ const fyLabel = () => {
   return `${y}–${String(y + 1).slice(2)}`;
 };
 
+const EMPTY_ITEM = { category: EXP_CATEGORIES[0], budget: '', actual: '', payment_status: '', accommodation: '', venue: '' };
 const EMPTY = {
   training_id: '', training_label: '', dates: '', location: '', participants: '',
   entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], accommodation: '', venue: '', training_type: 'Internal',
   vendor: '', description: '', budget: '', actual: '', payments: [{ date: '', amt: '', invoices: [] }],
   invoices: '', approval: 'pending', payment_status: '', remark: '', reason: '',
+  // New records can carry several category lines — each becomes its own
+  // expense record sharing the training/participants/approval details.
+  items: [{ ...EMPTY_ITEM }],
 };
 
 export default function Expenses() {
@@ -88,8 +92,20 @@ export default function Expenses() {
         await api.patch('/api/expenses/' + form.id, toBody(form));
         toast('Expense record updated — pending, variance and entity split recomputed.');
       } else {
-        await api.post('/api/expenses', toBody(form));
-        toast('Expense record saved — entity shares split by headcount.');
+        const items = (form.items || []).filter((it) => Number(it.actual) > 0);
+        if (!items.length) return setErr('Enter the actual amount on at least one category line.');
+        for (const it of items) {
+          await api.post('/api/expenses', toBody({
+            ...form,
+            category: it.category, budget: it.budget, actual: it.actual,
+            payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue,
+            // Detailed part-payment rows only make sense for a single line.
+            payments: items.length === 1 ? form.payments : [],
+          }));
+        }
+        toast(items.length === 1
+          ? 'Expense record saved — entity shares split by headcount.'
+          : `${items.length} expense records saved (one per category) — entity shares split by headcount.`);
       }
       setForm(null); setSel(null); load();
     } catch (e2) { setErr(e2.message); }
@@ -207,20 +223,22 @@ export default function Expenses() {
               <input value={form.dates} onChange={(e) => setForm({ ...form, dates: e.target.value })} /></div>
             <div><label>Training location{star('location')}</label>
               <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
-            <div><label>Category{star('category')}</label>
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {[...new Set([...expCats, ...(form.category ? [form.category] : [])])].map((x) => <option key={x}>{x}</option>)}
-              </select></div>
-            {/accommodation/i.test(form.category || '') && (
-              <div><label>Accommodation at (hotel / place)</label>
-                <input value={form.accommodation} placeholder="e.g. Hotel Radisson Blu, Chennai"
-                  onChange={(e) => setForm({ ...form, accommodation: e.target.value })} /></div>
-            )}
-            {/venue|conference/i.test(form.category || '') && (
-              <div><label>Venue (place / hall)</label>
-                <input value={form.venue} placeholder="e.g. ITC Grand Chola — Rajendra Hall"
-                  onChange={(e) => setForm({ ...form, venue: e.target.value })} /></div>
-            )}
+            {form.id && <>
+              <div><label>Category{star('category')}</label>
+                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                  {[...new Set([...expCats, ...(form.category ? [form.category] : [])])].map((x) => <option key={x}>{x}</option>)}
+                </select></div>
+              {/accommodation/i.test(form.category || '') && (
+                <div><label>Accommodation at (hotel / place)</label>
+                  <input value={form.accommodation} placeholder="e.g. Hotel Radisson Blu, Chennai"
+                    onChange={(e) => setForm({ ...form, accommodation: e.target.value })} /></div>
+              )}
+              {/venue|conference/i.test(form.category || '') && (
+                <div><label>Venue (place / hall)</label>
+                  <input value={form.venue} placeholder="e.g. ITC Grand Chola — Rajendra Hall"
+                    onChange={(e) => setForm({ ...form, venue: e.target.value })} /></div>
+              )}
+            </>}
             <div><label>Training type</label>
               <select value={form.training_type} onChange={(e) => setForm({ ...form, training_type: e.target.value })}>
                 <option>Internal</option><option>External</option>
@@ -228,22 +246,75 @@ export default function Expenses() {
             {form.training_type === 'External' &&
               <div><label>Vendor name{star('vendor')}</label>
                 <input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} /></div>}
-            <div><label>Approved budget ₹{star('budget')}</label>
-              <input required={reqE.includes('budget')} type="number" min="0" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} /></div>
-            <div><label>Actual expense ₹ *</label>
-              <input required type="number" min="1" value={form.actual} onChange={(e) => setForm({ ...form, actual: e.target.value })} /></div>
+            {form.id && <>
+              <div><label>Approved budget ₹{star('budget')}</label>
+                <input required={reqE.includes('budget')} type="number" min="0" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} /></div>
+              <div><label>Actual expense ₹ *</label>
+                <input required type="number" min="1" value={form.actual} onChange={(e) => setForm({ ...form, actual: e.target.value })} /></div>
+            </>}
             <div><label>Approval status</label>
               <select value={form.approval} onChange={(e) => setForm({ ...form, approval: e.target.value })}>
                 <option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
               </select></div>
-            <div><label>Payment status</label>
-              <select value={form.payment_status} onChange={(e) => setForm({ ...form, payment_status: e.target.value })}>
-                <option value="">Auto (from payment rows)</option>
-                <option value="paid">Paid</option>
-                <option value="partial">Partially paid</option>
-                <option value="unpaid">Not paid</option>
-              </select></div>
+            {form.id && (
+              <div><label>Payment status</label>
+                <select value={form.payment_status} onChange={(e) => setForm({ ...form, payment_status: e.target.value })}>
+                  <option value="">Auto (from payment rows)</option>
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partially paid</option>
+                  <option value="unpaid">Not paid</option>
+                </select></div>
+            )}
           </div>
+
+          {!form.id && <>
+            <p className="muted mini" style={{ margin: '12px 0 4px' }}>
+              Expense categories — one line per category; each saves as its own record under this training:
+            </p>
+            {(form.items || []).map((it, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 6 }}>
+                <div><label className="muted mini">Category</label><br />
+                  <select value={it.category} onChange={(e) => {
+                    const items = [...form.items]; items[i] = { ...it, category: e.target.value }; setForm({ ...form, items });
+                  }}>
+                    {expCats.map((x) => <option key={x}>{x}</option>)}
+                  </select></div>
+                {/accommodation/i.test(it.category || '') && (
+                  <div><label className="muted mini">Accommodation at</label><br />
+                    <input value={it.accommodation} placeholder="hotel / place" style={{ width: 170 }} onChange={(e) => {
+                      const items = [...form.items]; items[i] = { ...it, accommodation: e.target.value }; setForm({ ...form, items });
+                    }} /></div>
+                )}
+                {/venue|conference/i.test(it.category || '') && (
+                  <div><label className="muted mini">Venue</label><br />
+                    <input value={it.venue} placeholder="place / hall" style={{ width: 170 }} onChange={(e) => {
+                      const items = [...form.items]; items[i] = { ...it, venue: e.target.value }; setForm({ ...form, items });
+                    }} /></div>
+                )}
+                <div><label className="muted mini">Budget ₹{star('budget')}</label><br />
+                  <input type="number" min="0" style={{ width: 110 }} value={it.budget} onChange={(e) => {
+                    const items = [...form.items]; items[i] = { ...it, budget: e.target.value }; setForm({ ...form, items });
+                  }} /></div>
+                <div><label className="muted mini">Actual ₹ *</label><br />
+                  <input type="number" min="1" style={{ width: 110 }} value={it.actual} onChange={(e) => {
+                    const items = [...form.items]; items[i] = { ...it, actual: e.target.value }; setForm({ ...form, items });
+                  }} /></div>
+                <div><label className="muted mini">Payment status</label><br />
+                  <select value={it.payment_status} onChange={(e) => {
+                    const items = [...form.items]; items[i] = { ...it, payment_status: e.target.value }; setForm({ ...form, items });
+                  }}>
+                    <option value="">Auto (from payment rows)</option>
+                    <option value="paid">Paid</option>
+                    <option value="partial">Partially paid</option>
+                    <option value="unpaid">Not paid</option>
+                  </select></div>
+                {form.items.length > 1 && (
+                  <button className="btn" type="button" onClick={() => setForm({ ...form, items: form.items.filter((_, j) => j !== i) })}>✕</button>
+                )}
+              </div>
+            ))}
+            <button className="btn" type="button" onClick={() => setForm({ ...form, items: [...form.items, { ...EMPTY_ITEM }] })}>+ Add category</button>
+          </>}
 
           <p className="muted mini" style={{ margin: '12px 0 4px' }}>Entities covered — participant count per entity; cost splits pro-rata by headcount:</p>
           <div className="form-grid">
@@ -256,6 +327,7 @@ export default function Expenses() {
               <input readOnly value={totalSplit || form.participants || 0} style={{ background: 'var(--panel2)' }} /></div>
           </div>
 
+          {(form.id || (form.items || []).length <= 1) ? <>
           <p className="muted mini" style={{ margin: '12px 0 4px' }}>Payment dates &amp; amounts — one row per part-payment; pending and status compute automatically:</p>
           {form.payments.map((p, i) => (
             <div key={i} style={{ marginBottom: 8 }}>
@@ -288,6 +360,12 @@ export default function Expenses() {
             </div>
           ))}
           <button className="btn" type="button" onClick={() => setForm({ ...form, payments: [...form.payments, { date: '', amt: '', invoices: [] }] })}>+ Add payment row</button>
+          </> : (
+            <p className="muted mini" style={{ margin: '12px 0 4px' }}>
+              Part-payment rows and invoice uploads: with several category lines, set each line's payment status
+              above, then open a saved record (Edit) to add its payment dates and invoices.
+            </p>
+          )}
 
           <div className="form-grid" style={{ marginTop: 12 }}>
             <div><label>Description{star('description')}</label>
