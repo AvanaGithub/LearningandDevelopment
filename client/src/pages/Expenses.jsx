@@ -253,21 +253,19 @@ export default function Expenses() {
             <div><label>Training name (label) *</label>
               <input required value={form.training_label} onChange={(e) => setForm({ ...form, training_label: e.target.value })} /></div>
             <div><label>Training dates{star('dates')}</label>
-              {(() => {
-                const compose = (from, to) => (!from ? '' : (to && to !== from ? `${fmtDate(from)} → ${fmtDate(to)}` : fmtDate(from)));
-                return (
-                  <>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <input type="date" value={form.dates_from} title="From"
-                        onChange={(e) => setForm({ ...form, dates_from: e.target.value, dates: compose(e.target.value, form.dates_to) })} />
-                      <input type="date" value={form.dates_to} min={form.dates_from || undefined} title="To (optional)"
-                        onChange={(e) => setForm({ ...form, dates_to: e.target.value, dates: compose(form.dates_from, e.target.value) })} />
-                    </div>
-                    <input style={{ marginTop: 4 }} value={form.dates} placeholder="picked above, or type e.g. 15–16 Oct"
-                      onChange={(e) => setForm({ ...form, dates: e.target.value })} />
-                  </>
-                );
-              })()}
+              <input type="date" value={form.dates_from}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  // Second pick with a later date turns it into a range.
+                  if (v && form.dates_from && v > form.dates_from) {
+                    setForm({ ...form, dates_to: v, dates: `${fmtDate(form.dates_from)} → ${fmtDate(v)}` });
+                  } else {
+                    setForm({ ...form, dates_from: v, dates_to: '', dates: v ? fmtDate(v) : '' });
+                  }
+                }} />
+              <input style={{ marginTop: 4 }} value={form.dates}
+                placeholder="pick above — pick a later date again for a range"
+                onChange={(e) => setForm({ ...form, dates: e.target.value })} />
             </div>
             <div><label>Training location{star('location')}</label>
               <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
