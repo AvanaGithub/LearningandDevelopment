@@ -91,7 +91,22 @@ export default function Expenses() {
     try {
       if (form.id) {
         await api.patch('/api/expenses/' + form.id, toBody(form));
-        toast('Expense record updated — pending, variance and entity split recomputed.');
+        const lines = form.items || [];
+        const hasData = (it) => it.actual !== '' || it.budget !== '' || it.payment_status ||
+          (it.accommodation || '').trim() || (it.venue || '').trim();
+        const bad = lines.findIndex((it) => hasData(it) && !(Number(it.actual) > 0));
+        if (bad >= 0) return setErr(`Added category line ${bad + 1} (${lines[bad].category}) has details but no Actual ₹ — enter the amount or remove the line.`);
+        const extra = lines.filter((it) => Number(it.actual) > 0);
+        for (const it of extra) {
+          await api.post('/api/expenses', toBody({
+            ...form, category: it.category, budget: it.budget, actual: it.actual,
+            payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue,
+            payments: [], person_split: [],
+          }));
+        }
+        toast(extra.length
+          ? `Record updated · ${extra.length} new category record(s) added for this training.`
+          : 'Expense record updated — pending, variance and entity split recomputed.');
       } else {
         const lines = form.items || [];
         const hasData = (it) => it.actual !== '' || it.budget !== '' || it.payment_status ||
@@ -134,6 +149,7 @@ export default function Expenses() {
       invoices: (r.invoices || []).join(', '), approval: r.approval,
       payment_status: r.payment_status || '', remark: r.remark || '', reason: '',
       person_split: (r.person_split || []).map((p) => ({ ...p })),
+      items: [],   // extra category lines added while editing → new records
     });
     setErr(null);
   };
@@ -282,9 +298,11 @@ export default function Expenses() {
             )}
           </div>
 
-          {!form.id && <>
+          <>
             <p className="muted mini" style={{ margin: '12px 0 4px' }}>
-              Expense categories — one line per category; each saves as its own record under this training:
+              {form.id
+                ? 'Add more expense categories for this training — each saves as its own new record:'
+                : 'Expense categories — one line per category; each saves as its own record under this training:'}
             </p>
             {(form.items || []).map((it, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 6 }}>
@@ -323,13 +341,13 @@ export default function Expenses() {
                     <option value="partial">Partially paid</option>
                     <option value="unpaid">Not paid</option>
                   </select></div>
-                {form.items.length > 1 && (
+                {(form.id || form.items.length > 1) && (
                   <button className="btn" type="button" onClick={() => setForm({ ...form, items: form.items.filter((_, j) => j !== i) })}>✕</button>
                 )}
               </div>
             ))}
             <button className="btn" type="button" onClick={() => setForm({ ...form, items: [...form.items, { ...EMPTY_ITEM }] })}>+ Add category</button>
-          </>}
+          </>
 
           <p className="muted mini" style={{ margin: '12px 0 4px' }}>Entities covered — participant count per entity; cost splits pro-rata by headcount:</p>
           <div className="form-grid">
@@ -605,6 +623,15 @@ export default function Expenses() {
               <div className="form-actions">
                 <button className="btn gold" onClick={() => edit(sel)}>Edit</button>
                 <button className="btn" onClick={() => setCancelReason('')}>Cancel record…</button>
+                <button className="btn" style={{ color: 'var(--crit)' }} onClick={async () => {
+                  const reason = window.prompt(`Delete this ${sel.category || ''} record (₹${inr(sel.actual)}) permanently? For wrongly created or test entries only — otherwise use Cancel record. A snapshot stays in the audit trail.\n\nReason (required):`);
+                  if (!reason?.trim()) return;
+                  try {
+                    await api.del(`/api/expenses/${sel.id}?reason=` + encodeURIComponent(reason.trim()));
+                    toast('Expense record deleted — reason and snapshot recorded in the audit trail.');
+                    setSel(null); load();
+                  } catch (e2) { setErr(e2.message); }
+                }}>Delete…</button>
                 <button className="btn" onClick={() => setSel(null)}>Close</button>
               </div>
             ) : (

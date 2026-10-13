@@ -135,4 +135,20 @@ router.patch('/:id', express.json(), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Hard delete for wrongly created / test records only — reason required,
+// full snapshot kept in the audit trail. Real records should be cancelled.
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const reason = String(req.query.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A reason is required to delete an expense record' });
+    const { rows } = await query('DELETE FROM expenses WHERE id=$1 RETURNING *', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const r = rows[0];
+    await audit(req.user.id, 'expense.delete', 'expense', id,
+      { training: r.training_label, category: r.category, budget: r.budget, actual: r.actual, approval: r.approval }, reason);
+    res.json(rows[0]);
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
