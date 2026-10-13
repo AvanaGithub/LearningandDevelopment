@@ -37,6 +37,7 @@ const EMPTY = {
   // New records can carry several category lines — each becomes its own
   // expense record sharing the training/participants/approval details.
   items: [{ ...EMPTY_ITEM }],
+  person_split: [],
 };
 
 export default function Expenses() {
@@ -92,15 +93,23 @@ export default function Expenses() {
         await api.patch('/api/expenses/' + form.id, toBody(form));
         toast('Expense record updated — pending, variance and entity split recomputed.');
       } else {
-        const items = (form.items || []).filter((it) => Number(it.actual) > 0);
+        const lines = form.items || [];
+        const hasData = (it) => it.actual !== '' || it.budget !== '' || it.payment_status ||
+          (it.accommodation || '').trim() || (it.venue || '').trim();
+        // Never drop a half-filled line silently — name it instead.
+        const bad = lines.findIndex((it) => hasData(it) && !(Number(it.actual) > 0));
+        if (bad >= 0) return setErr(`Category line ${bad + 1} (${lines[bad].category}) has details but no Actual ₹ — enter the amount or remove the line.`);
+        const items = lines.filter((it) => Number(it.actual) > 0);
         if (!items.length) return setErr('Enter the actual amount on at least one category line.');
         for (const it of items) {
           await api.post('/api/expenses', toBody({
             ...form,
             category: it.category, budget: it.budget, actual: it.actual,
             payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue,
-            // Detailed part-payment rows only make sense for a single line.
+            // Part-payment rows and the per-person breakup belong to a
+            // single record; with several lines, add them via Edit after.
             payments: items.length === 1 ? form.payments : [],
+            person_split: items.length === 1 ? form.person_split : [],
           }));
         }
         toast(items.length === 1
@@ -124,6 +133,7 @@ export default function Expenses() {
       payments: (r.payments || []).length ? r.payments.map((p) => ({ invoices: [], ...p })) : [{ date: '', amt: '', invoices: [] }],
       invoices: (r.invoices || []).join(', '), approval: r.approval,
       payment_status: r.payment_status || '', remark: r.remark || '', reason: '',
+      person_split: (r.person_split || []).map((p) => ({ ...p })),
     });
     setErr(null);
   };
@@ -189,7 +199,7 @@ export default function Expenses() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => toXlsx('Expense-Records.xlsx',
             ['Training', 'Dates', 'Location', 'Participants', 'Entities', 'Category', 'Accommodation at', 'Venue', 'Type', 'Vendor', 'Description',
-              'Budget', 'Actual', 'Paid', 'Pending', 'Variance', 'Approval', 'Payment status', 'Payments', 'Invoices', 'Remark'],
+              'Budget', 'Actual', 'Paid', 'Pending', 'Variance', 'Approval', 'Payment status', 'Payments', 'Per-person breakup', 'Invoices', 'Remark'],
             (rows || []).map((r) => {
               const paid = paidOf(r);
               return [r.training_label, r.dates || '', r.location || '', r.participants,
@@ -197,6 +207,11 @@ export default function Expenses() {
                 r.vendor || '', r.description || '', Number(r.budget), Number(r.actual), paid,
                 Number(r.actual) - paid, Number(r.budget) - Number(r.actual), r.approval, payStatus(r)[0],
                 (r.payments || []).map((p) => `${p.date} ₹${p.amt}`).join(' | '),
+                (r.person_split || []).map((p) => {
+                  const legs = (Number(p.onward) || 0) || (Number(p.ret) || 0);
+                  return legs ? `${p.name} ₹${(Number(p.onward) || 0) + (Number(p.ret) || 0)} (onward ${p.onward || 0} / return ${p.ret || 0})`
+                    : `${p.name} ₹${Number(p.amt) || 0}`;
+                }).join(' | '),
                 (r.invoices || []).join(' | '), r.remark || ''];
             }), 'Expenses')}>⬇ Export</button>
           <button className="btn gold" onClick={() => { setForm(JSON.parse(JSON.stringify(EMPTY))); setErr(null); }}>New expense record</button>
@@ -367,6 +382,63 @@ export default function Expenses() {
             </p>
           )}
 
+          {(form.id || (form.items || []).length <= 1) && (() => {
+            const cat = form.id ? form.category : (form.items?.[0]?.category || '');
+            const isFlight = /flight|train(?!ing)/i.test(cat);
+            const ps = form.person_split || [];
+            const setPS = (next) => setForm({ ...form, person_split: next });
+            const upd = (i, patch) => { const next = [...ps]; next[i] = { ...next[i], ...patch }; setPS(next); };
+            const total = ps.reduce((a, p) => a + (Number(p.onward) || 0) + (Number(p.ret) || 0) + (Number(p.amt) || 0), 0);
+            const loadPeople = async () => {
+              if (!form.training_id) return setErr('Pick a training above first, then load its participant list.');
+              try {
+                const d = await api.get('/api/trainings/' + form.training_id);
+                setPS(d.participants.map((p) => ps.find((x) => x.employee_id === p.id) ||
+                  ({ employee_id: p.id, name: p.name, onward: '', ret: '', amt: '' })));
+              } catch (e2) { setErr(e2.message); }
+            };
+            return (
+              <div style={{ marginTop: 12 }}>
+                <p className="muted mini" style={{ margin: '0 0 4px' }}>
+                  Per-participant amounts (optional) — {isFlight ? 'onward and return charges per person' : 'amount paid per person'}:
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <button className="btn" type="button" onClick={loadPeople}>⇣ Load participant list</button>
+                  <button className="btn" type="button" onClick={() => setPS([...ps, { employee_id: null, name: '', onward: '', ret: '', amt: '' }])}>+ Add person</button>
+                  {ps.length > 0 && <button className="btn" type="button" onClick={() => setPS([])}>Clear</button>}
+                </div>
+                {ps.map((p, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                    <input value={p.name} placeholder="Name" style={{ flex: 1, minWidth: 160 }}
+                      onChange={(e) => upd(i, { name: e.target.value })} />
+                    {isFlight ? (<>
+                      <input type="number" min="0" placeholder="Onward ₹" style={{ width: 110 }}
+                        value={p.onward} onChange={(e) => upd(i, { onward: e.target.value })} />
+                      <input type="number" min="0" placeholder="Return ₹" style={{ width: 110 }}
+                        value={p.ret} onChange={(e) => upd(i, { ret: e.target.value })} />
+                    </>) : (
+                      <input type="number" min="0" placeholder="Amount ₹" style={{ width: 130 }}
+                        value={p.amt} onChange={(e) => upd(i, { amt: e.target.value })} />
+                    )}
+                    <span className="muted mini" style={{ width: 90, textAlign: 'right' }}>
+                      ₹{inr((Number(p.onward) || 0) + (Number(p.ret) || 0) + (Number(p.amt) || 0))}
+                    </span>
+                    <button className="btn" type="button" onClick={() => setPS(ps.filter((_, j) => j !== i))}>✕</button>
+                  </div>
+                ))}
+                {ps.length > 0 && (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, marginTop: 4 }}>
+                    <b>Breakup total: ₹{inr(total)}</b>
+                    <button className="btn" type="button" onClick={() => {
+                      if (form.id) setForm({ ...form, actual: total });
+                      else { const items = [...form.items]; items[0] = { ...items[0], actual: total }; setForm({ ...form, items }); }
+                    }}>Use as Actual ₹</button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="form-grid" style={{ marginTop: 12 }}>
             <div><label>Description{star('description')}</label>
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
@@ -479,6 +551,32 @@ export default function Expenses() {
               <dt>Cost / participant</dt><dd>₹{inr(Number(sel.actual) / Math.max(1, sel.participants))}</dd>
               <dt>Remark</dt><dd>{sel.remark || '—'}</dd>
             </dl>
+            {(sel.person_split || []).length > 0 && (() => {
+              const hasLegs = sel.person_split.some((p) => Number(p.onward) > 0 || Number(p.ret) > 0);
+              const tot = (p) => (Number(p.onward) || 0) + (Number(p.ret) || 0) + (Number(p.amt) || 0);
+              return (
+                <>
+                  <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>Per-participant amounts</h3>
+                  <table>
+                    <thead><tr><th>Participant</th>
+                      {hasLegs && <><th style={{ textAlign: 'right' }}>Onward ₹</th><th style={{ textAlign: 'right' }}>Return ₹</th></>}
+                      <th style={{ textAlign: 'right' }}>Total ₹</th></tr></thead>
+                    <tbody>
+                      {sel.person_split.map((p, i) => (
+                        <tr key={i}><td>{p.name}</td>
+                          {hasLegs && <><td style={{ textAlign: 'right' }}>{inr(p.onward || 0)}</td><td style={{ textAlign: 'right' }}>{inr(p.ret || 0)}</td></>}
+                          <td style={{ textAlign: 'right' }}>{inr(tot(p))}</td></tr>
+                      ))}
+                      <tr style={{ fontWeight: 700 }}><td>Total</td>
+                        {hasLegs && <><td style={{ textAlign: 'right' }}>{inr(sel.person_split.reduce((a, p) => a + (Number(p.onward) || 0), 0))}</td>
+                          <td style={{ textAlign: 'right' }}>{inr(sel.person_split.reduce((a, p) => a + (Number(p.ret) || 0), 0))}</td></>}
+                        <td style={{ textAlign: 'right' }}>{inr(sel.person_split.reduce((a, p) => a + tot(p), 0))}</td></tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            })()}
+
             <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>Entity split — pro-rata by headcount</h3>
             <table>
               <tbody>

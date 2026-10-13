@@ -30,8 +30,19 @@ function pick(b) {
       invoices: (Array.isArray(p.invoices) ? p.invoices : [])
         .filter((x) => x && x.id).map((x) => ({ id: String(x.id), name: String(x.name || x.id) })),
     }));
+  const personSplit = (Array.isArray(b.person_split) ? b.person_split : [])
+    .filter((p) => p && String(p.name || '').trim())
+    .map((p) => ({
+      employee_id: p.employee_id ? Number(p.employee_id) : null,
+      name: String(p.name).trim().slice(0, 120),
+      onward: Number(p.onward) || 0,
+      ret: Number(p.ret) || 0,
+      amt: Number(p.amt) || 0,
+    }))
+    .filter((p) => p.onward > 0 || p.ret > 0 || p.amt > 0);
   return {
     training_id: b.training_id ? Number(b.training_id) : null,
+    person_split: personSplit,
     training_label: b.training_label?.trim(),
     dates: b.dates?.trim() || null,
     location: b.location?.trim() || null,
@@ -82,11 +93,12 @@ router.post('/', express.json(), async (req, res, next) => {
     const bad = validate(f, await require('./settings').requiredFields('expenses'));
     if (bad) return res.status(400).json({ error: bad });
     const { rows } = await query(
-      `INSERT INTO expenses (training_id, training_label, dates, location, participants, entity_split,         category, accommodation, venue, training_type, vendor, description, budget, actual, payments, invoices, approval, payment_status, remark)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+      `INSERT INTO expenses (training_id, training_label, dates, location, participants, entity_split,         category, accommodation, venue, training_type, vendor, description, budget, actual, payments, invoices, approval, payment_status, remark, person_split)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [f.training_id, f.training_label, f.dates, f.location, f.participants, JSON.stringify(f.entity_split),
        f.category, f.accommodation, f.venue, f.training_type, f.vendor, f.description, f.budget, f.actual,
-       JSON.stringify(f.payments), JSON.stringify(f.invoices), f.approval, f.payment_status, f.remark]);
+       JSON.stringify(f.payments), JSON.stringify(f.invoices), f.approval, f.payment_status, f.remark,
+       JSON.stringify(f.person_split)]);
     await audit(req.user.id, 'expense.create', 'expense', rows[0].id, { training: f.training_label, actual: f.actual });
     res.status(201).json(rows[0]);
   } catch (e) { next(e); }
@@ -112,11 +124,12 @@ router.patch('/:id', express.json(), async (req, res, next) => {
       `UPDATE expenses SET training_id=$2, training_label=$3, dates=$4, location=$5, participants=$6,
          entity_split=$7, category=$8, accommodation=$9, venue=$10, training_type=$11, vendor=$12,
          description=$13, budget=$14, actual=$15, payments=$16, invoices=$17, approval=$18,
-         payment_status=$19, remark=$20, updated_at=now()
+         payment_status=$19, remark=$20, person_split=$21, updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, f.training_id, f.training_label, f.dates, f.location, f.participants, JSON.stringify(f.entity_split),
        f.category, f.accommodation, f.venue, f.training_type, f.vendor, f.description, f.budget, f.actual,
-       JSON.stringify(f.payments), JSON.stringify(f.invoices), f.approval, f.payment_status, f.remark]);
+       JSON.stringify(f.payments), JSON.stringify(f.invoices), f.approval, f.payment_status, f.remark,
+       JSON.stringify(f.person_split)]);
     await audit(req.user.id, 'expense.update', 'expense', id, { changes: b }, b.reason);
     res.json(rows[0]);
   } catch (e) { next(e); }

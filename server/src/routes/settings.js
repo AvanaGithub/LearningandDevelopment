@@ -12,7 +12,7 @@ const DEFAULTS = {
   emp_types: ['Permanent', 'Trainee', 'Probation', 'TalentPro'],
   trn_categories: ['Induction', 'Product', 'Soft skill', 'Technical', 'Compliance', 'Safety', 'On-the-job', 'Mavericks'],
   exp_categories: ['Food / Catering', 'Flight', 'Venue / Conference room', 'Accommodation',
-    'Local Transportation', 'Train', 'Training materials', 'Printing', 'Others'],
+    'Local Transportation', 'Train', 'Training materials', 'Printing', 'Course / Participant fees', 'Others'],
   entity_budgets: { AMD: 700000, ASS: 450000, ATS: 250000 },
   required_employee_fields: ['name', 'entity'],
   joiner_steps: ['Induction training', 'Product training', 'Department orientation', 'Systems access set up'],
