@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, apiUpload, ENTITIES, ENTITY_NAMES, entLabel, EXP_CATEGORIES, fmtRange, inr } from '../api.js';
+import { api, apiUpload, ENTITIES, ENTITY_NAMES, entLabel, EXP_CATEGORIES, fmtDate, fmtRange, inr } from '../api.js';
 import { useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 
@@ -30,7 +30,7 @@ const fyLabel = () => {
 
 const EMPTY_ITEM = { category: EXP_CATEGORIES[0], budget: '', actual: '', payment_status: '', accommodation: '', venue: '', other_detail: '' };
 const EMPTY = {
-  training_id: '', training_label: '', dates: '', location: '', participants: '',
+  training_id: '', training_label: '', dates: '', dates_from: '', dates_to: '', location: '', participants: '',
   entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], accommodation: '', venue: '', other_detail: '', training_type: 'Internal',
   vendor: '', description: '', budget: '', actual: '', payments: [{ date: '', amt: '', invoices: [] }],
   invoices: '', approval: 'pending', payment_status: '', remark: '', reason: '',
@@ -143,7 +143,7 @@ export default function Expenses() {
     (r.entity_split || []).forEach((s) => { split[s.ent] = s.n; });
     setForm({
       id: r.id, training_id: r.training_id || '', training_label: r.training_label,
-      dates: r.dates || '', location: r.location || '', participants: r.participants || '',
+      dates: r.dates || '', dates_from: '', dates_to: '', location: r.location || '', participants: r.participants || '',
       entity_split: split, category: r.category || EXP_CATEGORIES[0], accommodation: r.accommodation || '', venue: r.venue || '', other_detail: r.other_detail || '',
       training_type: r.training_type || 'Internal', vendor: r.vendor || '',
       description: r.description || '', budget: r.budget, actual: r.actual,
@@ -253,7 +253,22 @@ export default function Expenses() {
             <div><label>Training name (label) *</label>
               <input required value={form.training_label} onChange={(e) => setForm({ ...form, training_label: e.target.value })} /></div>
             <div><label>Training dates{star('dates')}</label>
-              <input value={form.dates} onChange={(e) => setForm({ ...form, dates: e.target.value })} /></div>
+              {(() => {
+                const compose = (from, to) => (!from ? '' : (to && to !== from ? `${fmtDate(from)} → ${fmtDate(to)}` : fmtDate(from)));
+                return (
+                  <>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input type="date" value={form.dates_from} title="From"
+                        onChange={(e) => setForm({ ...form, dates_from: e.target.value, dates: compose(e.target.value, form.dates_to) })} />
+                      <input type="date" value={form.dates_to} min={form.dates_from || undefined} title="To (optional)"
+                        onChange={(e) => setForm({ ...form, dates_to: e.target.value, dates: compose(form.dates_from, e.target.value) })} />
+                    </div>
+                    <input style={{ marginTop: 4 }} value={form.dates} placeholder="picked above, or type e.g. 15–16 Oct"
+                      onChange={(e) => setForm({ ...form, dates: e.target.value })} />
+                  </>
+                );
+              })()}
+            </div>
             <div><label>Training location{star('location')}</label>
               <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
             {form.id && <>
