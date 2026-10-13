@@ -51,7 +51,7 @@ router.get('/full', async (req, res, next) => {
                sum(CASE mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::float AS units
              FROM attendance GROUP BY training_id, employee_id`),
       isAdmin
-        ? query(`SELECT training_id, training_label, entity_split, budget, actual, approval FROM expenses WHERE active`)
+        ? query(`SELECT training_id, training_label, category, entity_split, budget, actual, approval FROM expenses WHERE active`)
         : Promise.resolve({ rows: null }),
       query(`SELECT b.id, b.name,
                (SELECT count(*)::int FROM mav_members m WHERE m.batch_id=b.id) AS trainees,
