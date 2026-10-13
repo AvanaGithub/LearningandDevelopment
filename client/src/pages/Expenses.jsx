@@ -28,10 +28,10 @@ const fyLabel = () => {
   return `${y}–${String(y + 1).slice(2)}`;
 };
 
-const EMPTY_ITEM = { category: EXP_CATEGORIES[0], budget: '', actual: '', payment_status: '', accommodation: '', venue: '' };
+const EMPTY_ITEM = { category: EXP_CATEGORIES[0], budget: '', actual: '', payment_status: '', accommodation: '', venue: '', other_detail: '' };
 const EMPTY = {
   training_id: '', training_label: '', dates: '', location: '', participants: '',
-  entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], accommodation: '', venue: '', training_type: 'Internal',
+  entity_split: { AMD: '', ASS: '', ATS: '' }, category: EXP_CATEGORIES[0], accommodation: '', venue: '', other_detail: '', training_type: 'Internal',
   vendor: '', description: '', budget: '', actual: '', payments: [{ date: '', amt: '', invoices: [] }],
   invoices: '', approval: 'pending', payment_status: '', remark: '', reason: '',
   // New records can carry several category lines — each becomes its own
@@ -54,11 +54,13 @@ export default function Expenses() {
   const [err, setErr] = useState(null);
 
   const [batches, setBatches] = useState([]);
+  const [empList, setEmpList] = useState([]);   // for mapping breakup rows to employees
   const load = () => api.get('/api/expenses').then(setRows).catch((e) => setErr(e.message));
   useEffect(() => {
     load();
     api.get('/api/trainings').then(setTrainings).catch(() => {});
     api.get('/api/mavericks').then(setBatches).catch(() => {});
+    api.get('/api/employees?active=true').then(setEmpList).catch(() => {});
   }, []);
 
   const toBody = (f) => ({
@@ -100,7 +102,7 @@ export default function Expenses() {
         for (const it of extra) {
           await api.post('/api/expenses', toBody({
             ...form, category: it.category, budget: it.budget, actual: it.actual,
-            payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue,
+            payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue, other_detail: it.other_detail,
             payments: [], person_split: [],
           }));
         }
@@ -120,7 +122,7 @@ export default function Expenses() {
           await api.post('/api/expenses', toBody({
             ...form,
             category: it.category, budget: it.budget, actual: it.actual,
-            payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue,
+            payment_status: it.payment_status, accommodation: it.accommodation, venue: it.venue, other_detail: it.other_detail,
             // Part-payment rows and the per-person breakup belong to a
             // single record; with several lines, add them via Edit after.
             payments: items.length === 1 ? form.payments : [],
@@ -142,7 +144,7 @@ export default function Expenses() {
     setForm({
       id: r.id, training_id: r.training_id || '', training_label: r.training_label,
       dates: r.dates || '', location: r.location || '', participants: r.participants || '',
-      entity_split: split, category: r.category || EXP_CATEGORIES[0], accommodation: r.accommodation || '', venue: r.venue || '',
+      entity_split: split, category: r.category || EXP_CATEGORIES[0], accommodation: r.accommodation || '', venue: r.venue || '', other_detail: r.other_detail || '',
       training_type: r.training_type || 'Internal', vendor: r.vendor || '',
       description: r.description || '', budget: r.budget, actual: r.actual,
       payments: (r.payments || []).length ? r.payments.map((p) => ({ invoices: [], ...p })) : [{ date: '', amt: '', invoices: [] }],
@@ -214,12 +216,12 @@ export default function Expenses() {
         <h2>Expenses</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => toXlsx('Expense-Records.xlsx',
-            ['Training', 'Dates', 'Location', 'Participants', 'Entities', 'Category', 'Accommodation at', 'Venue', 'Type', 'Vendor', 'Description',
+            ['Training', 'Dates', 'Location', 'Participants', 'Entities', 'Category', 'Accommodation at', 'Venue', 'Others detail', 'Type', 'Vendor', 'Description',
               'Budget', 'Actual', 'Paid', 'Pending', 'Variance', 'Approval', 'Payment status', 'Payments', 'Per-person breakup', 'Invoices', 'Remark'],
             (rows || []).map((r) => {
               const paid = paidOf(r);
               return [r.training_label, r.dates || '', r.location || '', r.participants,
-                (r.entity_split || []).map((s) => `${entLabel(s.ent)} ${s.n}`).join(' | '), r.category || '', r.accommodation || '', r.venue || '', r.training_type || '',
+                (r.entity_split || []).map((s) => `${entLabel(s.ent)} ${s.n}`).join(' | '), r.category || '', r.accommodation || '', r.venue || '', r.other_detail || '', r.training_type || '',
                 r.vendor || '', r.description || '', Number(r.budget), Number(r.actual), paid,
                 Number(r.actual) - paid, Number(r.budget) - Number(r.actual), r.approval, payStatus(r)[0],
                 (r.payments || []).map((p) => `${p.date} ₹${p.amt}`).join(' | '),
@@ -268,6 +270,11 @@ export default function Expenses() {
                 <div><label>Venue (place / hall)</label>
                   <input value={form.venue} placeholder="e.g. ITC Grand Chola — Rajendra Hall"
                     onChange={(e) => setForm({ ...form, venue: e.target.value })} /></div>
+              )}
+              {/other/i.test(form.category || '') && (
+                <div><label>What is this expense? (Others)</label>
+                  <input value={form.other_detail} placeholder="e.g. Gallup assessment licences"
+                    onChange={(e) => setForm({ ...form, other_detail: e.target.value })} /></div>
               )}
             </>}
             <div><label>Training type</label>
@@ -322,6 +329,12 @@ export default function Expenses() {
                   <div><label className="muted mini">Venue</label><br />
                     <input value={it.venue} placeholder="place / hall" style={{ width: 170 }} onChange={(e) => {
                       const items = [...form.items]; items[i] = { ...it, venue: e.target.value }; setForm({ ...form, items });
+                    }} /></div>
+                )}
+                {/other/i.test(it.category || '') && (
+                  <div><label className="muted mini">What is it?</label><br />
+                    <input value={it.other_detail} placeholder="e.g. Gallup licences" style={{ width: 170 }} onChange={(e) => {
+                      const items = [...form.items]; items[i] = { ...it, other_detail: e.target.value }; setForm({ ...form, items });
                     }} /></div>
                 )}
                 <div><label className="muted mini">Budget ₹{star('budget')}</label><br />
@@ -420,14 +433,24 @@ export default function Expenses() {
                 <p className="muted mini" style={{ margin: '0 0 4px' }}>
                   Per-participant amounts (optional) — {isFlight ? 'onward and return charges per person' : 'amount paid per person'}:
                 </p>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                   <button className="btn" type="button" onClick={loadPeople}>⇣ Load participant list</button>
-                  <button className="btn" type="button" onClick={() => setPS([...ps, { employee_id: null, name: '', onward: '', ret: '', amt: '' }])}>+ Add person</button>
+                  <select value="" style={{ minWidth: 200 }} onChange={(e) => {
+                    const emp = empList.find((x) => x.id === Number(e.target.value));
+                    if (emp) setPS([...ps, { employee_id: emp.id, name: emp.name, onward: '', ret: '', amt: '' }]);
+                  }}>
+                    <option value="">＋ Add employee…</option>
+                    {empList.filter((x) => !ps.some((p) => p.employee_id === x.id))
+                      .map((x) => <option key={x.id} value={x.id}>{x.name} — {x.division || x.department || entLabel(x.entity)}</option>)}
+                  </select>
+                  <button className="btn" type="button" onClick={() => setPS([...ps, { employee_id: null, name: '', onward: '', ret: '', amt: '' }])}>+ Other person</button>
                   {ps.length > 0 && <button className="btn" type="button" onClick={() => setPS([])}>Clear</button>}
                 </div>
                 {ps.map((p, i) => (
                   <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
                     <input value={p.name} placeholder="Name" style={{ flex: 1, minWidth: 160 }}
+                      readOnly={Boolean(p.employee_id)}
+                      title={p.employee_id ? 'Mapped to the employee record' : 'Free text (not mapped to an employee)'}
                       onChange={(e) => upd(i, { name: e.target.value })} />
                     {isFlight ? (<>
                       <input type="number" min="0" placeholder="Onward ₹" style={{ width: 110 }}
@@ -560,6 +583,7 @@ export default function Expenses() {
               <dt>Type / Vendor</dt><dd>{sel.training_type}{sel.vendor ? ' · ' + sel.vendor : ''}</dd>
               {sel.accommodation && <><dt>Accommodation at</dt><dd>{sel.accommodation}</dd></>}
               {sel.venue && <><dt>Venue</dt><dd>{sel.venue}</dd></>}
+              {sel.other_detail && <><dt>Others — detail</dt><dd>{sel.other_detail}</dd></>}
               <dt>Description</dt><dd>{sel.description || '—'}</dd>
               <dt>Approved budget</dt><dd>₹{inr(sel.budget)}</dd>
               <dt>Actual expense</dt><dd>₹{inr(sel.actual)}</dd>

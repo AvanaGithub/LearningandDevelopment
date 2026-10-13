@@ -285,6 +285,34 @@ export default function Reports() {
       `Pending = actual − paid · Variance = budget − actual. Total actual: ₹${inr(r.reduce((a, x) => a + Number(x.actual), 0))}.`);
   });
 
+  const expByEmployee = guard(async (picks) => {
+    const r = await api.get('/api/expenses');
+    const rows = [];
+    const totals = [];
+    for (const emp of picks) {
+      const plainName = emp.t.replace(/ \(inactive\)$/, '').toLowerCase();
+      let sum = 0;
+      for (const x of r) {
+        (x.person_split || []).forEach((p) => {
+          const hit = (p.employee_id && p.employee_id === emp.v) ||
+            (!p.employee_id && String(p.name || '').trim().toLowerCase() === plainName);
+          if (!hit) return;
+          const tot = (Number(p.onward) || 0) + (Number(p.ret) || 0) + (Number(p.amt) || 0);
+          sum += tot;
+          rows.push([emp.t, x.training_label, x.category || '', x.other_detail || '', x.dates || '',
+            Number(p.onward) || 0, Number(p.ret) || 0, Number(p.amt) || 0, tot]);
+        });
+      }
+      totals.push(`${emp.t}: ₹${inr(sum)}`);
+    }
+    show('Expenses by employee',
+      ['Employee', 'Training', 'Category', 'Detail', 'Dates', 'Onward ₹', 'Return ₹', 'Amount ₹', 'Total ₹'],
+      rows,
+      rows.length
+        ? `From the per-participant breakups on expense records. Totals — ${totals.join(' · ')}.`
+        : 'No per-participant amounts recorded for this selection yet — add them on the expense records (Per-participant amounts section).');
+  });
+
   const evidencePack = guard(async () => {
     const d = await api.get('/api/reports/evidence');
     toWorkbook(`Audit-Evidence-Pack-${new Date().toISOString().slice(0, 10)}.xlsx`, [
@@ -319,7 +347,10 @@ export default function Reports() {
       { name: 'View pending employees', desc: 'Everyone assigned a mandatory training who has not completed it, exportable.', run: () => openComp('pending') },
       { name: 'Leader follow-up report', desc: 'Pending employees grouped by leader and manager, with an e-mail-ready summary per leader.', run: () => openComp('followup') },
     ] : []),
-    ...(canExpense ? [{ name: 'Expense report', desc: 'Budget, actual, paid, pending and variance per training, with approval and payment status.', run: expenseReport }] : []),
+    ...(canExpense ? [
+      { name: 'Expense report', desc: 'Budget, actual, paid, pending and variance per training, with approval and payment status.', run: expenseReport },
+      { name: 'Expenses by employee', desc: 'Pick one or several employees — every amount mapped to them in the per-participant breakups.', picker: { options: emps.map((e) => ({ v: e.id, t: e.active ? e.name : `${e.name} (inactive)` })), onPick: expByEmployee } },
+    ] : []),
     ...(isAdmin ? [{ name: 'Audit-ready evidence pack', desc: 'One Excel workbook: trainings, participants, attendance with timestamps, feedback, expenses and the audit trail.', run: evidencePack, download: true }] : []),
   ];
 
