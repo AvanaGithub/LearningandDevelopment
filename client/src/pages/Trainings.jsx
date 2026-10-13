@@ -33,7 +33,7 @@ const spanDays = (from, to) =>
 const EMPTY = {
   title: '', batch: '', category: 'Product', department: [], division: [], mode: 'Classroom',
   trainer_type: 'internal', trainer_name: '', agency: '',
-  numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
+  location: '', numDays: 1, from: '', to: '', hours_per_day: 8, seats: 20,
   mandatory: false, status: 'planned', validity_months: '',
   agenda_file: null, agenda_name: '', reason: '',
   nom_self: false, nom_manager: false, nom_leader: false, nom_deadline: '', completion_deadline: '',
@@ -179,6 +179,7 @@ export default function Trainings() {
       id: t.id, title: t.title, batch: t.batch || '', category: t.category || 'Product',
       department: t.department ? t.department.split(',').map((s) => s.trim()).filter(Boolean) : [],
       division: t.division ? t.division.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      location: t.location || '',
       mode: t.mode || 'Classroom', trainer_type: t.trainer_type, trainer_name: t.trainer_name || '',
       agency: t.agency || '', numDays: days.length || 1,
       from: days[0] ? days[0].slice(0, 10) : '', to: days.length ? days[days.length - 1].slice(0, 10) : '',
@@ -288,6 +289,7 @@ export default function Trainings() {
                 <option value="internal">Internal</option>
                 <option value="external">External agency</option>
               </select></div>
+            {F('Location (city / venue)', 'location', { placeholder: 'e.g. Chennai' })}
             {form.trainer_type === 'external' && F('External agency name *', 'agency', { required: true })}
             {F(form.trainer_type === 'external' ? 'Trainer name (optional)' : 'Trainer name *', 'trainer_name',
               form.trainer_type === 'external' ? {} : { required: true })}
@@ -410,6 +412,7 @@ export default function Trainings() {
               <dt>Trainer</dt><dd>{sel.trainer_type === 'external'
                 ? `${sel.agency || '—'}${sel.trainer_name ? ' — ' + sel.trainer_name : ''} (external)`
                 : `${sel.trainer_name || '—'} (internal)`}</dd>
+              {sel.location && <><dt>Location</dt><dd>{sel.location}</dd></>}
               <dt>Dates</dt><dd>{fmtRange(sel.days)}</dd>
               <dt>Hours</dt><dd>{(sel.days?.length || 0) * Number(sel.hours_per_day)} h · {sel.hours_per_day} h/day</dd>
               <dt>Seats</dt><dd>{sel.participants.length}/{sel.seats} filled</dd>

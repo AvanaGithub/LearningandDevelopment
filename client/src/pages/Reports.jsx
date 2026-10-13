@@ -155,6 +155,16 @@ export default function Reports() {
       'Combined summary — open a single training for its day-wise grid.');
   });
 
+  const register = guard(async () => {
+    const r = await api.get('/api/reports/register');
+    show('Training register',
+      ['Code', 'Training', 'Batch', 'Location', 'Dates', 'Days', 'Category', 'Mode', 'Trainer', 'No. of participants', 'Participants'],
+      r.map((x) => [x.code, x.title, x.batch || '', x.location || '', fmtRange(x.days), x.day_count,
+        x.category || '', x.mode || '', x.trainer_type === 'external' ? (x.agency || x.trainer_name) : x.trainer_name,
+        x.participant_count, x.participants || '']),
+      'One row per training with its participant head-count and name list. Set the location on the training form.');
+  });
+
   const manhours = guard(async () => {
     const r = await api.get('/api/reports/manhours');
     show('Training man-hours per employee', ['Employee', 'Entity', 'Division', 'Department', 'Hours'],
@@ -294,6 +304,7 @@ export default function Reports() {
   const CARDS = [
     { name: 'Individual employee training hours (passport)', desc: 'Type to search, tick one or several employees — full history with attendance-weighted hours.', picker: { options: emps.map((e) => ({ v: e.id, t: e.name })), onPick: passport } },
     { name: 'Report by training', desc: 'Tick one training for its day-wise grid, or several for a combined summary.', picker: { options: trns.map((t) => ({ v: t.id, t: `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}` })), onPick: byTraining } },
+    { name: 'Training register', desc: 'One row per training: batch, location, dates, head-count and the participant name list.', run: register },
     { name: 'Training man-hours per employee', desc: 'Hours per person across all trainings, from real attendance.', run: manhours },
     { name: 'Mandatory training compliance', desc: 'Done / booked / due per active employee.', run: compliance },
     { name: 'Feedback summary — training & trainer', desc: 'Average scores per training and per trainer, response-weighted.', run: feedbackSummary },

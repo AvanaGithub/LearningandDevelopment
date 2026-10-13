@@ -73,6 +73,7 @@ const pickFields = (b) => ({
     ? (b.division.map((d) => String(d).trim()).filter(Boolean).join(', ') || null)
     : (b.division?.trim() || null),
   mode: b.mode?.trim() || null,
+  location: b.location?.trim() || null,
   trainer_type: b.trainer_type === 'external' ? 'external' : 'internal',
   trainer_name: b.trainer_name?.trim() || null,
   agency: b.agency?.trim() || null,
@@ -125,11 +126,11 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const { rows: code } = await query(`SELECT 'TRG-' || nextval('training_code_seq') AS code`);
     const token = require('crypto').randomBytes(12).toString('hex');
     const { rows } = await query(
-      `INSERT INTO trainings (code, title, batch, category, department, division, mode, trainer_type, trainer_name, agency,
+      `INSERT INTO trainings (code, title, batch, category, department, division, mode, location, trainer_type, trainer_name, agency,
          hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file,
          nom_self, nom_manager, nom_leader, nom_deadline, completion_deadline)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
-      [code[0].code, f.title, f.batch, f.category, f.department, f.division, f.mode, f.trainer_type, f.trainer_name, f.agency,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *`,
+      [code[0].code, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file,
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
@@ -151,13 +152,13 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     const miss = await missingTrn(f);
     if (miss.length) return res.status(400).json({ error: 'Mandatory field(s) missing: ' + miss.join(', ') });
     const { rows } = await query(
-      `UPDATE trainings SET title=$2, batch=$3, category=$4, department=$5, division=$6, mode=$7,
-         trainer_type=$8, trainer_name=$9, agency=$10, hours_per_day=$11, seats=$12, mandatory=$13,
-         status=$14, validity_months=$15, agenda_file=$16,
-         nom_self=$17, nom_manager=$18, nom_leader=$19, nom_deadline=$20, completion_deadline=$21,
+      `UPDATE trainings SET title=$2, batch=$3, category=$4, department=$5, division=$6, mode=$7, location=$8,
+         trainer_type=$9, trainer_name=$10, agency=$11, hours_per_day=$12, seats=$13, mandatory=$14,
+         status=$15, validity_months=$16, agenda_file=$17,
+         nom_self=$18, nom_manager=$19, nom_leader=$20, nom_deadline=$21, completion_deadline=$22,
          updated_at=now()
        WHERE id=$1 RETURNING *`,
-      [id, f.title, f.batch, f.category, f.department, f.division, f.mode, f.trainer_type, f.trainer_name,
+      [id, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name,
        f.agency, f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file,
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline]);
     if (b.days !== undefined) {

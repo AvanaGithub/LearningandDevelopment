@@ -56,6 +56,25 @@ router.get('/compliance', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Training register: one row per training — details, dates, headcount and
+// the participant name list.
+router.get('/register', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT t.code, t.title, t.batch, t.category, t.mode, t.location, t.status,
+              t.trainer_type, t.trainer_name, t.agency, t.hours_per_day,
+              (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days,
+              (SELECT count(*)::int FROM training_days d WHERE d.training_id=t.id) AS day_count,
+              (SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id) AS participant_count,
+              (SELECT string_agg(e.name, ', ' ORDER BY e.name)
+                 FROM training_participants p JOIN employees e ON e.id=p.employee_id
+                 WHERE p.training_id=t.id) AS participants
+       FROM trainings t WHERE t.status <> 'cancelled'
+       ORDER BY (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) DESC NULLS LAST`);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
 // One employee's training passport: every training with attendance % and hours.
 router.get('/passport/:employeeId', async (req, res, next) => {
   try {
