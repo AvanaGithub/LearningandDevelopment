@@ -102,9 +102,10 @@ export default function LearnerPortal() {
                     {markedToday && <span className="pill good mini">Present today ✓</span>}
                     {t.feedback_given
                       ? <span className="pill good mini">Feedback given ✓</span>
-                      : t.external_form_url
-                        ? <a className="btn" style={{ textDecoration: 'none' }} href={t.external_form_url} target="_blank" rel="noreferrer">Give feedback</a>
-                        : <button className="btn" onClick={() => setFb({ t, scores: {}, comment: '' })}>Give feedback</button>}
+                      : !t.feedback_open ? null
+                        : t.external_form_url
+                          ? <a className="btn" style={{ textDecoration: 'none' }} href={t.external_form_url} target="_blank" rel="noreferrer">Give feedback</a>
+                          : <button className="btn" onClick={() => setFb({ t, scores: {}, comment: '' })}>Give feedback</button>}
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {days.map((d) => {

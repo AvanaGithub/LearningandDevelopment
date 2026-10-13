@@ -255,7 +255,8 @@ export default function Feedback() {
               {list.map((t) => (
                 <tr key={t.id}>
                   <td>{t.title}{t.batch && <span className="pill soft mini" style={{ marginLeft: 6 }}>{t.batch}</span>}
-                    {t.external_form_url && <span className="pill warn mini" style={{ marginLeft: 6 }} title="The QR/link redirects to this Microsoft Form">MS Form</span>}</td>
+                    {t.external_form_url && <span className="pill warn mini" style={{ marginLeft: 6 }} title="The QR/link redirects to this Microsoft Form">MS Form</span>}
+                    {t.feedback_open && <span className="pill good mini" style={{ marginLeft: 6 }} title="Learners on this training see the feedback option">open</span>}</td>
                   <td className="muted">{fmtRange(t.days)}</td>
                   <td>{t.response_count} / {t.participant_count}</td>
                   <td>
@@ -263,6 +264,21 @@ export default function Feedback() {
                     <button className="btn link" onClick={() => openResults(t)}>Results</button>
                     {isAdmin && <button className="btn link" onClick={() => openBuilder(t)}>Edit form</button>}
                     {isAdmin && <button className="btn link" onClick={() => openImport(t)}>Import</button>}
+                    {isAdmin && (
+                      <button className="btn link" style={t.feedback_open ? { color: 'var(--crit)' } : {}}
+                        title="Controls whether learners see the feedback option on their portal"
+                        onClick={async () => {
+                          try {
+                            await api.post(`/api/feedback/${t.id}/open`, { open: !t.feedback_open });
+                            toast(t.feedback_open
+                              ? `Feedback closed for ${t.title} — hidden from learner portals.`
+                              : `Feedback opened for ${t.title} — learners on it now see "Give feedback".`);
+                            load();
+                          } catch (e2) { setErr(e2.message); }
+                        }}>
+                        {t.feedback_open ? 'Close learner feedback' : 'Open learner feedback'}
+                      </button>
+                    )}
                     {isAdmin && t.public_token && (
                       <button className="btn link" onClick={() => setQr({
                         title: 'Feedback QR — ' + t.title,

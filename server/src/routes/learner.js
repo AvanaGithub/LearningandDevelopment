@@ -39,7 +39,7 @@ router.get('/overview', async (req, res, next) => {
     const today = localDay();
     const { rows: my } = await query(
       `SELECT t.id, t.code, t.title, t.batch, t.status, t.mode, t.trainer_type, t.trainer_name, t.agency,
-              t.feedback_questions, t.external_form_url, t.agenda_file,
+              t.feedback_questions, t.external_form_url, t.agenda_file, t.feedback_open,
               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days,
               n.slot AS nom_slot, n.source AS nom_source,
               (SELECT json_agg(json_build_object('day', a.day, 'mark', a.mark))
@@ -102,10 +102,11 @@ router.post('/feedback', express.json(), async (req, res, next) => {
     if (!me) return res.status(403).json({ error: 'No employee record matches your e-mail — contact L&D.' });
     const trainingId = Number(req.body?.training_id);
     const { rows: t } = await query(
-      `SELECT feedback_questions FROM trainings t
+      `SELECT feedback_questions, feedback_open FROM trainings t
        WHERE t.id=$1 AND EXISTS (SELECT 1 FROM training_participants p WHERE p.training_id=t.id AND p.employee_id=$2)`,
       [trainingId, me.id]);
     if (!t.length) return res.status(403).json({ error: 'You are not a participant of this training.' });
+    if (!t[0].feedback_open) return res.status(403).json({ error: 'Feedback is not open for this training yet.' });
     const questions = t[0].feedback_questions || DEFAULT_QUESTIONS;
     const scores = req.body?.scores || {};
     const ok = questions.every((q, i) => {

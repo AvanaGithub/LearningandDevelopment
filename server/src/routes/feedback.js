@@ -60,6 +60,19 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
   } catch (e) { next(e); }
 });
 
+// Open/close feedback collection for the learner portal (admin).
+router.post('/:trainingId/open', requireRole('admin'), express.json(), async (req, res, next) => {
+  try {
+    const trainingId = Number(req.params.trainingId);
+    const open = Boolean(req.body?.open);
+    const { rowCount } = await query(
+      'UPDATE trainings SET feedback_open=$2, updated_at=now() WHERE id=$1', [trainingId, open]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    await audit(req.user.id, open ? 'feedback.opened' : 'feedback.closed', 'training', trainingId);
+    res.json({ ok: true, open });
+  } catch (e) { next(e); }
+});
+
 // Bulk import (admin): responses collected on paper/Excel, each matched to
 // a participant employee. An employee's earlier imported/QR response is
 // updated in place; nothing is ever deleted.
