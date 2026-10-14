@@ -63,7 +63,10 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
   try {
     const trainingId = Number(req.params.trainingId);
     const questions = (req.body?.questions || []).map(normQ).filter((x) => qT(x));
-    if (questions.length < 1 || questions.length > 20) {
+    // Questions are optional when only the Microsoft Form link is being
+    // set — the stored in-hub questions then stay as they are.
+    const onlyExt = !questions.length && req.body?.external_form_url !== undefined;
+    if (!onlyExt && (questions.length < 1 || questions.length > 20)) {
       return res.status(400).json({ error: 'Between 1 and 20 questions' });
     }
     // Optional external form (Microsoft Forms): the QR page redirects there.
@@ -77,10 +80,11 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
       ext = v || null;
     }
     const { rowCount } = await query(
-      `UPDATE trainings SET feedback_questions=$2,
+      `UPDATE trainings SET
+         feedback_questions = CASE WHEN $5::boolean THEN $2::jsonb ELSE feedback_questions END,
          external_form_url = CASE WHEN $3::boolean THEN $4 ELSE external_form_url END,
          updated_at=now() WHERE id=$1`,
-      [trainingId, JSON.stringify(questions), req.body?.external_form_url !== undefined, ext]);
+      [trainingId, JSON.stringify(questions), req.body?.external_form_url !== undefined, ext, !onlyExt]);
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
     await audit(req.user.id, 'feedback.form_update', 'training', trainingId, { questions, external_form_url: ext });
     res.json({ ok: true, questions });

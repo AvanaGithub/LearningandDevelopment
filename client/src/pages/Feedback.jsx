@@ -243,9 +243,11 @@ export default function Feedback() {
     try {
       const questions = [...stdQs.filter((q) => builder.checked.has(q)),
         ...builder.custom.map((c) => (c.type === 'text' ? { q: c.q, type: 'text' } : c.q))];
-      await api.put(`/api/feedback/${builder.t.id}/form`, { questions, external_form_url: builder.ext.trim() || null });
+      const body = { external_form_url: builder.ext.trim() || null };
+      if (questions.length) body.questions = questions;
+      await api.put(`/api/feedback/${builder.t.id}/form`, body);
       toast(builder.ext.trim()
-        ? 'Saved — the QR/link now sends participants to the Microsoft Form.'
+        ? 'Saved — the QR/link now sends participants to the Microsoft Form (all Forms elements and branching work there).'
         : `Feedback form saved — ${questions.length} questions.`);
       setBuilder(null); load();
     } catch (e) { setErr(e.message); }
@@ -274,7 +276,9 @@ export default function Feedback() {
                   <td className="muted">{fmtRange(t.days)}</td>
                   <td>{t.response_count} / {t.participant_count}</td>
                   <td>
-                    {isAdmin && <button className="btn link" onClick={() => openRespond(t)}>Respond</button>}
+                    {isAdmin && (t.external_form_url
+                      ? <a className="btn link" href={t.external_form_url} target="_blank" rel="noreferrer">Respond</a>
+                      : <button className="btn link" onClick={() => openRespond(t)}>Respond</button>)}
                     <button className="btn link" onClick={() => openResults(t)}>Results</button>
                     {isAdmin && <button className="btn link" onClick={() => openBuilder(t)}>Edit form</button>}
                     {isAdmin && <button className="btn link" onClick={() => openImport(t)}>Import</button>}
@@ -398,7 +402,27 @@ export default function Feedback() {
         <div className="modal-backdrop" onClick={() => setBuilder(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Feedback form — {builder.t.title}</h3>
-            <p className="muted mini">Standard questions — untick what you don't need:</p>
+
+            <p className="muted mini" style={{ marginBottom: 4 }}>
+              <b>Microsoft Form (recommended):</b> paste the Form's share link. The QR and the feedback
+              link send participants straight to it, so <b>everything Microsoft Forms offers works as-is</b> —
+              Choice, Text, Rating, Ranking, Likert, File upload, Net Promoter Score, Sections and all
+              branching logic. Design the form in Microsoft Forms; collect results there and bring them
+              into the hub with this training's <b>Import</b> button.
+            </p>
+            <input style={{ width: '100%' }} placeholder="https://forms.office.com/…"
+              value={builder.ext} onChange={(e) => setBuilder({ ...builder, ext: e.target.value })} />
+            {builder.ext.trim()
+              ? <p className="muted mini" style={{ marginTop: 4, color: 'var(--good)' }}>
+                  The QR / link will open this Microsoft Form — the in-hub questions below are ignored while the link is set.
+                </p>
+              : <p className="muted mini" style={{ marginTop: 4 }}>No link — the QR shows the simple in-hub form below (1–5 ratings and text answers only).</p>}
+
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Simple in-hub form (fallback when no Microsoft Form link is set)
+              </summary>
+            <p className="muted mini" style={{ marginTop: 8 }}>Standard questions — untick what you don't need:</p>
             {stdQs.map((q) => (
               <label key={q} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: 13, cursor: 'pointer' }}>
                 <input type="checkbox" checked={builder.checked.has(q)} onChange={(e) => {
@@ -447,22 +471,11 @@ export default function Feedback() {
               }}>⇣ Add pasted questions</button>
             <p className="muted mini" style={{ marginTop: 2 }}>
               Open questions are guessed as "Text answer" — adjust the type dropdowns before saving.
-              Save with the Microsoft Form link below <b>empty</b> so the QR shows these questions in the hub.
             </p>
-            <p className="muted mini" style={{ marginTop: 14, marginBottom: 4 }}>
-              <b>Or use a Microsoft Form instead:</b> paste its share link and the same QR / link sends
-              participants to that form (the questions above are then not shown).
-            </p>
-            <input style={{ width: '100%' }} placeholder="https://forms.office.com/… (leave empty to use the questions above)"
-              value={builder.ext} onChange={(e) => setBuilder({ ...builder, ext: e.target.value })} />
-            {builder.ext.trim() && (
-              <p className="muted mini" style={{ marginTop: 4 }}>
-                Responses will be collected in Microsoft Forms — export them there and use this training's
-                <b> Import</b> button to bring the scores into the hub.
-              </p>
-            )}
+            </details>
             <div className="form-actions">
-              <button className="btn gold" disabled={builder.checked.size + builder.custom.length < 1} onClick={saveForm}>Save form</button>
+              <button className="btn gold" disabled={!builder.ext.trim() && builder.checked.size + builder.custom.length < 1}
+                onClick={saveForm}>Save form</button>
               <button className="btn" onClick={() => setBuilder(null)}>Cancel</button>
             </div>
           </div>
