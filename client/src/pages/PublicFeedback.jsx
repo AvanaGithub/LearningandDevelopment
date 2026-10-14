@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { qText, qIsText } from '../api.js';
 
 // QR feedback page — the respondent is identified by their own Zoho sign-in.
 export default function PublicFeedback() {
@@ -45,7 +46,7 @@ export default function PublicFeedback() {
     } catch (e) { setErr(e.message); }
   };
 
-  const complete = t && t.questions.every((q, i) => scores[i] >= 1);
+  const complete = t && t.questions.every((q, i) => qIsText(q) || scores[i] >= 1);
 
   return (
     <div className="login-wrap">
@@ -88,14 +89,19 @@ export default function PublicFeedback() {
                 <p style={{ fontSize: 13 }}>Responding as <b>{t.me.name}</b> ✓ (verified by Zoho)</p>
                 {t.questions.map((q, i) => (
                   <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                    <div style={{ fontSize: 13, marginBottom: 6 }}>{q}</div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[1, 2, 3, 4, 5].map((v) => (
-                        <button key={v} type="button" className="btn" style={scores[i] === v
-                          ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
-                          onClick={() => setScores({ ...scores, [i]: v })}>{v}</button>
-                      ))}
-                    </div>
+                    <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{qIsText(q) && <span className="muted"> (optional)</span>}</div>
+                    {qIsText(q) ? (
+                      <textarea rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
+                        value={scores[i] || ''} onChange={(e) => setScores({ ...scores, [i]: e.target.value })} />
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {[1, 2, 3, 4, 5].map((v) => (
+                          <button key={v} type="button" className="btn" style={scores[i] === v
+                            ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
+                            onClick={() => setScores({ ...scores, [i]: v })}>{v}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 <input style={{ width: '100%', margin: '10px 0' }} placeholder="What should be improved? (optional)"

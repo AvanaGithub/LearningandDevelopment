@@ -108,12 +108,8 @@ router.post('/feedback', express.json(), async (req, res, next) => {
     if (!t.length) return res.status(403).json({ error: 'You are not a participant of this training.' });
     if (!t[0].feedback_open) return res.status(403).json({ error: 'Feedback is not open for this training yet.' });
     const questions = t[0].feedback_questions || DEFAULT_QUESTIONS;
-    const scores = req.body?.scores || {};
-    const ok = questions.every((q, i) => {
-      const v = Number(scores[i]);
-      return Number.isInteger(v) && v >= 1 && v <= 5;
-    });
-    if (!ok) return res.status(400).json({ error: 'Answer every question with a rating from 1 to 5.' });
+    const scores = require('./feedback').helpers.cleanScores(questions, req.body?.scores || {});
+    if (!scores) return res.status(400).json({ error: 'Answer every rating question with 1 to 5.' });
     await query(
       `INSERT INTO feedback_responses (training_id, employee_id, respondent, scores, comment)
        VALUES ($1,$2,$3,$4,$5)

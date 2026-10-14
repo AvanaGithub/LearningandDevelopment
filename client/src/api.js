@@ -38,6 +38,11 @@ export const ENTITIES = ['AMD', 'ASS', 'ATS'];
 // 'ASS' stays the internal code (DB constraints, existing rows); it is
 // always DISPLAYED as ASSP.
 export const entLabel = (e) => (e === 'ASS' ? 'ASSP' : e);
+
+// Feedback questions are plain strings (1–5 rating) or {q, type:'text'}
+// for open answers.
+export const qText = (q) => (typeof q === 'string' ? q : (q && q.q) || '');
+export const qIsText = (q) => Boolean(q && typeof q === 'object' && q.type === 'text');
 export const ENTITY_NAMES = {
   AMD: 'Avana Medical Devices',
   ASS: 'Avana Surgical Systems',

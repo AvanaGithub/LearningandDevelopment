@@ -4,6 +4,33 @@ const { requireRole, audit } = require('../auth');
 
 const router = express.Router();
 
+// A question is a plain string (1–5 rating) or {q, type:'text'} for an
+// open answer; qT/qIsTxt normalize both shapes.
+const qT = (q) => (typeof q === 'string' ? q : (q && q.q) || '');
+const qIsTxt = (q) => Boolean(q && typeof q === 'object' && q.type === 'text');
+const normQ = (x) => {
+  if (typeof x === 'string') return x.trim().slice(0, 300);
+  if (x && x.q) return { q: String(x.q).trim().slice(0, 300), type: 'text' };
+  return '';
+};
+// Ratings are required; text answers are optional. Returns the cleaned
+// scores object or null when a rating is missing/invalid.
+function cleanScores(questions, scores) {
+  const out = {};
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const v = scores?.[i];
+    if (qIsTxt(q)) {
+      const s = String(v ?? '').trim();
+      if (s) out[i] = s.slice(0, 1000);
+      continue;
+    }
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 5) return null;
+    out[i] = n;
+  }
+  return out;
+}
 // Standard questionnaire from the prototype; a training can override it.
 const DEFAULT_QUESTIONS = [
   'Relevance of content to my job',
@@ -35,7 +62,7 @@ router.get('/:trainingId', async (req, res, next) => {
 router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req, res, next) => {
   try {
     const trainingId = Number(req.params.trainingId);
-    const questions = (req.body?.questions || []).map((q) => String(q).trim()).filter(Boolean);
+    const questions = (req.body?.questions || []).map(normQ).filter((x) => qT(x));
     if (questions.length < 1 || questions.length > 20) {
       return res.status(400).json({ error: 'Between 1 and 20 questions' });
     }
@@ -85,7 +112,7 @@ router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '
     // The sheet brings its own questions (each training has its own set):
     // they become this training's feedback form.
     if (Array.isArray(req.body?.questions)) {
-      const qs = req.body.questions.map((q) => String(q).trim().slice(0, 300)).filter(Boolean);
+      const qs = req.body.questions.map(normQ).filter((x) => qT(x));
       if (qs.length < 1 || qs.length > 20) return res.status(400).json({ error: 'Between 1 and 20 question columns' });
       questions = qs;
       await query('UPDATE trainings SET feedback_questions=$2, updated_at=now() WHERE id=$1',
@@ -96,7 +123,10 @@ router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '
       'SELECT employee_id FROM training_participants WHERE training_id=$1', [trainingId]);
     const partIds = new Set(parts.map((p) => p.employee_id));
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-    if (!rows.length || rows.length > 1000) return res.status(400).json({ error: 'Send between 1 and 1000 rows' });
+    if (rows.length > 1000) return res.status(400).json({ error: 'At most 1000 rows per import' });
+    if (!rows.length && !Array.isArray(req.body?.questions)) {
+      return res.status(400).json({ error: 'The sheet has no data rows' });
+    }
     let ok = 0, skipped = 0;
     for (const r of rows) {
       const empId = Number(r.employee_id);
@@ -133,20 +163,17 @@ router.post('/:trainingId', requireRole('admin'), express.json(), async (req, re
     const { rows: t } = await query('SELECT feedback_questions FROM trainings WHERE id=$1', [trainingId]);
     if (!t.length) return res.status(404).json({ error: 'Not found' });
     const questions = t[0].feedback_questions || DEFAULT_QUESTIONS;
-    const scores = req.body?.scores || {};
-    const ok = questions.every((q, i) => {
-      const v = Number(scores[i]);
-      return Number.isInteger(v) && v >= 1 && v <= 5;
-    });
-    if (!ok) return res.status(400).json({ error: 'Answer every question with a rating from 1 to 5' });
+    const clean = cleanScores(questions, req.body?.scores || {});
+    if (!clean) return res.status(400).json({ error: 'Answer every rating question with 1 to 5' });
     await query(
       `INSERT INTO feedback_responses (training_id, user_id, respondent, scores, comment)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (training_id, user_id)
        DO UPDATE SET scores=$4, comment=$5, created_at=now()`,
-      [trainingId, req.user.id, req.user.name, JSON.stringify(scores), req.body?.comment?.trim() || null]);
+      [trainingId, req.user.id, req.user.name, JSON.stringify(clean), req.body?.comment?.trim() || null]);
     res.status(201).json({ ok: true });
   } catch (e) { next(e); }
 });
 
 module.exports = router;
+module.exports.helpers = { qT, qIsTxt, normQ, cleanScores };

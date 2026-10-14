@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtRange } from '../api.js';
+import { api, fmtRange, qText, qIsText } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
@@ -24,14 +24,16 @@ function FbImport({ t, participants, onClose, onDone }) {
       const aoa = await readSheet(f);
       const headers = (aoa[0] || []).map((h) => String(h).trim());
       const rows = aoa.slice(1).filter((r) => r.some((c) => String(c).trim() !== ''));
-      if (!headers.length || !rows.length) throw new Error('The first sheet needs a header row plus data rows.');
+      if (!headers.length) throw new Error('The first sheet needs a header row.');
       const low = headers.map((h) => h.toLowerCase());
       const guessId = low.findIndex((h) => /emp|zoho|e-?mail|name|participant|respondent/.test(h));
       // Classify each column: rating (most filled cells are 1–5), text
-      // (open answers — imported verbatim), or empty.
+      // (open answers — imported verbatim), or empty. With no response
+      // rows yet, guess from the wording (adjustable after import).
+      const guessText = (h) => /what|suggest|improve|comment|describe|any other|useful|why/i.test(h);
       const kinds = headers.map((h, i) => {
         const vals = rows.map((r) => String(r[i] ?? '').trim()).filter(Boolean);
-        if (!vals.length) return 'empty';
+        if (!vals.length) return rows.length ? 'empty' : (guessText(h) ? 'text' : 'rating');
         const ok = vals.filter((v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 5).length;
         return ok / vals.length >= 0.5 ? 'rating' : 'text';
       });
@@ -54,7 +56,17 @@ function FbImport({ t, participants, onClose, onDone }) {
     setBusy(true); setErr(null);
     try {
       const qIdx = sheet.headers.map((h, i) => i).filter((i) => sheet.qSel.has(i));
-      const questions = qIdx.map((i) => sheet.headers[i] || `Question ${i + 1}`);
+      const questions = qIdx.map((i) => {
+        const h = sheet.headers[i] || `Question ${i + 1}`;
+        return sheet.kinds[i] === 'text' ? { q: h, type: 'text' } : h;
+      });
+      // No responses yet: import just the questions — the QR / learner
+      // form shows them from now on, results collect in the hub.
+      if (!sheet.rows.length) {
+        await api.post(`/api/feedback/${t.id}/import`, { questions, rows: [] });
+        onDone(`${questions.length} question(s) imported from the sheet — the QR and learner feedback form now show them.`);
+        return;
+      }
       const out = [];
       let unmatched = 0;
       for (const r of sheet.rows) {
@@ -172,7 +184,7 @@ export default function Feedback() {
 
   const exportResults = (r) => toXlsx(
     ('Feedback-' + r.t.code + '.xlsx').replace(/[^\w.-]+/g, '-'),
-    ['Respondent', ...r.questions.map((q, i) => `Q${i + 1} ${q}`), 'Comment'],
+    ['Respondent', ...r.questions.map((q, i) => `Q${i + 1} ${qText(q)}`), 'Comment'],
     r.responses.map((x) => [x.respondent, ...r.questions.map((q, i) => x.scores[i] ?? ''), x.comment || '']),
     'Feedback');
 
@@ -219,16 +231,18 @@ export default function Feedback() {
       const current = d.questions || [];
       setBuilder({
         t,
-        checked: new Set(stdQs.filter((q) => current.includes(q))),
-        custom: current.filter((q) => !stdQs.includes(q)),
-        newQ: '',
+        checked: new Set(stdQs.filter((q) => current.some((c) => typeof c === 'string' && c === q))),
+        custom: current.filter((c) => qIsText(c) || !stdQs.includes(c))
+          .map((c) => ({ q: qText(c), type: qIsText(c) ? 'text' : 'rating' })),
+        newQ: '', paste: '',
         ext: d.external_form_url || '',
       });
     } catch (e) { setErr(e.message); }
   };
   const saveForm = async () => {
     try {
-      const questions = [...stdQs.filter((q) => builder.checked.has(q)), ...builder.custom];
+      const questions = [...stdQs.filter((q) => builder.checked.has(q)),
+        ...builder.custom.map((c) => (c.type === 'text' ? { q: c.q, type: 'text' } : c.q))];
       await api.put(`/api/feedback/${builder.t.id}/form`, { questions, external_form_url: builder.ext.trim() || null });
       toast(builder.ext.trim()
         ? 'Saved — the QR/link now sends participants to the Microsoft Form.'
@@ -308,14 +322,19 @@ export default function Feedback() {
             {respond.mine && <p className="muted mini">You already responded; submitting again updates your response.</p>}
             {respond.questions.map((q, i) => (
               <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ fontSize: 13, marginBottom: 6 }}>{q}</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {[1, 2, 3, 4, 5].map((v) => (
-                    <button key={v} className="btn" style={respond.scores[i] === v
-                      ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
-                      onClick={() => setRespond({ ...respond, scores: { ...respond.scores, [i]: v } })}>{v}</button>
-                  ))}
-                </div>
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{qIsText(q) && <span className="muted"> (optional)</span>}</div>
+                {qIsText(q) ? (
+                  <textarea rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
+                    value={respond.scores[i] || ''} onChange={(e) => setRespond({ ...respond, scores: { ...respond.scores, [i]: e.target.value } })} />
+                ) : (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[1, 2, 3, 4, 5].map((v) => (
+                      <button key={v} className="btn" style={respond.scores[i] === v
+                        ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
+                        onClick={() => setRespond({ ...respond, scores: { ...respond.scores, [i]: v } })}>{v}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             <div style={{ marginTop: 10 }}>
@@ -325,7 +344,7 @@ export default function Feedback() {
             </div>
             <div className="form-actions">
               <button className="btn gold"
-                disabled={!respond.questions.every((q, i) => respond.scores[i] >= 1)}
+                disabled={!respond.questions.every((q, i) => qIsText(q) || respond.scores[i] >= 1)}
                 onClick={submit}>Submit feedback</button>
               <button className="btn" onClick={() => setRespond(null)}>Cancel</button>
             </div>
@@ -345,7 +364,7 @@ export default function Feedback() {
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead><tr><th>Respondent</th>{results.questions.map((q, i) =>
-                  <th key={i} style={{ textAlign: 'right', fontSize: 11, maxWidth: 150, minWidth: 70, whiteSpace: 'normal', verticalAlign: 'bottom' }}>{q}</th>)}<th>Submitted at</th><th>Comment</th></tr></thead>
+                  <th key={i} style={{ textAlign: 'right', fontSize: 11, maxWidth: 150, minWidth: 70, whiteSpace: 'normal', verticalAlign: 'bottom' }}>{qText(q)}</th>)}<th>Submitted at</th><th>Comment</th></tr></thead>
                 <tbody>
                   {results.responses.map((r, ri) => (
                     <tr key={ri}><td>{r.respondent}</td>
@@ -390,9 +409,16 @@ export default function Feedback() {
               </label>
             ))}
             <p className="muted mini" style={{ marginTop: 10 }}>Custom questions for this training:</p>
-            {builder.custom.map((q, i) => (
+            {builder.custom.map((c, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', fontSize: 13 }}>
-                <span style={{ flex: 1 }}>{q}</span>
+                <span style={{ flex: 1 }}>{c.q}</span>
+                <select value={c.type} onChange={(e) => {
+                  const custom = [...builder.custom]; custom[i] = { ...c, type: e.target.value };
+                  setBuilder({ ...builder, custom });
+                }}>
+                  <option value="rating">1–5 rating</option>
+                  <option value="text">Text answer</option>
+                </select>
                 <button className="btn link" onClick={() => setBuilder({ ...builder, custom: builder.custom.filter((_, j) => j !== i) })}>✕</button>
               </div>
             ))}
@@ -400,8 +426,29 @@ export default function Feedback() {
               <input style={{ flex: 1 }} placeholder="Type a question…" value={builder.newQ}
                 onChange={(e) => setBuilder({ ...builder, newQ: e.target.value })} />
               <button className="btn" disabled={!builder.newQ.trim()}
-                onClick={() => setBuilder({ ...builder, custom: [...builder.custom, builder.newQ.trim()], newQ: '' })}>+ Add</button>
+                onClick={() => setBuilder({ ...builder, custom: [...builder.custom, { q: builder.newQ.trim(), type: 'rating' }], newQ: '' })}>+ Add</button>
             </div>
+            <p className="muted mini" style={{ marginTop: 12, marginBottom: 4 }}>
+              <b>Or paste the questions from your Microsoft Form</b> (one per line — they replace nothing, they are added as custom questions):
+            </p>
+            <textarea rows={4} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }} value={builder.paste || ''}
+              placeholder={'How would you rate the trainer?\nWhat was the most useful part of the training?'}
+              onChange={(e) => setBuilder({ ...builder, paste: e.target.value })} />
+            <button className="btn" style={{ marginTop: 4 }} disabled={!(builder.paste || '').trim()}
+              onClick={() => {
+                const lines = builder.paste.split('\n')
+                  .map((s) => s.replace(/^\s*(?:Q?\d+\s*[).:-]?)\s*/i, '').trim()).filter(Boolean);
+                const guessText = (q) => /what|suggest|improve|comment|describe|any other|useful part|why/i.test(q);
+                setBuilder({
+                  ...builder,
+                  custom: [...builder.custom, ...lines.map((q) => ({ q, type: guessText(q) ? 'text' : 'rating' }))],
+                  paste: '',
+                });
+              }}>⇣ Add pasted questions</button>
+            <p className="muted mini" style={{ marginTop: 2 }}>
+              Open questions are guessed as "Text answer" — adjust the type dropdowns before saving.
+              Save with the Microsoft Form link below <b>empty</b> so the QR shows these questions in the hub.
+            </p>
             <p className="muted mini" style={{ marginTop: 14, marginBottom: 4 }}>
               <b>Or use a Microsoft Form instead:</b> paste its share link and the same QR / link sends
               participants to that form (the questions above are then not shown).

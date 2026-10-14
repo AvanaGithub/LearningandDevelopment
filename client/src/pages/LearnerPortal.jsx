@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate, fmtRange, statusPill, TRN_STATUSES } from '../api.js';
+import { api, fmtDate, fmtRange, statusPill, TRN_STATUSES, qText, qIsText } from '../api.js';
 import { useAuth, useToast } from '../App.jsx';
 
 // The learner's own portal: my trainings (check-in, feedback), trainings
@@ -164,20 +164,25 @@ export default function LearnerPortal() {
             <h3>Feedback — {fb.t.title}</h3>
             {fb.t.questions.map((q, i) => (
               <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ fontSize: 13, marginBottom: 6 }}>{q}</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {[1, 2, 3, 4, 5].map((v) => (
-                    <button key={v} type="button" className="btn" style={fb.scores[i] === v
-                      ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
-                      onClick={() => setFb({ ...fb, scores: { ...fb.scores, [i]: v } })}>{v}</button>
-                  ))}
-                </div>
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{qIsText(q) && <span className="muted"> (optional)</span>}</div>
+                {qIsText(q) ? (
+                  <textarea rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
+                    value={fb.scores[i] || ''} onChange={(e) => setFb({ ...fb, scores: { ...fb.scores, [i]: e.target.value } })} />
+                ) : (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[1, 2, 3, 4, 5].map((v) => (
+                      <button key={v} type="button" className="btn" style={fb.scores[i] === v
+                        ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}}
+                        onClick={() => setFb({ ...fb, scores: { ...fb.scores, [i]: v } })}>{v}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             <input style={{ width: '100%', margin: '10px 0' }} placeholder="What should be improved? (optional)"
               value={fb.comment} onChange={(e) => setFb({ ...fb, comment: e.target.value })} />
             <div className="form-actions">
-              <button className="btn gold" disabled={!fb.t.questions.every((q, i) => fb.scores[i] >= 1)} onClick={sendFb}>Submit feedback</button>
+              <button className="btn gold" disabled={!fb.t.questions.every((q, i) => qIsText(q) || fb.scores[i] >= 1)} onClick={sendFb}>Submit feedback</button>
               <button className="btn" onClick={() => setFb(null)}>Cancel</button>
             </div>
           </div>

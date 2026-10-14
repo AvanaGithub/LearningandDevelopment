@@ -137,18 +137,15 @@ router.post('/fb/:token', express.json(), async (req, res, next) => {
     const me = await participantOf(req);
     if (!me) return res.status(401).json({ error: 'Sign in with Zoho first.', need_login: true });
     const questions = t.feedback_questions || DEFAULT_QUESTIONS;
-    const scores = req.body?.scores || {};
-    const ok = questions.every((q, i) => {
-      const v = Number(scores[i]);
-      return Number.isInteger(v) && v >= 1 && v <= 5;
-    });
-    if (!ok) return res.status(400).json({ error: 'Answer every question with a rating from 1 to 5.' });
+    const clean = require('./feedback').helpers.cleanScores(questions, req.body?.scores || {});
+    if (!clean) return res.status(400).json({ error: 'Answer every rating question with 1 to 5.' });
+    req.body.scores = clean;
     await query(
       `INSERT INTO feedback_responses (training_id, employee_id, respondent, scores, comment)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (training_id, employee_id) WHERE employee_id IS NOT NULL
        DO UPDATE SET scores=$4, comment=$5, created_at=now()`,
-      [t.id, me.id, me.name, JSON.stringify(scores), req.body?.comment?.trim() || null]);
+      [t.id, me.id, me.name, JSON.stringify(clean), req.body?.comment?.trim() || null]);
     res.status(201).json({ ok: true, name: me.name, at: new Date().toISOString() });
   } catch (e) { next(e); }
 });
