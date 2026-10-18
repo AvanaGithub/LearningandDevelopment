@@ -77,8 +77,8 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
     // Questions are optional when only the Microsoft Form link is being
     // set — the stored in-hub questions then stay as they are.
     const onlyExt = !questions.length && req.body?.external_form_url !== undefined;
-    if (!onlyExt && (questions.length < 1 || questions.length > 20)) {
-      return res.status(400).json({ error: 'Between 1 and 20 questions' });
+    if (!onlyExt && (questions.length < 1 || questions.length > 50)) {
+      return res.status(400).json({ error: 'Between 1 and 50 questions' });
     }
     // Optional external form (Microsoft Forms): the QR page redirects there.
     let ext = null;
@@ -128,7 +128,7 @@ router.post('/:trainingId/import', requireRole('admin'), express.json({ limit: '
     // they become this training's feedback form.
     if (Array.isArray(req.body?.questions)) {
       const qs = req.body.questions.map(normQ).filter((x) => qT(x));
-      if (qs.length < 1 || qs.length > 20) return res.status(400).json({ error: 'Between 1 and 20 question columns' });
+      if (qs.length < 1 || qs.length > 50) return res.status(400).json({ error: 'Between 1 and 50 question columns' });
       questions = qs;
       await query('UPDATE trainings SET feedback_questions=$2, updated_at=now() WHERE id=$1',
         [trainingId, JSON.stringify(qs)]);
