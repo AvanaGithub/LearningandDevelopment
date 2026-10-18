@@ -184,8 +184,9 @@ export default function Feedback() {
 
   const exportResults = (r) => toXlsx(
     ('Feedback-' + r.t.code + '.xlsx').replace(/[^\w.-]+/g, '-'),
-    ['Respondent', ...r.questions.map((q, i) => `Q${i + 1} ${qText(q)}`), 'Comment'],
-    r.responses.map((x) => [x.respondent, ...r.questions.map((q, i) => x.scores[i] ?? ''), x.comment || '']),
+    ['Respondent', 'Status', ...r.questions.map((q, i) => `Q${i + 1} ${qText(q)}`), 'Comment'],
+    [...r.responses.map((x) => [x.respondent, 'Responded', ...r.questions.map((q, i) => x.scores[i] ?? ''), x.comment || '']),
+     ...(r.pending || []).map((p) => [p.name, 'NOT responded', ...r.questions.map(() => ''), ''])],
     'Feedback');
 
   const load = () => api.get('/api/trainings')
@@ -360,10 +361,24 @@ export default function Feedback() {
         <div className="modal-backdrop" onClick={() => setResults(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <h3>Results — {results.t.title}</h3>
-            <p className="muted mini">{results.responses.length} response(s) · scale 1–5</p>
+            <p className="muted mini">
+              {results.responses.length} of {results.participant_count ?? results.responses.length} participant(s) responded
+              {(results.pending || []).length > 0 && <> · <b style={{ color: 'var(--crit)' }}>{results.pending.length} pending</b></>}
+              {' '}· scale 1–5
+            </p>
             {results.external_form_url && (
               <p className="muted mini">This training collects feedback on a <a href={results.external_form_url} target="_blank" rel="noreferrer">Microsoft Form</a> —
                 export responses there and use <b>Import</b> to bring the scores in.</p>
+            )}
+            {(results.pending || []).length > 0 && (
+              <div style={{ margin: '6px 0 10px' }}>
+                <span className="muted mini"><b>Not yet responded ({results.pending.length}):</b></span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  {results.pending.map((p) => (
+                    <span key={p.id} className="pill crit mini" title={[p.zoho_emp_id, p.department].filter(Boolean).join(' · ')}>{p.name}</span>
+                  ))}
+                </div>
+              </div>
             )}
             <div style={{ overflowX: 'auto' }}>
               <table>

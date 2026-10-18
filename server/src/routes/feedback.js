@@ -47,12 +47,23 @@ router.get('/:trainingId', async (req, res, next) => {
     const { rows: t } = await query('SELECT id, feedback_questions, external_form_url FROM trainings WHERE id=$1', [trainingId]);
     if (!t.length) return res.status(404).json({ error: 'Not found' });
     const { rows: responses } = await query(
-      `SELECT respondent, user_id, scores, comment, created_at
+      `SELECT respondent, user_id, employee_id, scores, comment, created_at
        FROM feedback_responses WHERE training_id=$1 ORDER BY created_at`, [trainingId]);
+    // Who has NOT responded yet, from the participant list (matched by
+    // employee id, or by name for responses recorded without one).
+    const { rows: parts } = await query(
+      `SELECT e.id, e.name, e.zoho_emp_id, e.department
+       FROM training_participants p JOIN employees e ON e.id = p.employee_id
+       WHERE p.training_id=$1 ORDER BY e.name`, [trainingId]);
+    const doneIds = new Set(responses.map((r) => r.employee_id).filter(Boolean));
+    const doneNames = new Set(responses.map((r) => String(r.respondent || '').trim().toLowerCase()));
+    const pending = parts.filter((p) => !doneIds.has(p.id) && !doneNames.has(p.name.trim().toLowerCase()));
     res.json({
       questions: t[0].feedback_questions || DEFAULT_QUESTIONS,
       external_form_url: t[0].external_form_url || null,
       responses,
+      participant_count: parts.length,
+      pending,
       my_response: responses.find((r) => r.user_id === req.user.id) || null,
     });
   } catch (e) { next(e); }
