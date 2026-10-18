@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtRange, qText, qIsText } from '../api.js';
+import { api, apiUpload, fmtRange, qText, qIsText, qIsFile } from '../api.js';
+import FileAnswer from '../components/FileAnswer.jsx';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx, readSheet } from '../xlsx.js';
 import QrModal from '../components/QrModal.jsx';
@@ -31,7 +32,9 @@ function FbImport({ t, participants, onClose, onDone }) {
       // (open answers — imported verbatim), or empty. With no response
       // rows yet, guess from the wording (adjustable after import).
       const guessText = (h) => /what|suggest|improve|comment|describe|any other|useful|why/i.test(h);
+      const guessFile = (h) => /upload|screenshot|attach|photo|certificate/i.test(h);
       const kinds = headers.map((h, i) => {
+        if (guessFile(h)) return 'file';
         const vals = rows.map((r) => String(r[i] ?? '').trim()).filter(Boolean);
         if (!vals.length) return rows.length ? 'empty' : (guessText(h) ? 'text' : 'rating');
         const ok = vals.filter((v) => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 5).length;
@@ -58,7 +61,7 @@ function FbImport({ t, participants, onClose, onDone }) {
       const qIdx = sheet.headers.map((h, i) => i).filter((i) => sheet.qSel.has(i));
       const questions = qIdx.map((i) => {
         const h = sheet.headers[i] || `Question ${i + 1}`;
-        return sheet.kinds[i] === 'text' ? { q: h, type: 'text' } : h;
+        return sheet.kinds[i] === 'rating' ? h : { q: h, type: sheet.kinds[i] === 'file' ? 'file' : 'text' };
       });
       // No responses yet: import just the questions — the QR / learner
       // form shows them from now on, results collect in the hub.
@@ -185,7 +188,9 @@ export default function Feedback() {
   const exportResults = (r) => toXlsx(
     ('Feedback-' + r.t.code + '.xlsx').replace(/[^\w.-]+/g, '-'),
     ['Respondent', 'Status', ...r.questions.map((q, i) => `Q${i + 1} ${qText(q)}`), 'Comment'],
-    [...r.responses.map((x) => [x.respondent, 'Responded', ...r.questions.map((q, i) => x.scores[i] ?? ''), x.comment || '']),
+    [...r.responses.map((x) => [x.respondent, 'Responded',
+      ...r.questions.map((q, i) => (Array.isArray(x.scores[i]) ? x.scores[i].map((f) => f.name).join('; ') : (x.scores[i] ?? ''))),
+      x.comment || '']),
      ...(r.pending || []).map((p) => [p.name, 'NOT responded', ...r.questions.map(() => ''), ''])],
     'Feedback');
 
@@ -233,8 +238,8 @@ export default function Feedback() {
       setBuilder({
         t,
         checked: new Set(stdQs.filter((q) => current.some((c) => typeof c === 'string' && c === q))),
-        custom: current.filter((c) => qIsText(c) || !stdQs.includes(c))
-          .map((c) => ({ q: qText(c), type: qIsText(c) ? 'text' : 'rating' })),
+        custom: current.filter((c) => qIsText(c) || qIsFile(c) || !stdQs.includes(c))
+          .map((c) => ({ q: qText(c), type: qIsFile(c) ? 'file' : qIsText(c) ? 'text' : 'rating' })),
         newQ: '', paste: '',
         ext: d.external_form_url || '',
       });
@@ -243,7 +248,7 @@ export default function Feedback() {
   const saveForm = async () => {
     try {
       const questions = [...stdQs.filter((q) => builder.checked.has(q)),
-        ...builder.custom.map((c) => (c.type === 'text' ? { q: c.q, type: 'text' } : c.q))];
+        ...builder.custom.map((c) => (c.type === 'rating' ? c.q : { q: c.q, type: c.type }))];
       const body = { external_form_url: builder.ext.trim() || null };
       if (questions.length) body.questions = questions;
       await api.put(`/api/feedback/${builder.t.id}/form`, body);
@@ -327,8 +332,11 @@ export default function Feedback() {
             {respond.mine && <p className="muted mini">You already responded; submitting again updates your response.</p>}
             {respond.questions.map((q, i) => (
               <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{qIsText(q) && <span className="muted"> (optional)</span>}</div>
-                {qIsText(q) ? (
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{(qIsText(q) || qIsFile(q)) && <span className="muted"> (optional)</span>}</div>
+                {qIsFile(q) ? (
+                  <FileAnswer value={respond.scores[i]} uploadTo={(fl) => apiUpload(fl)}
+                    onChange={(v) => setRespond({ ...respond, scores: { ...respond.scores, [i]: v } })} />
+                ) : qIsText(q) ? (
                   <textarea rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
                     value={respond.scores[i] || ''} onChange={(e) => setRespond({ ...respond, scores: { ...respond.scores, [i]: e.target.value } })} />
                 ) : (
@@ -349,7 +357,7 @@ export default function Feedback() {
             </div>
             <div className="form-actions">
               <button className="btn gold"
-                disabled={!respond.questions.every((q, i) => qIsText(q) || respond.scores[i] >= 1)}
+                disabled={!respond.questions.every((q, i) => qIsText(q) || qIsFile(q) || respond.scores[i] >= 1)}
                 onClick={submit}>Submit feedback</button>
               <button className="btn" onClick={() => setRespond(null)}>Cancel</button>
             </div>
@@ -388,9 +396,13 @@ export default function Feedback() {
                   {results.responses.map((r, ri) => (
                     <tr key={ri}><td>{r.respondent}</td>
                       {results.questions.map((q, i) => (
-                        <td key={i} title={String(r.scores[i] ?? '')}
+                        <td key={i} title={Array.isArray(r.scores[i]) ? r.scores[i].map((f) => f.name).join(', ') : String(r.scores[i] ?? '')}
                           style={{ textAlign: 'right', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {r.scores[i] ?? '—'}
+                          {Array.isArray(r.scores[i])
+                            ? r.scores[i].map((f) => (
+                              <a key={f.id} href={'/api/files/' + f.id} target="_blank" rel="noreferrer" style={{ marginLeft: 4 }}>📄</a>
+                            ))
+                            : (r.scores[i] ?? '—')}
                         </td>
                       ))}
                       <td className="muted" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleString('en-IN')}</td>
@@ -457,6 +469,7 @@ export default function Feedback() {
                 }}>
                   <option value="rating">1–5 rating</option>
                   <option value="text">Text answer</option>
+                  <option value="file">File upload</option>
                 </select>
                 <button className="btn link" onClick={() => setBuilder({ ...builder, custom: builder.custom.filter((_, j) => j !== i) })}>✕</button>
               </div>

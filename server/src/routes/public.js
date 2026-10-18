@@ -105,6 +105,19 @@ router.post('/nom/:token', express.json(), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// File upload for feedback answers — Zoho-verified participants only,
+// against a valid training link.
+const filesRoute = require('./files');
+router.post('/upload/:token', filesRoute.upload.array('files', 5), async (req, res, next) => {
+  try {
+    const t = await byToken(req.params.token);
+    if (!t) return res.status(404).json({ error: 'This link is not valid any more.' });
+    const me = await participantOf(req);
+    if (!me) return res.status(401).json({ error: 'Sign in with Zoho first.', need_login: true });
+    res.status(201).json(await filesRoute.saveFiles(req.files, null));
+  } catch (e) { next(e); }
+});
+
 // Self check-in — only for the signed-in participant themselves.
 router.post('/att/:token', express.json(), async (req, res, next) => {
   try {

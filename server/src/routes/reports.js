@@ -175,6 +175,20 @@ router.get('/compliance-detail', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Reports employees submitted for courses taken outside the hub.
+router.get('/external-courses', async (req, res, next) => {
+  try {
+    if (req.user.role === 'manager' || req.user.role === 'learner') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    const { rows } = await query(
+      `SELECT x.*, e.name, e.zoho_emp_id, e.department, e.division, e.entity
+       FROM external_courses x JOIN employees e ON e.id = x.employee_id
+       ORDER BY x.id DESC`);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
 // Everything an ISO 13485 auditor asks for, in one payload — the client
 // turns it into a multi-sheet Excel evidence pack. Admin only.
 router.get('/evidence', async (req, res, next) => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { qText, qIsText } from '../api.js';
+import { qText, qIsText, qIsFile, apiUpload } from '../api.js';
+import FileAnswer from '../components/FileAnswer.jsx';
 
 // QR feedback page — the respondent is identified by their own Zoho sign-in.
 export default function PublicFeedback() {
@@ -46,7 +47,7 @@ export default function PublicFeedback() {
     } catch (e) { setErr(e.message); }
   };
 
-  const complete = t && t.questions.every((q, i) => qIsText(q) || scores[i] >= 1);
+  const complete = t && t.questions.every((q, i) => qIsText(q) || qIsFile(q) || scores[i] >= 1);
 
   return (
     <div className="login-wrap">
@@ -89,8 +90,15 @@ export default function PublicFeedback() {
                 <p style={{ fontSize: 13 }}>Responding as <b>{t.me.name}</b> ✓ (verified by Zoho)</p>
                 {t.questions.map((q, i) => (
                   <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                    <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{qIsText(q) && <span className="muted"> (optional)</span>}</div>
-                    {qIsText(q) ? (
+                    <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{(qIsText(q) || qIsFile(q)) && <span className="muted"> (optional)</span>}</div>
+                    {qIsFile(q) ? (
+                      <FileAnswer value={scores[i]}
+                        uploadTo={async (fl) => {
+                          try { return await apiUpload(fl, '/api/public/upload/' + token); }
+                          catch (e) { if (e.need_login) { location.href = loginUrl; } throw e; }
+                        }}
+                        onChange={(v) => setScores({ ...scores, [i]: v })} />
+                    ) : qIsText(q) ? (
                       <textarea rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
                         value={scores[i] || ''} onChange={(e) => setScores({ ...scores, [i]: e.target.value })} />
                     ) : (

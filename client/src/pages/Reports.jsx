@@ -157,6 +157,16 @@ export default function Reports() {
       'Combined summary — open a single training for its day-wise grid.');
   });
 
+  const externalCourses = guard(async () => {
+    const r = await api.get('/api/reports/external-courses');
+    show('External course reports',
+      ['Employee', 'Employee ID', 'Department', 'Entity', 'Course', 'Provider', 'Completed on', 'Files', 'Notes', 'Submitted'],
+      r.map((x) => [x.name, x.zoho_emp_id || '', x.department || '', entLabel(x.entity), x.course, x.provider || '',
+        x.completed_on ? fmtDate(x.completed_on) : '', (x.files || []).map((f) => f.name).join('; '),
+        x.notes || '', fmtDate(x.created_at)]),
+      'Submitted by employees from their learner portal ("Other courses & certifications"). Open an employee on the Employees tab to download the attached files.');
+  });
+
   const register = guard(async () => {
     const r = await api.get('/api/reports/register');
     show('Training register',
@@ -335,6 +345,7 @@ export default function Reports() {
     { name: 'Individual employee training hours (passport)', desc: 'Type to search, tick one or several employees — full history with attendance-weighted hours (former employees included).', picker: { options: emps.map((e) => ({ v: e.id, t: e.active ? e.name : `${e.name} (inactive)` })), onPick: passport } },
     { name: 'Report by training', desc: 'Tick one training for its day-wise grid, or several for a combined summary.', picker: { options: trns.map((t) => ({ v: t.id, t: `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}` })), onPick: byTraining } },
     { name: 'Training register', desc: 'One row per training: batch, location, dates, head-count and the participant name list.', run: register },
+    ...(isAdmin || me.role === 'leader' ? [{ name: 'External course reports', desc: 'Courses taken outside the hub, submitted by employees with their certificates/reports.', run: externalCourses }] : []),
     { name: 'Training man-hours per employee', desc: 'Hours per person across all trainings, from real attendance.', run: manhours },
     { name: 'Mandatory training compliance', desc: 'Done / booked / due per active employee.', run: compliance },
     { name: 'Feedback summary — training & trainer', desc: 'Average scores per training and per trainer, response-weighted.', run: feedbackSummary },

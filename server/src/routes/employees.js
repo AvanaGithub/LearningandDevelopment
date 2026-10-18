@@ -152,6 +152,15 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
   }
 });
 
+// External-course reports this employee submitted from the learner portal.
+router.get('/:id/external-courses', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      'SELECT * FROM external_courses WHERE employee_id=$1 ORDER BY id DESC', [Number(req.params.id)]);
+    res.json(rows);
+  } catch (e) { next(e); }
+});
+
 // Hard delete is allowed ONLY for a record with no history (a mistaken
 // entry): no training participation, attendance, batch membership or
 // feedback. Anything with history must be deactivated instead (ISO 13485).

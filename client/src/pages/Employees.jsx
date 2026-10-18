@@ -90,8 +90,13 @@ export default function Employees() {
   const [deactReason, setDeactReason] = useState(null); // null = closed
   const [importing, setImporting] = useState(false);
   const [allEmps, setAllEmps] = useState([]);   // full list for the manager picker
+  const [extList, setExtList] = useState([]);   // external-course reports of the open employee
   const [err, setErr] = useState(null);
   useEffect(() => { api.get('/api/employees?active=true').then(setAllEmps).catch(() => {}); }, []);
+  useEffect(() => {
+    setExtList([]);
+    if (sel?.id) api.get(`/api/employees/${sel.id}/external-courses`).then(setExtList).catch(() => {});
+  }, [sel?.id]);
 
   const doImport = async (objs) => {
     // Never create duplicates: rows matching an existing Zoho ID, e-mail or
@@ -310,9 +315,20 @@ export default function Employees() {
               <dt>Location</dt><dd>{sel.location || '—'}</dd>
               <dt>Status</dt><dd><span className={'pill ' + (sel.active ? 'good' : 'crit')}>{sel.active ? 'Active' : 'Inactive'}</span></dd>
             </dl>
-            <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>
-              Training history appears here once the Trainings module is live — history follows the person across entities.
-            </p>
+            {extList.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 14, margin: '14px 0 6px' }}>External courses &amp; certifications</h3>
+                {extList.map((x) => (
+                  <div key={x.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '5px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
+                    <span style={{ flex: 1, minWidth: 160 }}><b>{x.course}</b>{x.provider ? ` · ${x.provider}` : ''}</span>
+                    {x.completed_on && <span className="pill soft mini">{fmtDate(x.completed_on)}</span>}
+                    {(x.files || []).map((f) => (
+                      <a key={f.id} href={'/api/files/' + f.id} target="_blank" rel="noreferrer">📄 {f.name}</a>
+                    ))}
+                  </div>
+                ))}
+              </>
+            )}
             {err && <p className="err">{err}</p>}
             {isAdmin && deactReason === null && (
               <div className="form-actions" style={{ flexWrap: 'wrap' }}>

@@ -25,12 +25,12 @@ export const api = {
 };
 
 // Upload one or more files; resolves to [{id, name}] for attaching to records.
-export async function apiUpload(fileList) {
+export async function apiUpload(fileList, url = '/api/files') {
   const fd = new FormData();
   [...fileList].forEach((f) => fd.append('files', f));
-  const res = await fetch('/api/files', { method: 'POST', body: fd, credentials: 'same-origin' });
+  const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+  if (!res.ok) { const e = new Error(data.error || `Upload failed (${res.status})`); e.need_login = data.need_login; throw e; }
   return data;
 }
 
@@ -43,6 +43,13 @@ export const entLabel = (e) => (e === 'ASS' ? 'ASSP' : e);
 // for open answers.
 export const qText = (q) => (typeof q === 'string' ? q : (q && q.q) || '');
 export const qIsText = (q) => Boolean(q && typeof q === 'object' && q.type === 'text');
+export const qIsFile = (q) => Boolean(q && typeof q === 'object' && q.type === 'file');
+// Render a feedback answer cell: number, text, or uploaded files.
+export const fbAnswer = (v) => {
+  if (v == null || v === '') return null;
+  if (Array.isArray(v)) return v;   // file list — caller renders links
+  return v;
+};
 export const ENTITY_NAMES = {
   AMD: 'Avana Medical Devices',
   ASS: 'Avana Surgical Systems',

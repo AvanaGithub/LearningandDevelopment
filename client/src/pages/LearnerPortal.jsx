@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate, fmtRange, statusPill, TRN_STATUSES, qText, qIsText } from '../api.js';
+import { api, apiUpload, fmtDate, fmtRange, statusPill, TRN_STATUSES, qText, qIsText, qIsFile } from '../api.js';
+import FileAnswer from '../components/FileAnswer.jsx';
 import { useAuth, useToast } from '../App.jsx';
 
 // The learner's own portal: my trainings (check-in, feedback), trainings
@@ -11,6 +12,7 @@ export default function LearnerPortal() {
   const [data, setData] = useState(null);
   const [fb, setFb] = useState(null);           // {t, scores, comment}
   const [slots, setSlots] = useState({});       // training_id -> chosen slot
+  const [ext, setExt] = useState(null);         // external-course submission draft
   const [err, setErr] = useState(null);
 
   const load = () => api.get('/api/learner/overview').then(setData).catch((e) => setErr(e.message));
@@ -139,6 +141,58 @@ export default function LearnerPortal() {
               </div>
             ))}
 
+            <div className="page-head" style={{ marginTop: 18 }}>
+              <h2>Other courses &amp; certifications</h2>
+              {!ext && <button className="btn gold" onClick={() => setExt({ course: '', provider: '', completed_on: '', notes: '', files: [] })}>+ Submit a course report</button>}
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+              Took a course outside the Learning Hub? Submit it here with the certificate or report (PDF, Word or image) so L&amp;D has it on record.
+            </p>
+            {ext && (
+              <form className="card" onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  await api.post('/api/learner/external-courses', ext);
+                  toast('Course report submitted — thank you! L&D can now see it.');
+                  setExt(null); load();
+                } catch (e2) { setErr(e2.message); }
+              }}>
+                <div className="form-grid">
+                  <div><label>Course / certification name *</label>
+                    <input required value={ext.course} onChange={(e) => setExt({ ...ext, course: e.target.value })} placeholder="e.g. PMP Certification" /></div>
+                  <div><label>Provider / institute</label>
+                    <input value={ext.provider} onChange={(e) => setExt({ ...ext, provider: e.target.value })} placeholder="e.g. Coursera, PMI" /></div>
+                  <div><label>Completed on</label>
+                    <input type="date" value={ext.completed_on} onChange={(e) => setExt({ ...ext, completed_on: e.target.value })} /></div>
+                  <div style={{ gridColumn: '1/-1' }}><label>Notes</label>
+                    <input value={ext.notes} onChange={(e) => setExt({ ...ext, notes: e.target.value })} placeholder="anything L&D should know" /></div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <label className="muted mini">Certificate / report (PDF, Word or image)</label>
+                  <FileAnswer value={ext.files} uploadTo={(fl) => apiUpload(fl, '/api/learner/upload')}
+                    onChange={(v) => setExt({ ...ext, files: v })} />
+                </div>
+                <div className="form-actions">
+                  <button className="btn gold" type="submit">Submit report</button>
+                  <button className="btn" type="button" onClick={() => setExt(null)}>Cancel</button>
+                </div>
+              </form>
+            )}
+            {(data.external || []).map((x) => (
+              <div key={x.id} className="card" style={{ padding: '10px 16px' }}>
+                <div className="toolbar" style={{ marginBottom: 0, alignItems: 'center' }}>
+                  <b>{x.course}</b>
+                  {x.provider && <span className="muted mini">{x.provider}</span>}
+                  {x.completed_on && <span className="pill soft mini">{fmtDate(x.completed_on)}</span>}
+                  <span style={{ flex: 1 }} />
+                  {(x.files || []).map((f) => (
+                    <a key={f.id} className="btn" style={{ textDecoration: 'none' }} href={'/api/files/' + f.id} target="_blank" rel="noreferrer">📄 {f.name}</a>
+                  ))}
+                </div>
+                {x.notes && <p className="muted mini" style={{ margin: '6px 0 0' }}>{x.notes}</p>}
+              </div>
+            ))}
+
             <div className="page-head" style={{ marginTop: 18 }}><h2>Upcoming trainings</h2></div>
             <div className="card" style={{ padding: 0 }}>
               <table>
@@ -164,8 +218,11 @@ export default function LearnerPortal() {
             <h3>Feedback — {fb.t.title}</h3>
             {fb.t.questions.map((q, i) => (
               <div key={i} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{qIsText(q) && <span className="muted"> (optional)</span>}</div>
-                {qIsText(q) ? (
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{qText(q)}{(qIsText(q) || qIsFile(q)) && <span className="muted"> (optional)</span>}</div>
+                {qIsFile(q) ? (
+                  <FileAnswer value={fb.scores[i]} uploadTo={(fl) => apiUpload(fl, '/api/learner/upload')}
+                    onChange={(v) => setFb({ ...fb, scores: { ...fb.scores, [i]: v } })} />
+                ) : qIsText(q) ? (
                   <textarea rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }}
                     value={fb.scores[i] || ''} onChange={(e) => setFb({ ...fb, scores: { ...fb.scores, [i]: e.target.value } })} />
                 ) : (
@@ -182,7 +239,7 @@ export default function LearnerPortal() {
             <input style={{ width: '100%', margin: '10px 0' }} placeholder="What should be improved? (optional)"
               value={fb.comment} onChange={(e) => setFb({ ...fb, comment: e.target.value })} />
             <div className="form-actions">
-              <button className="btn gold" disabled={!fb.t.questions.every((q, i) => qIsText(q) || fb.scores[i] >= 1)} onClick={sendFb}>Submit feedback</button>
+              <button className="btn gold" disabled={!fb.t.questions.every((q, i) => qIsText(q) || qIsFile(q) || fb.scores[i] >= 1)} onClick={sendFb}>Submit feedback</button>
               <button className="btn" onClick={() => setFb(null)}>Cancel</button>
             </div>
           </div>

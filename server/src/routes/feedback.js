@@ -8,18 +8,25 @@ const router = express.Router();
 // open answer; qT/qIsTxt normalize both shapes.
 const qT = (q) => (typeof q === 'string' ? q : (q && q.q) || '');
 const qIsTxt = (q) => Boolean(q && typeof q === 'object' && q.type === 'text');
+const qIsFile = (q) => Boolean(q && typeof q === 'object' && q.type === 'file');
 const normQ = (x) => {
   if (typeof x === 'string') return x.trim().slice(0, 300);
-  if (x && x.q) return { q: String(x.q).trim().slice(0, 300), type: 'text' };
+  if (x && x.q) return { q: String(x.q).trim().slice(0, 300), type: x.type === 'file' ? 'file' : 'text' };
   return '';
 };
-// Ratings are required; text answers are optional. Returns the cleaned
-// scores object or null when a rating is missing/invalid.
+// Ratings are required; text answers and file uploads are optional.
+// Returns the cleaned scores object or null when a rating is missing.
 function cleanScores(questions, scores) {
   const out = {};
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     const v = scores?.[i];
+    if (qIsFile(q)) {
+      const arr = (Array.isArray(v) ? v : []).filter((f) => f && f.id)
+        .slice(0, 5).map((f) => ({ id: String(f.id).slice(0, 60), name: String(f.name || 'file').slice(0, 150) }));
+      if (arr.length) out[i] = arr;
+      continue;
+    }
     if (qIsTxt(q)) {
       const s = String(v ?? '').trim();
       if (s) out[i] = s.slice(0, 1000);
@@ -191,4 +198,4 @@ router.post('/:trainingId', requireRole('admin'), express.json(), async (req, re
 });
 
 module.exports = router;
-module.exports.helpers = { qT, qIsTxt, normQ, cleanScores };
+module.exports.helpers = { qT, qIsTxt, qIsFile, normQ, cleanScores };

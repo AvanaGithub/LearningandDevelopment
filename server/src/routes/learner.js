@@ -66,12 +66,43 @@ router.get('/overview', async (req, res, next) => {
        WHERE t.status IN ('planned','confirmed','in_progress')
          AND EXISTS (SELECT 1 FROM training_days d WHERE d.training_id=t.id AND d.day >= $1::date)
        ORDER BY (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) LIMIT 20`, [today]);
+    const { rows: external } = await query(
+      'SELECT * FROM external_courses WHERE employee_id=$1 ORDER BY id DESC', [me.id]);
     res.json({
       employee: { id: me.id, name: me.name, department: me.department, division: me.division, entity: me.entity },
-      today,
+      today, external,
       my: my.map((t) => ({ ...t, questions: t.feedback_questions || DEFAULT_QUESTIONS, feedback_questions: undefined })),
       open, upcoming,
     });
+  } catch (e) { next(e); }
+});
+
+// File upload from the learner portal (feedback answers, external-course
+// reports) — pdf/word/images up to 15 MB each.
+const filesRoute = require('./files');
+router.post('/upload', filesRoute.upload.array('files', 5), async (req, res, next) => {
+  try {
+    res.status(201).json(await filesRoute.saveFiles(req.files, req.user.id));
+  } catch (e) { next(e); }
+});
+
+// Submit a report for a course taken outside the hub.
+router.post('/external-courses', express.json(), async (req, res, next) => {
+  try {
+    const me = await myEmployee(req);
+    if (!me) return res.status(403).json({ error: 'No employee record matches your e-mail — contact L&D.' });
+    const b = req.body || {};
+    const course = String(b.course || '').trim();
+    if (!course) return res.status(400).json({ error: 'Course name is required' });
+    const files = (Array.isArray(b.files) ? b.files : [])
+      .filter((f) => f && f.id).map((f) => ({ id: String(f.id), name: String(f.name || 'file') }));
+    const { rows } = await query(
+      `INSERT INTO external_courses (employee_id, course, provider, completed_on, notes, files)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [me.id, course.slice(0, 200), b.provider?.trim() || null, b.completed_on || null,
+       b.notes?.trim() || null, JSON.stringify(files)]);
+    await audit(null, 'external_course.submit', 'employee', me.id, { course, files: files.length });
+    res.status(201).json(rows[0]);
   } catch (e) { next(e); }
 });
 

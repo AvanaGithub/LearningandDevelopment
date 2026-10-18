@@ -50,4 +50,19 @@ router.get('/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Store uploaded files' metadata; shared by the participant/learner
+// upload routes so feedback answers and external-course reports can
+// carry attachments.
+async function saveFiles(reqFiles, userId) {
+  const out = [];
+  for (const f of reqFiles || []) {
+    await query('INSERT INTO files (id, orig_name, mime, size, uploaded_by) VALUES ($1,$2,$3,$4,$5)',
+      [f.filename, f.originalname, f.mimetype, f.size, userId || null]);
+    out.push({ id: f.filename, name: f.originalname });
+  }
+  return out;
+}
+
 module.exports = router;
+module.exports.upload = upload;
+module.exports.saveFiles = saveFiles;
