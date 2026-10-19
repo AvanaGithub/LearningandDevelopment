@@ -376,4 +376,6 @@ async function sendTest() {
 module.exports = {
   notifyNomination, announceSelfNomination, nominationDigest, attendanceDigest,
   runDigests, sendTest, certAvailable,
+  // Shared Microsoft Graph credentials — also used by the Forms score sync.
+  cfg, graphToken,
 };

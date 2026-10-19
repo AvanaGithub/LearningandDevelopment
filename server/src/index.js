@@ -41,6 +41,7 @@ app.use('/api/settings', require('./routes/settings').router);
 app.use('/api/files', require('./routes/files'));
 app.use('/api/mavericks', require('./routes/mavericks'));
 app.use('/api/joiners', require('./routes/joiners'));
+app.use('/api/assessments', require('./routes/assessments'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
@@ -64,6 +65,10 @@ migrate().then(() => {
   const mailer = require('./mailer');
   setTimeout(() => mailer.runDigests().catch(() => {}), 30 * 1000);
   setInterval(() => mailer.runDigests().catch(() => {}), 60 * 60 * 1000);
+  // Assessment scores sync hourly from each linked Microsoft Forms workbook.
+  const formsync = require('./formsync');
+  setTimeout(() => formsync.runFormsSync().catch(() => {}), 90 * 1000);
+  setInterval(() => formsync.runFormsSync().catch(() => {}), 60 * 60 * 1000);
 }).catch(e => {
   console.error('[startup] migration failed:', e.message);
   process.exit(1);

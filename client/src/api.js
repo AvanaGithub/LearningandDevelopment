@@ -35,6 +35,15 @@ export async function apiUpload(fileList, url = '/api/files') {
 }
 
 export const ENTITIES = ['AMD', 'ASS', 'ATS'];
+
+// Assessment grading bands: (marks ÷ max) × 100 → grade + colour.
+export const GRADES = [
+  { min: 80, label: 'Very Good', color: '#1a7f37' },
+  { min: 60, label: 'Good', color: '#1f6feb' },
+  { min: 50, label: 'Satisfactory', color: '#b58a00' },
+  { min: 0, label: 'Training is Needed', color: '#c62828' },
+];
+export const gradeOf = (pct) => GRADES.find((g) => pct >= g.min) || GRADES[GRADES.length - 1];
 // 'ASS' stays the internal code (DB constraints, existing rows); it is
 // always DISPLAYED as ASSP.
 export const entLabel = (e) => (e === 'ASS' ? 'ASSP' : e);

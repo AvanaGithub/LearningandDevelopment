@@ -183,6 +183,79 @@ router.post('/:id/assessments', requireRole('admin'), express.json(), async (req
   } catch (e) { next(e); }
 });
 
+// Edit an assessment — incl. linking the Microsoft Form and its response
+// workbook for score sync.
+router.patch('/assessments/:aid', requireRole('admin'), express.json(), async (req, res, next) => {
+  try {
+    const aid = Number(req.params.aid);
+    const { rows: cur } = await query('SELECT * FROM mav_assessments WHERE id=$1', [aid]);
+    if (!cur.length) return res.status(404).json({ error: 'Not found' });
+    const b = req.body || {};
+    const https = (u) => {
+      const s = String(u || '').trim();
+      if (!s) return null;
+      if (!/^https:\/\//i.test(s)) throw Object.assign(new Error('Links must start with https://'), { status: 400 });
+      return s;
+    };
+    const f = {
+      max_marks: b.max_marks !== undefined && Number(b.max_marks) > 0 ? Number(b.max_marks) : cur[0].max_marks,
+      assess_date: b.assess_date !== undefined ? (b.assess_date || null) : cur[0].assess_date,
+      external_form_url: b.external_form_url !== undefined ? https(b.external_form_url) : cur[0].external_form_url,
+      workbook_url: b.workbook_url !== undefined ? https(b.workbook_url) : cur[0].workbook_url,
+    };
+    const { rows } = await query(
+      `UPDATE mav_assessments SET max_marks=$2, assess_date=$3, external_form_url=$4,
+         workbook_url=$5, sync_error=NULL WHERE id=$1 RETURNING *`,
+      [aid, f.max_marks, f.assess_date, f.external_form_url, f.workbook_url]);
+    await audit(req.user.id, 'mav.assessment_update', 'mav_assessment', aid, { changes: b });
+    res.json(rows[0]);
+  } catch (e) { e.status === 400 ? res.status(400).json({ error: e.message }) : next(e); }
+});
+
+// Excel import of scores (client parses and matches the sheet rows).
+router.post('/assessments/:aid/import', requireRole('admin'), express.json(), async (req, res, next) => {
+  try {
+    const aid = Number(req.params.aid);
+    const { rows: cur } = await query('SELECT max_marks FROM mav_assessments WHERE id=$1', [aid]);
+    if (!cur.length) return res.status(404).json({ error: 'Not found' });
+    const max = Number(cur[0].max_marks);
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ error: 'No rows to import' });
+    let ok = 0;
+    for (const r of rows) {
+      const v = Number(r.score);
+      if (!Number.isFinite(v) || !r.employee_id) continue;
+      await query(
+        `INSERT INTO mav_scores (assessment_id, employee_id, score, source, submitted_at)
+         VALUES ($1,$2,$3,'import',$4)
+         ON CONFLICT (assessment_id, employee_id)
+         DO UPDATE SET score=$3, source='import', submitted_at=$4`,
+        [aid, Number(r.employee_id), Math.max(0, Math.min(v, max)), r.submitted_at || null]);
+      ok++;
+    }
+    await audit(req.user.id, 'mav.assessment_import', 'mav_assessment', aid, { imported: ok });
+    res.json({ ok });
+  } catch (e) { next(e); }
+});
+
+// Pull scores from the linked Microsoft Forms response workbook right now.
+router.post('/assessments/:aid/sync', requireRole('admin'), async (req, res, next) => {
+  try {
+    const aid = Number(req.params.aid);
+    const { rows: cur } = await query('SELECT * FROM mav_assessments WHERE id=$1', [aid]);
+    if (!cur.length) return res.status(404).json({ error: 'Not found' });
+    if (!cur[0].workbook_url) return res.status(400).json({ error: 'No response workbook linked — edit the assessment and paste the Form\'s "Open results in Excel" share link.' });
+    try {
+      const r = await require('../formsync').syncMavAssessment(cur[0]);
+      await audit(req.user.id, 'mav.assessment_sync', 'mav_assessment', aid, r);
+      res.json({ ok: true, ...r });
+    } catch (e2) {
+      await query('UPDATE mav_assessments SET sync_error=$2, last_synced=now() WHERE id=$1', [aid, String(e2.message).slice(0, 400)]);
+      res.status(502).json({ error: e2.message });
+    }
+  } catch (e) { next(e); }
+});
+
 router.put('/assessments/:aid/scores', requireRole('admin'), express.json(), async (req, res, next) => {
   try {
     const aid = Number(req.params.aid);
@@ -192,8 +265,8 @@ router.put('/assessments/:aid/scores', requireRole('admin'), express.json(), asy
         await query('DELETE FROM mav_scores WHERE assessment_id=$1 AND employee_id=$2', [aid, Number(s.employee_id)]);
       } else {
         await query(
-          `INSERT INTO mav_scores (assessment_id, employee_id, score) VALUES ($1,$2,$3)
-           ON CONFLICT (assessment_id, employee_id) DO UPDATE SET score=$3`,
+          `INSERT INTO mav_scores (assessment_id, employee_id, score, source) VALUES ($1,$2,$3,'manual')
+           ON CONFLICT (assessment_id, employee_id) DO UPDATE SET score=$3, source='manual'`,
           [aid, Number(s.employee_id), Number(s.score)]);
       }
     }

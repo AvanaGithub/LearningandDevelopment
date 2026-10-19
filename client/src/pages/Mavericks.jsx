@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate, entLabel } from '../api.js';
+import { api, fmtDate, entLabel, gradeOf } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
+import ScoreImport from '../components/ScoreImport.jsx';
+
+const GradeBadge = ({ pct }) => {
+  const g = gradeOf(pct);
+  return <span style={{ background: g.color, color: '#fff', borderRadius: 999, padding: '1px 9px', fontSize: 11, whiteSpace: 'nowrap' }}>{g.label}</span>;
+};
 
 const M_STATUS = {
   classroom: ['Classroom', 'soft'], field: ['Field', 'warn'],
@@ -24,6 +30,8 @@ export default function Mavericks() {
   const [form, setForm] = useState(null);
   const [assessForm, setAssessForm] = useState(null);
   const [scoresFor, setScoresFor] = useState(null);
+  const [linkFor, setLinkFor] = useState(null);     // Microsoft Form / workbook links
+  const [importFor, setImportFor] = useState(null); // Excel score import
   const [err, setErr] = useState(null);
 
   const loadList = () => api.get('/api/mavericks').then(setBatches).catch((e) => setErr(e.message));
@@ -278,6 +286,8 @@ export default function Mavericks() {
                 const scored = sel.members
                   .map((m) => ({ m, s: sc.find((x) => x.employee_id === m.employee_id) }))
                   .filter((x) => x.s);
+                const eligible = sel.members.filter((m) => !a.division || m.division === a.division);
+                const pending = eligible.filter((m) => !sc.some((x) => x.employee_id === m.employee_id));
                 return (
                   <div key={a.id} className="card" style={{ padding: 0, overflowX: 'auto' }}>
                     <div className="toolbar" style={{ padding: '12px 14px 0', marginBottom: 6 }}>
@@ -285,6 +295,20 @@ export default function Mavericks() {
                       <span className="pill soft mini">{a.division || 'All divisions'}</span>
                       <span className="muted mini">{fmtDate(a.assess_date)} · out of {Number(a.max_marks)}</span>
                       <span style={{ flex: 1 }} />
+                      {a.external_form_url && <a className="btn" href={a.external_form_url} target="_blank" rel="noreferrer">Open Form</a>}
+                      {isAdmin && a.workbook_url && <button className="btn" onClick={async () => {
+                        try {
+                          const r = await api.post(`/api/mavericks/assessments/${a.id}/sync`, {});
+                          toast(`Synced from the Form — ${r.matched} matched${r.unmatched ? `, ${r.unmatched} respondent(s) not in this batch` : ''}.`);
+                          open(sel.id);
+                        } catch (e2) { setErr(e2.message); }
+                      }}>⟳ Sync now</button>}
+                      {isAdmin && <button className="btn" onClick={() => setImportFor(a)}>Import</button>}
+                      {isAdmin && <button className="btn" onClick={() => setLinkFor({
+                        id: a.id, label: a.atype || a.name, max_marks: a.max_marks,
+                        assess_date: a.assess_date ? String(a.assess_date).slice(0, 10) : '',
+                        external_form_url: a.external_form_url || '', workbook_url: a.workbook_url || '',
+                      })}>🔗 Form</button>}
                       {isAdmin && <button className="btn" onClick={() => setScoresFor({
                         ...a,
                         entries: [...sel.members]
@@ -295,14 +319,36 @@ export default function Mavericks() {
                           })),
                       })}>Enter scores</button>}
                       <button className="btn" onClick={() => toXlsx(`Scores-${(a.atype || a.name).replace(/[^\w]+/g, '-')}.xlsx`,
-                        ['Employee ID', 'Employee Name', 'Assessment type', 'Date', `Score /${Number(a.max_marks)}`, 'Out of 100', 'Result'],
-                        scored.map(({ m, s }) => [m.zoho_emp_id || '', m.name, a.atype || a.name, a.assess_date ? a.assess_date.slice(0, 10) : '',
-                          Number(s.score), pct100(s.score, a.max_marks), pct100(s.score, a.max_marks) >= 80 ? 'Passed' : 'Failed']))}>⬇</button>
+                        ['Employee ID', 'Employee Name', 'Assessment type', 'Date', `Score /${Number(a.max_marks)}`, 'Out of 100', 'Grade', 'Result', 'Status'],
+                        [...scored.map(({ m, s }) => [m.zoho_emp_id || '', m.name, a.atype || a.name, a.assess_date ? a.assess_date.slice(0, 10) : '',
+                          Number(s.score), pct100(s.score, a.max_marks), gradeOf(pct100(s.score, a.max_marks)).label,
+                          pct100(s.score, a.max_marks) >= 80 ? 'Passed' : 'Failed', 'Completed']),
+                         ...pending.map((m) => [m.zoho_emp_id || '', m.name, a.atype || a.name, a.assess_date ? a.assess_date.slice(0, 10) : '',
+                          '', '', '', '', 'Pending'])])}>⬇</button>
                     </div>
-                    <table style={{ minWidth: 720 }}>
+                    {(a.workbook_url || a.sync_error) && (
+                      <p className="muted mini" style={{ padding: '0 14px', margin: '0 0 4px' }}>
+                        {a.workbook_url && <>Auto-sync from the Form's workbook is on (hourly).
+                          {a.last_synced && <> Last checked {new Date(a.last_synced).toLocaleString('en-IN')}.</>}</>}
+                        {a.sync_error && <span style={{ color: 'var(--crit)' }}> Sync problem: {a.sync_error}</span>}
+                      </p>
+                    )}
+                    {pending.length > 0 && (
+                      <details style={{ padding: '0 14px', margin: '0 0 6px' }}>
+                        <summary style={{ cursor: 'pointer', fontSize: 12 }}>
+                          <b style={{ color: 'var(--crit)' }}>Not yet completed ({pending.length})</b> — click to view
+                        </summary>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '6px 0' }}>
+                          {pending.map((m) => (
+                            <span key={m.employee_id} className="pill crit mini" title={[m.zoho_emp_id, m.division].filter(Boolean).join(' · ')}>{m.name}</span>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                    <table style={{ minWidth: 760 }}>
                       <thead><tr><th>Employee ID</th><th>Employee Name</th><th>Assessment type</th><th>Date</th>
                         <th style={{ textAlign: 'right' }}>Score /{Number(a.max_marks)}</th>
-                        <th style={{ textAlign: 'right' }}>Out of 100</th><th>Result</th></tr></thead>
+                        <th style={{ textAlign: 'right' }}>Out of 100</th><th>Grade</th><th>Result</th></tr></thead>
                       <tbody>
                         {scored.map(({ m, s }) => {
                           const p = pct100(s.score, a.max_marks);
@@ -314,11 +360,12 @@ export default function Mavericks() {
                               <td className="muted">{fmtDate(a.assess_date)}</td>
                               <td style={{ textAlign: 'right' }}>{Number(s.score)}</td>
                               <td style={{ textAlign: 'right', fontWeight: 600 }}>{p}</td>
+                              <td><GradeBadge pct={p} /></td>
                               <td><span className={'pill ' + (p >= 80 ? 'good' : 'crit')}>{p >= 80 ? 'Passed' : 'Failed'}</span></td>
                             </tr>
                           );
                         })}
-                        {!scored.length && <tr><td colSpan={7} className="muted">No scores entered yet.</td></tr>}
+                        {!scored.length && <tr><td colSpan={8} className="muted">No scores entered yet.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -380,9 +427,9 @@ export default function Mavericks() {
                       entries[i] = { ...en, score: e.target.value === '' ? '' : Number(e.target.value) };
                       setScoresFor({ ...scoresFor, entries });
                     }} />
-                  <span style={{ width: 96, textAlign: 'right', fontSize: 12 }}>
+                  <span style={{ width: 200, textAlign: 'right', fontSize: 12 }}>
                     {p === null ? <span className="muted">—</span> : <>
-                      <b>{p}</b>/100 <span className={'pill mini ' + (p >= 80 ? 'good' : 'crit')}>{p >= 80 ? 'Pass' : 'Fail'}</span>
+                      <b>{p}</b>/100 <GradeBadge pct={p} />
                     </>}
                   </span>
                 </div>
@@ -397,6 +444,52 @@ export default function Mavericks() {
             </div>
           </form>
         </div>
+      )}
+
+      {linkFor && (
+        <div className="modal-backdrop" onClick={() => setLinkFor(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await api.patch('/api/mavericks/assessments/' + linkFor.id, linkFor);
+                toast('Assessment updated.');
+                setLinkFor(null); open(sel.id);
+              } catch (e2) { setErr(e2.message); }
+            }}>
+            <h3>Microsoft Form — {linkFor.label}</h3>
+            <div className="form-grid">
+              <div><label>Assessment date</label>
+                <input type="date" value={linkFor.assess_date} onChange={(e) => setLinkFor({ ...linkFor, assess_date: e.target.value })} /></div>
+              <div><label>Maximum marks</label>
+                <input type="number" min="1" value={linkFor.max_marks} onChange={(e) => setLinkFor({ ...linkFor, max_marks: e.target.value })} /></div>
+            </div>
+            <div style={{ marginTop: 8 }}><label>Microsoft Form link (what trainees answer)</label>
+              <input style={{ width: '100%' }} value={linkFor.external_form_url} placeholder="https://forms.office.com/…"
+                onChange={(e) => setLinkFor({ ...linkFor, external_form_url: e.target.value })} /></div>
+            <div style={{ marginTop: 8 }}><label>Response workbook link (for automatic score sync)</label>
+              <input style={{ width: '100%' }} value={linkFor.workbook_url} placeholder="https://… (Form → Responses → Open results in Excel → share link)"
+                onChange={(e) => setLinkFor({ ...linkFor, workbook_url: e.target.value })} />
+              <p className="muted mini" style={{ margin: '4px 0 0' }}>
+                The Form must be a <b>quiz</b> set to "Only people in my organization can respond".
+                Scores then sync hourly, matched to the batch trainees by e-mail; manual entries are
+                never overwritten.
+              </p></div>
+            {err && <p className="err">{err}</p>}
+            <div className="form-actions">
+              <button className="btn gold" type="submit">Save</button>
+              <button className="btn" type="button" onClick={() => setLinkFor(null)}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {importFor && (
+        <ScoreImport title={importFor.atype || importFor.name}
+          people={sel.members.map((m) => ({ id: m.employee_id, name: m.name, email: m.email, zoho_emp_id: m.zoho_emp_id }))}
+          maxMarks={Number(importFor.max_marks)} postTo={`/api/mavericks/assessments/${importFor.id}/import`}
+          onClose={() => setImportFor(null)}
+          onDone={(msg) => { toast(msg); setImportFor(null); open(sel.id); }} />
       )}
     </>
   );

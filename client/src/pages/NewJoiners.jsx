@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, fmtDate, fmtRange, entLabel, toISODay } from '../api.js';
+import { api, fmtDate, fmtRange, entLabel, toISODay, gradeOf } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 
 // New-joiner onboarding: everyone who joined recently, their induction
@@ -225,7 +225,7 @@ export default function NewJoiners() {
                         return (
                           <div key={a.id} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
                             {a.atype}: <b>{p}</b>/100{' '}
-                            <span className={'pill mini ' + (p >= 80 ? 'good' : 'crit')}>{p >= 80 ? 'Pass' : 'Fail'}</span>
+                            <span style={{ background: gradeOf(p).color, color: '#fff', borderRadius: 999, padding: '0 7px', fontSize: 10 }}>{gradeOf(p).label}</span>
                           </div>
                         );
                       }) : (!isAdmin && <span className="muted">—</span>)}
@@ -301,7 +301,7 @@ export default function NewJoiners() {
                   <span style={{ flex: 1 }}>{a.atype}{a.assess_date ? ` · ${fmtDate(a.assess_date)}` : ''}</span>
                   <span className="muted mini">{Number(a.score)}/{Number(a.max_marks)}</span>
                   <b>{p}</b>/100
-                  <span className={'pill mini ' + (p >= 80 ? 'good' : 'crit')}>{p >= 80 ? 'Pass' : 'Fail'}</span>
+                  <span style={{ background: gradeOf(p).color, color: '#fff', borderRadius: 999, padding: '0 8px', fontSize: 11 }}>{gradeOf(p).label}</span>
                   <button className="btn link" onClick={() => delAssessment(a.id)}>✕</button>
                 </div>
               );
