@@ -38,6 +38,7 @@ const EMPTY = {
   mandatory: false, status: 'planned', validity_months: '',
   agenda_file: null, agenda_name: '', reason: '',
   nom_self: false, nom_manager: false, nom_leader: false, nom_deadline: '', completion_deadline: '',
+  req_assessment: false, req_feedback: false, req_certificate: false, cert_auto: false, cert_template_id: '',
 };
 
 export default function Trainings() {
@@ -84,6 +85,7 @@ export default function Trainings() {
   const [importing, setImporting] = useState(false);
   const [qr, setQr] = useState(null);             // {title, url, desc}
   const [budgetFor, setBudgetFor] = useState(null); // budget-approval modal
+  const [progressFor, setProgressFor] = useState(null); // workflow progress modal
   const [err, setErr] = useState(null);
 
   const doImport = async (objs) => {
@@ -129,6 +131,10 @@ export default function Trainings() {
   };
   useEffect(() => { load(); }, [status]);
   useEffect(() => { api.get('/api/employees?active=true').then(setEmps).catch(() => {}); }, []);
+  const [certTpls, setCertTpls] = useState([]);
+  useEffect(() => {
+    if (isAdmin) api.get('/api/certs/templates').then(setCertTpls).catch(() => {});
+  }, [isAdmin]);
 
   const openDetail = (id) => {
     setErr(null); setRemoving(null); setAddEmps([]);
@@ -191,6 +197,9 @@ export default function Trainings() {
       nom_self: Boolean(t.nom_self), nom_manager: Boolean(t.nom_manager), nom_leader: Boolean(t.nom_leader),
       nom_deadline: t.nom_deadline ? t.nom_deadline.slice(0, 10) : '',
       completion_deadline: t.completion_deadline ? t.completion_deadline.slice(0, 10) : '',
+      req_assessment: Boolean(t.req_assessment), req_feedback: Boolean(t.req_feedback),
+      req_certificate: Boolean(t.req_certificate), cert_auto: Boolean(t.cert_auto),
+      cert_template_id: t.cert_template_id || '',
     });
     setErr(null);
   };
@@ -355,6 +364,37 @@ export default function Trainings() {
                 </p>
               </div>
             )}
+            <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+              <b style={{ fontSize: 13 }}>After the training <span className="muted mini">(runs when the status becomes Completed)</span></b>
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', margin: '8px 0' }}>
+                {[['req_assessment', 'Assessment required'],
+                  ['req_feedback', 'Feedback required'],
+                  ['req_certificate', 'Certificate required']].map(([k, label]) => (
+                  <label key={k} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.checked })} />
+                    {label}
+                  </label>
+                ))}
+                {form.req_certificate && (
+                  <select value={form.cert_auto ? String(form.cert_template_id || 0) : ''} style={{ fontSize: 12 }}
+                    onChange={(e) => setForm({
+                      ...form,
+                      cert_auto: e.target.value !== '',
+                      cert_template_id: e.target.value === '' || e.target.value === '0' ? '' : Number(e.target.value),
+                    })}>
+                    <option value="">Certificate: issue manually (Certificates tab)</option>
+                    <option value="0">Auto-issue &amp; e-mail — built-in design</option>
+                    {certTpls.map((tp) => <option key={tp.id} value={tp.id}>Auto-issue &amp; e-mail — {tp.name}</option>)}
+                  </select>
+                )}
+              </div>
+              <p className="muted mini" style={{ margin: 0 }}>
+                On completion each participant is e-mailed their next pending step — assessment first,
+                then feedback (the learner-portal feedback form opens automatically) — with a sign-in
+                link to Avana Academy. Auto-issued certificates go out once every required step is done.
+                Track everyone under <b>⚙ Progress</b> on the training.
+              </p>
+            </div>
           </div>
           {form.numDays > 1 && form.from && form.to &&
             <p className="muted mini" style={{ marginTop: 8 }}>Blocked automatically: {fmtDate(form.from)} → {fmtDate(form.to)} · {form.numDays} consecutive days.</p>}
@@ -534,6 +574,9 @@ export default function Trainings() {
                   desc: 'Scan or share the link — responses tag to this training\'s feedback form automatically.',
                 })}>▦ Feedback QR</button>
               )}
+              {(isAdmin || me.role === 'leader') && (
+                <button className="btn" onClick={() => setProgressFor(sel)}>⚙ Progress</button>
+              )}
               {isAdmin && (
                 <button className="btn" onClick={() => setBudgetFor(sel)}>₹ Budget approval</button>
               )}
@@ -546,6 +589,102 @@ export default function Trainings() {
         </div>
       )}
       {budgetFor && <BudgetApproval t={budgetFor} onClose={() => setBudgetFor(null)} />}
+      {progressFor && <WfProgress t={progressFor} isAdmin={isAdmin} toast={toast} onClose={() => setProgressFor(null)} />}
     </>
+  );
+}
+
+// Per-participant workflow progress: attended → assessment → feedback →
+// certificate, with what each person is still pending on.
+function WfProgress({ t, isAdmin, toast, onClose }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => api.get(`/api/workflow/${t.id}/progress`).then(setData).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, [t.id]);
+
+  const STEPS = { attended: 'Attended', assessment: 'Assessment', feedback: 'Feedback', certificate: 'Certificate' };
+  const cols = data ? ['attended',
+    ...(data.training.req_assessment ? ['assessment'] : []),
+    ...(data.training.req_feedback ? ['feedback'] : []),
+    ...(data.training.req_certificate ? ['certificate'] : [])] : [];
+  const done = data ? data.participants.filter((p) => p.complete).length : 0;
+
+  const runNow = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/api/workflow/${t.id}/run`, {});
+      toast('Workflow pass done — due notifications sent, due certificates issued.');
+      load();
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+
+  const cell = (p, step) => {
+    const s = p.steps.find((x) => x.step === step);
+    if (!s) return <td key={step} className="muted mini">—</td>;
+    return (
+      <td key={step}>
+        {s.state === 'done'
+          ? (step === 'certificate' && s.file_id
+            ? <a href={'/api/files/' + s.file_id} target="_blank" rel="noreferrer" title={s.detail || ''}>🎓 ✓</a>
+            : <span className="pill good mini" title={s.detail || ''}>✓{step === 'attended' && s.detail ? ' ' + s.detail : ''}</span>)
+          : <span className="pill crit mini" title={s.detail || ''}>
+              pending{s.notified ? ' · ✉ reminded' : ''}
+            </span>}
+      </td>
+    );
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 820 }}>
+        <h3>Workflow progress — {t.title}{t.batch ? ' — ' + t.batch : ''}</h3>
+        {!data && !err && <p className="muted">Loading…</p>}
+        {err && <p className="err">{err}</p>}
+        {data && (
+          <>
+            <p className="muted mini">
+              Steps: {cols.map((c) => STEPS[c]).join(' → ')}
+              {cols.length === 1 && ' — tick the required steps on Edit → "After the training" to track more.'}
+              {' '}· <b>{done}</b>/{data.participants.length} fully complete
+              {data.training.status !== 'completed' && <> · <span style={{ color: 'var(--crit)' }}>notifications start once the training is marked Completed</span></>}
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead><tr><th>Participant</th>{cols.map((c) => <th key={c}>{STEPS[c]}</th>)}<th>Next step</th></tr></thead>
+                <tbody>
+                  {data.participants.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.name} <span className="muted mini">{p.zoho_emp_id || ''}</span></td>
+                      {cols.map((c) => cell(p, c))}
+                      <td>{p.complete ? <span className="pill good mini">All done 🎉</span> : <span className="muted mini">{STEPS[p.next_step]}</span>}</td>
+                    </tr>
+                  ))}
+                  {!data.participants.length && <tr><td colSpan={cols.length + 2} className="muted">No participants yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="form-actions">
+              {isAdmin && data.training.status === 'completed' && (
+                <button className="btn gold" disabled={busy} onClick={runNow}>
+                  {busy ? 'Running…' : '▶ Run workflow now'}</button>
+              )}
+              <button className="btn" onClick={() => toXlsx(
+                `Progress-${t.code || t.id}.xlsx`,
+                ['Employee ID', 'Participant', ...cols.map((c) => STEPS[c]), 'Next step'],
+                data.participants.map((p) => [p.zoho_emp_id || '', p.name,
+                  ...cols.map((c) => {
+                    const s = p.steps.find((x) => x.step === c);
+                    return s ? (s.state === 'done' ? 'Done' : 'Pending') : '';
+                  }),
+                  p.complete ? 'All done' : STEPS[p.next_step]]),
+                'Progress')}>⬇ Export</button>
+              <button className="btn" onClick={onClose}>Close</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

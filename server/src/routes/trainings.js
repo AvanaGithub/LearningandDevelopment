@@ -83,6 +83,12 @@ const pickFields = (b) => ({
   status: STATUSES.includes(b.status) ? b.status : 'planned',
   validity_months: Number(b.validity_months) > 0 ? Math.floor(Number(b.validity_months)) : null,
   agenda_file: b.agenda_file || null,
+  // Post-training workflow configuration.
+  req_assessment: Boolean(b.req_assessment),
+  req_feedback: Boolean(b.req_feedback),
+  req_certificate: Boolean(b.req_certificate),
+  cert_auto: Boolean(b.cert_auto),
+  cert_template_id: Number(b.cert_template_id) > 0 ? Number(b.cert_template_id) : null,
 });
 
 // Nomination settings are controlled completely by the super admin;
@@ -128,11 +134,13 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
     const { rows } = await query(
       `INSERT INTO trainings (code, title, batch, category, department, division, mode, location, trainer_type, trainer_name, agency,
          hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file,
-         nom_self, nom_manager, nom_leader, nom_deadline, completion_deadline)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *`,
+         nom_self, nom_manager, nom_leader, nom_deadline, completion_deadline,
+         req_assessment, req_feedback, req_certificate, cert_auto, cert_template_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
       [code[0].code, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file,
-       nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline]);
+       nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline,
+       f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
     if (nf.nom_self) mailer.announceSelfNomination(rows[0].id);
@@ -156,11 +164,13 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
          trainer_type=$9, trainer_name=$10, agency=$11, hours_per_day=$12, seats=$13, mandatory=$14,
          status=$15, validity_months=$16, agenda_file=$17,
          nom_self=$18, nom_manager=$19, nom_leader=$20, nom_deadline=$21, completion_deadline=$22,
+         req_assessment=$23, req_feedback=$24, req_certificate=$25, cert_auto=$26, cert_template_id=$27,
          updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name,
        f.agency, f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file,
-       nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline]);
+       nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline,
+       f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id]);
     if (b.days !== undefined) {
       const days = [...new Set(b.days)].sort();
       if (!validDays(days)) return res.status(400).json({ error: 'Pick between 1 and 60 training dates' });
@@ -176,6 +186,11 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     // Training just completed -> attendance digest to managers and leaders.
     if (cur[0].status !== 'completed' && rows[0].status === 'completed' && !cur[0].att_digest_sent) {
       mailer.attendanceDigest(id).catch(() => {});
+    }
+    // ...and the configured post-training workflow starts (assessment /
+    // feedback notifications, auto certificates).
+    if (cur[0].status !== 'completed' && rows[0].status === 'completed') {
+      require('../workflow').kick(id).catch((e) => console.error('[workflow]', e.message));
     }
     res.json(rows[0]);
   } catch (e) { next(e); }
