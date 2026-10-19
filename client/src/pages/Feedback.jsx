@@ -379,14 +379,16 @@ export default function Feedback() {
                 export responses there and use <b>Import</b> to bring the scores in.</p>
             )}
             {(results.pending || []).length > 0 && (
-              <div style={{ margin: '6px 0 10px' }}>
-                <span className="muted mini"><b>Not yet responded ({results.pending.length}):</b></span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              <details style={{ margin: '6px 0 10px' }}>
+                <summary style={{ cursor: 'pointer', fontSize: 12 }}>
+                  <b style={{ color: 'var(--crit)' }}>Not yet responded ({results.pending.length})</b> — click to view
+                </summary>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                   {results.pending.map((p) => (
                     <span key={p.id} className="pill crit mini" title={[p.zoho_emp_id, p.department].filter(Boolean).join(' · ')}>{p.name}</span>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
             <div style={{ overflowX: 'auto' }}>
               <table>
