@@ -40,6 +40,12 @@ const DEFAULTS = {
     announce_subject: 'Nominations open — {training}',
     announce_body: 'Dear {name},\n\nNominations are now open for the training below — you can nominate yourself.\n\nTraining: {training} ({code})\nDates: {dates}\nMode: {mode}\nNominate by: {deadline}\n\nUse the button below — you will sign in with Zoho so the nomination is recorded in your name.',
   },
+  // Who can approve training budget requests (Training Plan → Budget
+  // approval). Editable by the super admin on the Settings screen.
+  budget_approvers: [
+    { name: 'Vivek', email: 'vivek@avanasurgical.com' },
+    { name: 'Sundar', email: 'sundar@avanamedical.com' },
+  ],
   // Outlook / Microsoft 365 notifications. The password is write-only:
   // it is stored here but never sent back to any client.
   smtp: {

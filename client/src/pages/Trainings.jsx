@@ -6,6 +6,7 @@ import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
 import QrModal from '../components/QrModal.jsx';
 import MSel from '../components/MSel.jsx';
+import BudgetApproval from '../components/BudgetApproval.jsx';
 
 const IMPORT_FIELDS = [
   { key: 'title', label: 'Training title', req: true, syn: ['title', 'training title', 'training name', 'training', 'name'] },
@@ -82,6 +83,7 @@ export default function Trainings() {
   const [removing, setRemoving] = useState(null); // {empId, reason}
   const [importing, setImporting] = useState(false);
   const [qr, setQr] = useState(null);             // {title, url, desc}
+  const [budgetFor, setBudgetFor] = useState(null); // budget-approval modal
   const [err, setErr] = useState(null);
 
   const doImport = async (objs) => {
@@ -533,6 +535,9 @@ export default function Trainings() {
                 })}>▦ Feedback QR</button>
               )}
               {isAdmin && (
+                <button className="btn" onClick={() => setBudgetFor(sel)}>₹ Budget approval</button>
+              )}
+              {isAdmin && (
                 <button className="btn" style={{ color: 'var(--crit)' }} onClick={() => deleteTrn(sel)}>Delete…</button>
               )}
               <button className="btn" onClick={() => setSel(null)}>Close</button>
@@ -540,6 +545,7 @@ export default function Trainings() {
           </div>
         </div>
       )}
+      {budgetFor && <BudgetApproval t={budgetFor} onClose={() => setBudgetFor(null)} />}
     </>
   );
 }

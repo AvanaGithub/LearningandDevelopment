@@ -243,6 +243,37 @@ export default function Settings() {
             </div>
           ))}
         </details>
+
+        <details className="card scard setcard" style={{ marginBottom: 16 }}>
+          <summary><span className="sicon">✅</span>Budget approvers
+            <span className="pill soft mini">{(settings.budget_approvers || []).length}</span>
+          </summary>
+          <p className="muted mini" style={{ margin: '6px 0 10px' }}>
+            Who can approve training budget requests (Trainings → ₹ Budget approval). They decide via
+            a secure e-mail link, or from their dashboard when signed in.
+          </p>
+          {(settings.budget_approvers || []).map((a, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', fontSize: 13 }}>
+              <span style={{ flex: 1 }}><b>{a.name}</b> <span className="muted mini">{a.email}</span></span>
+              <button className="btn link" onClick={() => {
+                const next = (settings.budget_approvers || []).filter((_, j) => j !== i);
+                if (!next.length) { alert('Keep at least one approver.'); return; }
+                save('budget_approvers', next, `${a.name} removed from approvers.`);
+              }}>✕</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <input placeholder="Name" id="bap-name" style={{ width: 130 }} />
+            <input placeholder="E-mail" id="bap-email" style={{ flex: 1, minWidth: 180 }} />
+            <button className="btn" onClick={() => {
+              const name = document.getElementById('bap-name').value.trim();
+              const email = document.getElementById('bap-email').value.trim().toLowerCase();
+              if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('Enter a name and a valid e-mail.'); return; }
+              save('budget_approvers', [...(settings.budget_approvers || []), { name, email }], `${name} added as approver.`);
+              document.getElementById('bap-name').value = ''; document.getElementById('bap-email').value = '';
+            }}>+ Add</button>
+          </div>
+        </details>
       </div>
 
       <Strip icon="✉">Integrations</Strip>

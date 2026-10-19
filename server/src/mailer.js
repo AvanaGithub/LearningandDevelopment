@@ -359,6 +359,81 @@ async function runDigests() {
   for (const r of rows) await nominationDigest(r.id).catch((e) => console.error('[digest]', e.message));
 }
 
+// ---- Training budget approvals ------------------------------------------
+
+const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+
+async function budgetContext(apr) {
+  const tr = await loadTraining(apr.training_id);
+  if (!tr) return null;
+  const { rows: pc } = await query(
+    'SELECT count(*)::int AS n FROM training_participants WHERE training_id=$1', [apr.training_id]);
+  return { tr, participants: pc[0].n };
+}
+
+// To the approver: full training details + budget, with the secure
+// review link (approve / reject / request clarification + comments).
+async function budgetRequest(apr) {
+  const c = await cfg();
+  if (!c) throw new Error('E-mail notifications are not configured/enabled (Settings → E-mail notifications)');
+  const ctx = await budgetContext(apr);
+  if (!ctx) throw new Error('Training not found');
+  const { tr, participants } = ctx;
+  const link = `${SITE}/p/approve/${apr.token}`;
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">${LOGO}
+    <p>Dear ${esc(apr.approver_name || 'Approver')},</p>
+    <p><b>${esc(apr.requester_name || 'L&D')}</b> has requested your approval for the training budget below.</p>
+    <table style="font-size:14px;border-collapse:collapse">
+      ${row('Training', '<b>' + esc(tr._label) + '</b> (' + esc(tr.code || '') + ')')}
+      ${row('Dates', esc(tr._dates))}
+      ${tr.location ? row('Location', esc(tr.location)) : ''}
+      ${tr.mode ? row('Mode', esc(tr.mode)) : ''}
+      ${tr.trainer_name ? row('Trainer', esc(tr.trainer_name) + (tr.agency ? ' · ' + esc(tr.agency) : '')) : ''}
+      ${row('Participants', String(participants))}
+      ${row('Requested budget', '<b style="font-size:16px">' + inr(apr.amount) + '</b>')}
+      ${apr.note ? row('Note', esc(apr.note)) : ''}
+    </table>
+    <p><a href="${link}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:9px 20px;border-radius:8px;font-weight:600">Review &amp; decide</a></p>
+    <p style="color:#8a7a5c;font-size:12px">The link lets you approve, reject or ask for clarification, with comments — no sign-in needed.</p>
+    ${FOOT}</div>`;
+  await sendMail(c, apr.approver_email, `Budget approval requested — ${tr._label} (${inr(apr.amount)})`, html);
+}
+
+// To the requester: the decision summary (ready to share with Accounts).
+async function budgetDecision(apr) {
+  const c = await cfg();
+  if (!c) return;
+  const ctx = await budgetContext(apr);
+  if (!ctx) return;
+  const { tr, participants } = ctx;
+  let to = null;
+  if (apr.requested_by) {
+    const { rows } = await query('SELECT email FROM users WHERE id=$1', [apr.requested_by]);
+    to = rows[0]?.email || null;
+  }
+  if (!to) to = c.notify || c.user;
+  const WORD = { approved: 'APPROVED', rejected: 'REJECTED', clarify: 'Clarification requested' };
+  const COLOR = { approved: '#1a7f37', rejected: '#c62828', clarify: '#b58a00' };
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">${LOGO}
+    <p>Dear ${esc(apr.requester_name || 'L&D')},</p>
+    <p><b>${esc(apr.approver_name || apr.approver_email)}</b> has responded to your budget request:</p>
+    <p style="font-size:18px;font-weight:700;color:${COLOR[apr.status] || '#2b2317'}">${WORD[apr.status] || esc(apr.status)}</p>
+    <table style="font-size:14px;border-collapse:collapse">
+      ${row('Training', '<b>' + esc(tr._label) + '</b> (' + esc(tr.code || '') + ')')}
+      ${row('Dates', esc(tr._dates))}
+      ${tr.location ? row('Location', esc(tr.location)) : ''}
+      ${row('Participants', String(participants))}
+      ${row('Budget', '<b>' + inr(apr.amount) + '</b>')}
+      ${apr.decision_comment ? row('Comments', esc(apr.decision_comment)) : ''}
+      ${row('Decided on', new Date(apr.decided_at || Date.now()).toLocaleString('en-IN'))}
+      ${row('Approver', esc(apr.approver_name || '') + ' &lt;' + esc(apr.approver_email) + '&gt;')}
+    </table>
+    ${apr.status === 'approved' ? '<p>This summary can be shared with Accounts as the approval record.</p>' : ''}
+    ${apr.status === 'clarify' ? '<p>Update the details and send a fresh request from the Training Plan.</p>' : ''}
+    ${SITE_BTN}${FOOT}</div>`;
+  await sendMail(c, to, `Budget ${WORD[apr.status] ? WORD[apr.status].toLowerCase() : apr.status} — ${tr._label}`, html);
+}
+
 // Settings-screen test button — works even before sending is enabled, so
 // credentials can be verified first.
 async function sendTest() {
@@ -375,7 +450,7 @@ async function sendTest() {
 
 module.exports = {
   notifyNomination, announceSelfNomination, nominationDigest, attendanceDigest,
-  runDigests, sendTest, certAvailable,
+  runDigests, sendTest, certAvailable, budgetRequest, budgetDecision,
   // Shared Microsoft Graph credentials — also used by the Forms score sync.
   cfg, graphToken,
 };

@@ -4,6 +4,49 @@ import { api, ENTITIES, ENTITY_NAMES, DIVISIONS, DEPARTMENTS, fmtDay, inr, toISO
 import { useAuth, useSettings } from '../App.jsx';
 import MSel from '../components/MSel.jsx';
 
+// Budget requests addressed to the signed-in user (Vivek / Sundar):
+// approve, reject or ask for clarification right from the dashboard.
+function MyApprovals() {
+  const [rows, setRows] = useState(null);
+  const load = () => api.get('/api/budget/mine').then(setRows).catch(() => setRows(null));
+  useEffect(() => { load(); }, []);
+  if (!rows || !rows.length) return null;
+  const decide = async (r, action, label) => {
+    let comment = '';
+    if (action === 'approved') {
+      if (!confirm(`Approve ₹${Number(r.amount).toLocaleString('en-IN')} for "${r.title}"?`)) return;
+      comment = prompt('Comments (optional):') || '';
+    } else {
+      comment = prompt(`${label} — add a comment for the requester:`) || '';
+      if (!comment.trim()) return;
+    }
+    try {
+      await api.post(`/api/budget/${r.id}/decide`, { action, comment });
+      load();
+    } catch (e) { alert(e.message); }
+  };
+  return (
+    <div className="card" style={{ borderLeft: '4px solid var(--gold, #c8930a)', marginBottom: 16 }}>
+      <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>💰 Budget approvals waiting for you ({rows.length})</h3>
+      {rows.map((r) => (
+        <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
+          <span style={{ flex: 1, minWidth: 220 }}>
+            <b>{r.title}{r.batch ? ' — ' + r.batch : ''}</b>
+            <span className="muted mini"> · {r.participants} participant(s)
+              {r.first_day ? ` · ${fmtDay(r.first_day)}${r.last_day && r.last_day !== r.first_day ? ' → ' + fmtDay(r.last_day) : ''}` : ''}
+              {r.location ? ` · ${r.location}` : ''} · requested by {r.requester_name || '—'}</span>
+            {r.note && <div className="muted mini">Note: {r.note}</div>}
+          </span>
+          <b style={{ whiteSpace: 'nowrap' }}>{inr(r.amount)}</b>
+          <button className="btn" style={{ color: 'var(--good)' }} onClick={() => decide(r, 'approved', 'Approve')}>✓ Approve</button>
+          <button className="btn" onClick={() => decide(r, 'clarify', 'Request clarification')}>Clarify…</button>
+          <button className="btn" style={{ color: 'var(--crit)' }} onClick={() => decide(r, 'rejected', 'Reject')}>✕ Reject</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const nav = useNavigate();
   const { user: me } = useAuth();
@@ -120,6 +163,7 @@ export default function Dashboard() {
           {showF ? '▲' : '▼'} Filters{nFilters ? ` · ${nFilters} active` : ''}
         </button>
       </div>
+      <MyApprovals />
       {showF && (
         <div className="card">
           <div className="toolbar" style={{ marginBottom: 0 }}>

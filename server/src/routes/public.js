@@ -163,4 +163,40 @@ router.post('/fb/:token', express.json(), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---- Budget approval by secure token link (no sign-in needed) -----------
+
+async function approvalByToken(token) {
+  const { rows } = await query(
+    `SELECT b.*, t.title, t.batch, t.code, t.location, t.mode, t.trainer_name, t.agency,
+            (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
+            (SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id) AS last_day,
+            (SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id) AS participants
+     FROM budget_approvals b JOIN trainings t ON t.id=b.training_id
+     WHERE b.token=$1`, [String(token || '')]);
+  return rows[0] || null;
+}
+
+router.get('/approval/:token', async (req, res, next) => {
+  try {
+    const a = await approvalByToken(req.params.token);
+    if (!a) return res.status(404).json({ error: 'This link is not valid any more.' });
+    const { token, requested_by, ...safe } = a;
+    res.json(safe);
+  } catch (e) { next(e); }
+});
+
+router.post('/approval/:token', express.json(), async (req, res, next) => {
+  try {
+    const a = await approvalByToken(req.params.token);
+    if (!a) return res.status(404).json({ error: 'This link is not valid any more.' });
+    const { applyDecision } = require('./budget');
+    const out = await applyDecision(a, req.body?.action, req.body?.comment,
+      (a.approver_name || a.approver_email) + ' (via e-mail link)', null);
+    res.json({ ok: true, status: out.status, decided_at: out.decided_at });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
+});
+
 module.exports = router;
