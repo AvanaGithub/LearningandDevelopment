@@ -126,7 +126,7 @@ router.post('/training/:tid/generate', express.json(), async (req, res, next) =>
     }
     const label = `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
     const dates = t.first_day
-      ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} → ${fmtD(t.last_day)}`)
+      ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} - ${fmtD(t.last_day)}`)
       : null;
     const { rows: emps } = await query(
       `SELECT e.id, e.name, e.zoho_emp_id FROM employees e
