@@ -52,7 +52,7 @@ export default function PublicApprove() {
     <div className="login-wrap">
       <div className="login-card" style={{ textAlign: 'left', maxWidth: 480 }}>
         <h1 style={{ fontSize: 18, textAlign: 'center' }}>Avana Learning Hub</h1>
-        <p className="login-sub" style={{ textAlign: 'center' }}>Training budget approval</p>
+        <p className="login-sub" style={{ textAlign: 'center' }}>{a?.is_od ? 'OD event budget approval' : 'Training budget approval'}</p>
         {!a && !err && <p className="muted" style={{ textAlign: 'center' }}>Loading…</p>}
         {err && !a && <p className="login-err">{err}</p>}
         {a && done && (
@@ -66,12 +66,12 @@ export default function PublicApprove() {
           <>
             <table style={{ fontSize: 14, margin: '6px 0 10px' }}>
               <tbody>
-                <Row k="Training"><b>{a.title}{a.batch ? ' — ' + a.batch : ''}</b> <span className="muted mini">({a.code})</span></Row>
+                <Row k={a.is_od ? 'OD event' : 'Training'}><b>{a.title}{a.batch ? ' — ' + a.batch : ''}</b>{!a.is_od && <span className="muted mini"> ({a.code})</span>}</Row>
                 <Row k="Dates">{dates}</Row>
                 {a.location && <Row k="Location">{a.location}</Row>}
                 {a.mode && <Row k="Mode">{a.mode}</Row>}
                 {a.trainer_name && <Row k="Trainer">{a.trainer_name}{a.agency ? ' · ' + a.agency : ''}</Row>}
-                <Row k="Participants">{a.participants}</Row>
+                <Row k={a.is_od ? 'Employees' : 'Participants'}>{a.participants}</Row>
                 <Row k="Requested budget"><b style={{ fontSize: 17 }}>{inr(a.amount)}</b></Row>
                 {a.note && <Row k="Note">{a.note}</Row>}
                 <Row k="Requested by">{a.requester_name || '—'} · {new Date(a.created_at).toLocaleDateString('en-IN')}</Row>

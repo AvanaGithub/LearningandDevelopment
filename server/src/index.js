@@ -24,7 +24,10 @@ app.use('/api', requireAuth);
 app.use('/api', (req, res, next) => {
   if (req.user.role !== 'learner') return next();
   const ok = req.path.startsWith('/learner') ||
-    (req.method === 'GET' && (req.path.startsWith('/settings') || req.path.startsWith('/files/')));
+    (req.method === 'GET' && (req.path.startsWith('/settings') || req.path.startsWith('/files/'))) ||
+    // OD-authorised people keep their OD module and budget approvals even
+    // when their portal role is learner (the OD routes re-check access).
+    (req.user.od_access && (req.path.startsWith('/od') || req.path.startsWith('/budget')));
   if (!ok) return res.status(403).json({ error: 'Learner access is limited to your own trainings' });
   next();
 });
@@ -45,6 +48,7 @@ app.use('/api/assessments', require('./routes/assessments'));
 app.use('/api/budget', require('./routes/budget'));
 app.use('/api/certs', require('./routes/certs'));
 app.use('/api/workflow', require('./routes/workflow'));
+app.use('/api/od', require('./routes/od'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {

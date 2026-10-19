@@ -78,9 +78,10 @@ export default function Shell() {
         {isAdmin && <NavLink to="/certificates" className={link}>Certificates</NavLink>}
         {isAdmin && <NavLink to="/expenses" className={link}>Expenses</NavLink>}
         <NavLink to="/reports" className={link}>Reports</NavLink>
-        {(isAdmin || isLeader || hasJoiners) && <div className="sect">Programmes</div>}
+        {(isAdmin || isLeader || hasJoiners || user.od) && <div className="sect">Programmes</div>}
         {(isAdmin || isLeader) && <NavLink to="/mavericks" className={link}>Mavericks</NavLink>}
         {hasJoiners && <NavLink to="/joiners" className={link}>New Joiners</NavLink>}
+        {user.od && <NavLink to="/od" className={link}>Org Development</NavLink>}
         {isAdmin && (<>
           <div className="sect">Administration</div>
           <NavLink to="/users" className={link}>Users &amp; Access</NavLink>

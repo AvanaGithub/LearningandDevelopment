@@ -378,12 +378,29 @@ async function runDigests() {
 
 const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
+// Works for both targets: a training or an OD event (normalised shape).
 async function budgetContext(apr) {
+  if (apr.od_event_id) {
+    const { rows } = await query('SELECT * FROM od_events WHERE id=$1', [apr.od_event_id]);
+    if (!rows.length) return null;
+    const e = rows[0];
+    return {
+      kind: 'OD event',
+      tr: {
+        _label: e.name, code: 'OD',
+        _dates: fmtD(e.event_date)
+          ? (e.end_date && e.end_date !== e.event_date ? `${fmtD(e.event_date)} – ${fmtD(e.end_date)}` : fmtD(e.event_date))
+          : 'dates to be announced',
+        location: e.location, mode: null, trainer_name: null,
+      },
+      participants: e.employee_count,
+    };
+  }
   const tr = await loadTraining(apr.training_id);
   if (!tr) return null;
   const { rows: pc } = await query(
     'SELECT count(*)::int AS n FROM training_participants WHERE training_id=$1', [apr.training_id]);
-  return { tr, participants: pc[0].n };
+  return { kind: 'Training', tr, participants: pc[0].n };
 }
 
 // To the approver: full training details + budget, with the secure
@@ -392,19 +409,19 @@ async function budgetRequest(apr) {
   const c = await cfg();
   if (!c) throw new Error('E-mail notifications are not configured/enabled (Settings → E-mail notifications)');
   const ctx = await budgetContext(apr);
-  if (!ctx) throw new Error('Training not found');
-  const { tr, participants } = ctx;
+  if (!ctx) throw new Error('Training / event not found');
+  const { kind, tr, participants } = ctx;
   const link = `${SITE}/p/approve/${apr.token}`;
   const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">${LOGO}
     <p>Dear ${esc(apr.approver_name || 'Approver')},</p>
-    <p><b>${esc(apr.requester_name || 'L&D')}</b> has requested your approval for the training budget below.</p>
+    <p><b>${esc(apr.requester_name || 'L&D')}</b> has requested your approval for the ${kind === 'OD event' ? 'Organization Development event' : 'training'} budget below.</p>
     <table style="font-size:14px;border-collapse:collapse">
-      ${row('Training', '<b>' + esc(tr._label) + '</b> (' + esc(tr.code || '') + ')')}
+      ${row(kind, '<b>' + esc(tr._label) + '</b>' + (kind === 'Training' ? ' (' + esc(tr.code || '') + ')' : ''))}
       ${row('Dates', esc(tr._dates))}
       ${tr.location ? row('Location', esc(tr.location)) : ''}
       ${tr.mode ? row('Mode', esc(tr.mode)) : ''}
       ${tr.trainer_name ? row('Trainer', esc(tr.trainer_name) + (tr.agency ? ' · ' + esc(tr.agency) : '')) : ''}
-      ${row('Participants', String(participants))}
+      ${row(kind === 'OD event' ? 'Employees' : 'Participants', String(participants))}
       ${row('Requested budget', '<b style="font-size:16px">' + inr(apr.amount) + '</b>')}
       ${apr.note ? row('Note', esc(apr.note)) : ''}
     </table>
@@ -420,7 +437,7 @@ async function budgetDecision(apr) {
   if (!c) return;
   const ctx = await budgetContext(apr);
   if (!ctx) return;
-  const { tr, participants } = ctx;
+  const { kind, tr, participants } = ctx;
   let to = null;
   if (apr.requested_by) {
     const { rows } = await query('SELECT email FROM users WHERE id=$1', [apr.requested_by]);
@@ -434,17 +451,17 @@ async function budgetDecision(apr) {
     <p><b>${esc(apr.approver_name || apr.approver_email)}</b> has responded to your budget request:</p>
     <p style="font-size:18px;font-weight:700;color:${COLOR[apr.status] || '#2b2317'}">${WORD[apr.status] || esc(apr.status)}</p>
     <table style="font-size:14px;border-collapse:collapse">
-      ${row('Training', '<b>' + esc(tr._label) + '</b> (' + esc(tr.code || '') + ')')}
+      ${row(kind, '<b>' + esc(tr._label) + '</b>' + (kind === 'Training' ? ' (' + esc(tr.code || '') + ')' : ''))}
       ${row('Dates', esc(tr._dates))}
       ${tr.location ? row('Location', esc(tr.location)) : ''}
-      ${row('Participants', String(participants))}
+      ${row(kind === 'OD event' ? 'Employees' : 'Participants', String(participants))}
       ${row('Budget', '<b>' + inr(apr.amount) + '</b>')}
       ${apr.decision_comment ? row('Comments', esc(apr.decision_comment)) : ''}
       ${row('Decided on', new Date(apr.decided_at || Date.now()).toLocaleString('en-IN'))}
       ${row('Approver', esc(apr.approver_name || '') + ' &lt;' + esc(apr.approver_email) + '&gt;')}
     </table>
     ${apr.status === 'approved' ? '<p>This summary can be shared with Accounts as the approval record.</p>' : ''}
-    ${apr.status === 'clarify' ? '<p>Update the details and send a fresh request from the Training Plan.</p>' : ''}
+    ${apr.status === 'clarify' ? '<p>Update the details and send a fresh request from the hub.</p>' : ''}
     ${SITE_BTN}${FOOT}</div>`;
   await sendMail(c, to, `Budget ${WORD[apr.status] ? WORD[apr.status].toLowerCase() : apr.status} — ${tr._label}`, html);
 }

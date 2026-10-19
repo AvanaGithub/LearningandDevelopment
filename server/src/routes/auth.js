@@ -120,7 +120,7 @@ router.get('/me', async (req, res) => {
   const crypto2 = require('crypto');
   const hash = crypto2.createHash('sha256').update(token).digest('hex');
   const { rows } = await query(
-    `SELECT u.id, u.email, u.name, u.role, u.entity, s.act_role FROM sessions s
+    `SELECT u.id, u.email, u.name, u.role, u.entity, u.od_access, s.act_role FROM sessions s
      JOIN users u ON u.id=s.user_id
      WHERE s.token_hash=$1 AND s.expires_at > now() AND u.active=TRUE`, [hash]);
   let user = rows[0] || null;
@@ -130,6 +130,8 @@ router.get('/me', async (req, res) => {
       user.role = user.act_role;
     }
     delete user.act_role;
+    // Can this person open the Organization Development module?
+    try { user.od = await require('./od').isOD(user); } catch { user.od = false; }
   }
   res.json({ ...base, user });
 });

@@ -20,6 +20,7 @@ export default function Users() {
     try {
       await api.patch('/api/users/' + editU.id, {
         name: editU.name.trim(), role: editU.role, entity: editU.entity,
+        od_access: editU.od_access,
         reason: editU.reason?.trim() || undefined,
       });
       toast(`${editU.name} updated — change recorded in the audit trail.`);
@@ -68,13 +69,13 @@ export default function Users() {
               <tr key={u.id}>
                 <td>{u.name}{u.id === me.id && <span className="muted"> (you)</span>}</td>
                 <td>{u.email}</td>
-                <td>{ROLES[u.role]}</td>
+                <td>{ROLES[u.role]}{u.od_access && <span className="pill soft mini" style={{ marginLeft: 6 }} title="Organization Development module access">OD</span>}</td>
                 <td>{entLabel(u.entity)}</td>
                 <td><span className={'pill ' + (u.active ? 'good' : 'crit')}>{u.active ? 'Active' : 'Disabled'}</span></td>
                 <td className="muted">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {me.role === 'super_admin' && (
-                    <button className="btn link" onClick={() => { setErr(null); setEditU({ id: u.id, name: u.name, email: u.email, role: u.role, entity: u.entity, reason: '' }); }}>Edit</button>
+                    <button className="btn link" onClick={() => { setErr(null); setEditU({ id: u.id, name: u.name, email: u.email, role: u.role, entity: u.entity, od_access: Boolean(u.od_access), reason: '' }); }}>Edit</button>
                   )}
                   {u.id !== me.id && (u.role !== 'super_admin' || me.role === 'super_admin') && (
                     u.active
@@ -110,6 +111,13 @@ export default function Users() {
                 <select value={editU.entity} onChange={(e) => setEditU({ ...editU, entity: e.target.value })}>
                   {ENTITIES.map((x) => <option key={x} value={x}>{entLabel(x)}</option>)}
                 </select></div>
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={editU.od_access}
+                    onChange={(e) => setEditU({ ...editU, od_access: e.target.checked })} />
+                  Organization Development module access (confidential — OD events &amp; budgets)
+                </label>
+              </div>
               <div style={{ gridColumn: '1/-1' }}><label>Reason for the change (goes to the audit trail)</label>
                 <input value={editU.reason} placeholder="e.g. promoted to leader"
                   onChange={(e) => setEditU({ ...editU, reason: e.target.value })} /></div>

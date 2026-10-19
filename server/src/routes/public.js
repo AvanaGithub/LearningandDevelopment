@@ -167,11 +167,16 @@ router.post('/fb/:token', express.json(), async (req, res, next) => {
 
 async function approvalByToken(token) {
   const { rows } = await query(
-    `SELECT b.*, t.title, t.batch, t.code, t.location, t.mode, t.trainer_name, t.agency,
-            (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
-            (SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id) AS last_day,
-            (SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id) AS participants
-     FROM budget_approvals b JOIN trainings t ON t.id=b.training_id
+    `SELECT b.*,
+            coalesce(t.title, o.name) AS title, t.batch, coalesce(t.code, 'OD') AS code,
+            coalesce(t.location, o.location) AS location, t.mode, t.trainer_name, t.agency,
+            (b.od_event_id IS NOT NULL) AS is_od,
+            coalesce((SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id), o.event_date) AS first_day,
+            coalesce((SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id), o.end_date, o.event_date) AS last_day,
+            coalesce((SELECT count(*)::int FROM training_participants p WHERE p.training_id=t.id), o.employee_count) AS participants
+     FROM budget_approvals b
+     LEFT JOIN trainings t ON t.id=b.training_id
+     LEFT JOIN od_events o ON o.id=b.od_event_id
      WHERE b.token=$1`, [String(token || '')]);
   return rows[0] || null;
 }

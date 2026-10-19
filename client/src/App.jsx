@@ -11,6 +11,7 @@ import Attendance from './pages/Attendance.jsx';
 import Feedback from './pages/Feedback.jsx';
 import Assessments from './pages/Assessments.jsx';
 import Certificates from './pages/Certificates.jsx';
+import OrgDev from './pages/OrgDev.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Reports from './pages/Reports.jsx';
 import PublicCheckin from './pages/PublicCheckin.jsx';
@@ -72,7 +73,10 @@ export default function App() {
           <Route path="/p/approve/:token" element={<PublicApprove />} />
           <Route path="/login" element={auth.user ? <Navigate to="/" replace /> : <Login />} />
           {auth.user?.role === 'learner' ? (
-            <Route path="*" element={<LearnerPortal />} />
+            <>
+              {auth.user.od && <Route path="/od" element={<LearnerOD />} />}
+              <Route path="*" element={<LearnerPortal />} />
+            </>
           ) : (
           <Route element={<RequireUser user={auth.user}><Shell /></RequireUser>}>
             <Route path="/" element={<Dashboard />} />
@@ -83,6 +87,7 @@ export default function App() {
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/assessments" element={<RequireLeader><Assessments /></RequireLeader>} />
             <Route path="/certificates" element={<RequireAdmin><Certificates /></RequireAdmin>} />
+            <Route path="/od" element={<RequireOD><OrgDev /></RequireOD>} />
             <Route path="/expenses" element={<RequireAdmin><Expenses /></RequireAdmin>} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/mavericks" element={<RequireLeader><Mavericks /></RequireLeader>} />
@@ -116,4 +121,23 @@ function RequireLeader({ children }) {
   const { user } = useAuth();
   if (!['leader', 'admin', 'super_admin'].includes(user.role)) return <Navigate to="/" replace />;
   return children;
+}
+
+// Organization Development is confidential: authorised OD users, the
+// budget approvers and the super admin only (the server enforces it too).
+function RequireOD({ children }) {
+  const { user } = useAuth();
+  if (!user.od) return <Navigate to="/" replace />;
+  return children;
+}
+
+// An OD-authorised person whose portal role is Learner still gets the OD
+// module, on top of their own portal.
+function LearnerOD() {
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      <p style={{ marginBottom: 12 }}><a href="/">← Back to my portal</a></p>
+      <OrgDev />
+    </div>
+  );
 }

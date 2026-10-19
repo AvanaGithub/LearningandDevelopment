@@ -14,7 +14,7 @@ function MyApprovals() {
   const decide = async (r, action, label) => {
     let comment = '';
     if (action === 'approved') {
-      if (!confirm(`Approve ₹${Number(r.amount).toLocaleString('en-IN')} for "${r.title}"?`)) return;
+      if (!confirm(`Approve ₹${Number(r.amount).toLocaleString('en-IN')} for "${r.title || r.od_name}"?`)) return;
       comment = prompt('Comments (optional):') || '';
     } else {
       comment = prompt(`${label} — add a comment for the requester:`) || '';
@@ -31,10 +31,14 @@ function MyApprovals() {
       {rows.map((r) => (
         <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
           <span style={{ flex: 1, minWidth: 220 }}>
-            <b>{r.title}{r.batch ? ' — ' + r.batch : ''}</b>
-            <span className="muted mini"> · {r.participants} participant(s)
-              {r.first_day ? ` · ${fmtDay(r.first_day)}${r.last_day && r.last_day !== r.first_day ? ' → ' + fmtDay(r.last_day) : ''}` : ''}
-              {r.location ? ` · ${r.location}` : ''} · requested by {r.requester_name || '—'}</span>
+            <b>{r.od_name ? 'OD event: ' + r.od_name : `${r.title}${r.batch ? ' — ' + r.batch : ''}`}</b>
+            <span className="muted mini">
+              {r.od_name
+                ? <> · {r.od_employees || 0} employee(s){r.od_date ? ` · ${fmtDay(r.od_date)}` : ''}{r.od_location ? ` · ${r.od_location}` : ''}</>
+                : <> · {r.participants} participant(s)
+                  {r.first_day ? ` · ${fmtDay(r.first_day)}${r.last_day && r.last_day !== r.first_day ? ' → ' + fmtDay(r.last_day) : ''}` : ''}
+                  {r.location ? ` · ${r.location}` : ''}</>}
+              {' '}· requested by {r.requester_name || '—'}</span>
             {r.note && <div className="muted mini">Note: {r.note}</div>}
           </span>
           <b style={{ whiteSpace: 'nowrap' }}>{inr(r.amount)}</b>

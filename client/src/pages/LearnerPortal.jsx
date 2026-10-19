@@ -61,6 +61,7 @@ export default function LearnerPortal() {
       <div className="topbar">
         <div className="brand">Learning Hub<small>MY LEARNING · AVANA GROUP</small></div>
         <div className="spacer" />
+        {user.od && <a className="btn-ghost" href="/od" style={{ textDecoration: 'none' }}>Org Development</a>}
         <div className="who"><b>{user.name}</b> · Learner</div>
         <button className="btn-ghost" onClick={logout}>Sign out</button>
       </div>

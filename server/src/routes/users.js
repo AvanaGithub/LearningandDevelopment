@@ -12,7 +12,7 @@ router.use(requireRole('admin'));
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await query(
-      'SELECT id, email, name, role, entity, active, last_login_at, created_at FROM users ORDER BY name');
+      'SELECT id, email, name, role, entity, active, od_access, last_login_at, created_at FROM users ORDER BY name');
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -67,10 +67,14 @@ router.patch('/:id', express.json(), async (req, res, next) => {
     if (target.role === 'super_admin' && req.user.role !== 'super_admin') {
       return res.status(403).json({ error: 'Only a super admin can modify super admins' });
     }
-    const { name, role, entity, active, reason } = req.body || {};
+    const { name, role, entity, active, od_access, reason } = req.body || {};
     if (role !== undefined && !ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
     if (role === 'super_admin' && req.user.role !== 'super_admin') {
       return res.status(403).json({ error: 'Only a super admin can grant super admin' });
+    }
+    // OD module access is confidential — only the super admin grants it.
+    if (od_access !== undefined && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Only a super admin can change OD access' });
     }
     if (entity !== undefined && !ENTITIES.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
     if (active === false && target.id === req.user.id) {
@@ -82,13 +86,14 @@ router.patch('/:id', express.json(), async (req, res, next) => {
          role   = COALESCE($3, role),
          entity = COALESCE($4, entity),
          active = COALESCE($5, active),
+         od_access = COALESCE($6, od_access),
          updated_at = now()
        WHERE id=$1 RETURNING *`,
-      [id, name ?? null, role ?? null, entity ?? null, active ?? null]);
+      [id, name ?? null, role ?? null, entity ?? null, active ?? null, od_access ?? null]);
     // Revoking access kills the person's live sessions immediately.
     if (active === false) await query('DELETE FROM sessions WHERE user_id=$1', [id]);
     await audit(req.user.id, 'user.update', 'user', id,
-      { changes: { name, role, entity, active } }, reason);
+      { changes: { name, role, entity, active, od_access } }, reason);
     res.json(rows[0]);
   } catch (e) { next(e); }
 });
