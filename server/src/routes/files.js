@@ -66,3 +66,4 @@ async function saveFiles(reqFiles, userId) {
 module.exports = router;
 module.exports.upload = upload;
 module.exports.saveFiles = saveFiles;
+module.exports.UPLOAD_DIR = UPLOAD_DIR;

@@ -82,21 +82,26 @@ async function graphToken(c) {
   return d.access_token;
 }
 
-async function sendGraph(c, to, subject, html) {
+async function sendGraph(c, to, subject, html, attachments) {
   const tok = await graphToken(c);
   const sender = c.from || c.user;
+  const message = {
+    subject,
+    from: { emailAddress: { address: sender, name: c.from_name || 'Avana Academy' } },
+    body: { contentType: 'HTML', content: html },
+    toRecipients: [{ emailAddress: { address: to } }],
+  };
+  if (attachments && attachments.length) {
+    message.attachments = attachments.map((a) => ({
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      name: a.name, contentType: a.contentType || 'application/octet-stream',
+      contentBytes: a.content.toString('base64'),
+    }));
+  }
   const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: {
-        subject,
-        from: { emailAddress: { address: sender, name: c.from_name || 'Avana Academy' } },
-        body: { contentType: 'HTML', content: html },
-        toRecipients: [{ emailAddress: { address: to } }],
-      },
-      saveToSentItems: true,
-    }),
+    body: JSON.stringify({ message, saveToSentItems: true }),
   });
   if (!r.ok) {
     const txt = (await r.text()).slice(0, 300);
@@ -104,9 +109,19 @@ async function sendGraph(c, to, subject, html) {
   }
 }
 
-async function sendMail(c, to, subject, html) {
-  if ((c.method || 'smtp') === 'graph') return sendGraph(c, to, subject, html);
-  await transport(c).sendMail({ from: `"${c.from_name || 'Avana Academy'}" <${c.from || c.user}>`, to, subject, html });
+async function sendMail(c, to, subject, html, attachments) {
+  if ((c.method || 'smtp') === 'graph') return sendGraph(c, to, subject, html, attachments);
+  await transport(c).sendMail({
+    from: `"${c.from_name || 'Avana Academy'}" <${c.from || c.user}>`, to, subject, html,
+    attachments: (attachments || []).map((a) => ({ filename: a.name, content: a.content, contentType: a.contentType })),
+  });
+}
+
+// Generic send with the configured credentials (used by certificates etc.).
+async function sendRaw(to, subject, html, attachments) {
+  const c = await cfg();
+  if (!c) throw new Error('E-mail notifications are not configured/enabled (Settings → E-mail notifications)');
+  await sendMail(c, to, subject, html, attachments);
 }
 
 const esc = (s) => String(s || '').replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
@@ -450,7 +465,8 @@ async function sendTest() {
 
 module.exports = {
   notifyNomination, announceSelfNomination, nominationDigest, attendanceDigest,
-  runDigests, sendTest, certAvailable, budgetRequest, budgetDecision,
+  runDigests, sendTest, certAvailable, budgetRequest, budgetDecision, sendRaw,
+  esc, FOOT, SITE_BTN,
   // Shared Microsoft Graph credentials — also used by the Forms score sync.
   cfg, graphToken,
 };

@@ -10,6 +10,7 @@ import Calendar from './pages/Calendar.jsx';
 import Attendance from './pages/Attendance.jsx';
 import Feedback from './pages/Feedback.jsx';
 import Assessments from './pages/Assessments.jsx';
+import Certificates from './pages/Certificates.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Reports from './pages/Reports.jsx';
 import PublicCheckin from './pages/PublicCheckin.jsx';
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="/attendance" element={<Attendance />} />
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/assessments" element={<RequireLeader><Assessments /></RequireLeader>} />
+            <Route path="/certificates" element={<RequireAdmin><Certificates /></RequireAdmin>} />
             <Route path="/expenses" element={<RequireAdmin><Expenses /></RequireAdmin>} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/mavericks" element={<RequireLeader><Mavericks /></RequireLeader>} />

@@ -141,6 +141,25 @@ export default function LearnerPortal() {
               </div>
             ))}
 
+            {(data.certs || []).length > 0 && (
+              <>
+                <div className="page-head" style={{ marginTop: 18 }}>
+                  <h2>My certificates</h2>
+                </div>
+                {(data.certs || []).map((c) => (
+                  <div key={c.id} className="card" style={{ padding: '10px 16px' }}>
+                    <div className="toolbar" style={{ marginBottom: 0, alignItems: 'center' }}>
+                      <b>🎓 {c.title}{c.batch ? ' — ' + c.batch : ''}</b>
+                      <span className="muted mini">{c.cert_no} · issued {fmtDate(c.issued_at)}</span>
+                      <span style={{ flex: 1 }} />
+                      <a className="btn gold" style={{ textDecoration: 'none' }}
+                        href={'/api/files/' + c.file_id} target="_blank" rel="noreferrer">⬇ Download certificate</a>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
             <div className="page-head" style={{ marginTop: 18 }}>
               <h2>Other courses &amp; certifications</h2>
               {!ext && <button className="btn gold" onClick={() => setExt({ course: '', provider: '', completed_on: '', notes: '', files: [] })}>+ Submit a course report</button>}

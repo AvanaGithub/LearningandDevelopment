@@ -75,6 +75,7 @@ export default function Shell() {
         <NavLink to="/attendance" className={link}>Attendance</NavLink>
         <NavLink to="/feedback" className={link}>Feedback</NavLink>
         {(isAdmin || isLeader) && <NavLink to="/assessments" className={link}>Assessments</NavLink>}
+        {isAdmin && <NavLink to="/certificates" className={link}>Certificates</NavLink>}
         {isAdmin && <NavLink to="/expenses" className={link}>Expenses</NavLink>}
         <NavLink to="/reports" className={link}>Reports</NavLink>
         {(isAdmin || isLeader || hasJoiners) && <div className="sect">Programmes</div>}
@@ -88,7 +89,6 @@ export default function Shell() {
         {isAdmin && (<>
           <div className="sect">Phase 2 · Planned</div>
           <div className="locked">Effectiveness</div>
-          <div className="locked">Certificates</div>
         </>)}
       </nav>
       <main className="main"><Outlet /></main>

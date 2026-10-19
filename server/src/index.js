@@ -43,6 +43,7 @@ app.use('/api/mavericks', require('./routes/mavericks'));
 app.use('/api/joiners', require('./routes/joiners'));
 app.use('/api/assessments', require('./routes/assessments'));
 app.use('/api/budget', require('./routes/budget'));
+app.use('/api/certs', require('./routes/certs'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {

@@ -68,9 +68,13 @@ router.get('/overview', async (req, res, next) => {
        ORDER BY (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) LIMIT 20`, [today]);
     const { rows: external } = await query(
       'SELECT * FROM external_courses WHERE employee_id=$1 ORDER BY id DESC', [me.id]);
+    const { rows: certs } = await query(
+      `SELECT c.id, c.cert_no, c.file_id, c.issued_at, t.title, t.batch
+       FROM certificates c JOIN trainings t ON t.id=c.training_id
+       WHERE c.employee_id=$1 ORDER BY c.id DESC`, [me.id]);
     res.json({
       employee: { id: me.id, name: me.name, department: me.department, division: me.division, entity: me.entity },
-      today, external,
+      today, external, certs,
       my: my.map((t) => ({ ...t, questions: t.feedback_questions || DEFAULT_QUESTIONS, feedback_questions: undefined })),
       open, upcoming,
     });
