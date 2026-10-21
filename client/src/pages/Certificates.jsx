@@ -51,6 +51,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
   const toast = useToast();
   const [name, setName] = useState(tpl.name);
   const [fields, setFields] = useState(() => toFields(tpl.layout));
+  const [bgId, setBgId] = useState(tpl.bg_file_id);
   const [sel, setSel] = useState(0);
   const [err, setErr] = useState(null);
   const canvasRef = useRef(null);
@@ -108,7 +109,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
           onMouseLeave={() => { dragRef.current = null; }}
           style={{
             position: 'relative', width: '100%', aspectRatio: '841.89 / 595.28',
-            background: tpl.bg_file_id ? `url(/api/files/${tpl.bg_file_id}) center / 100% 100% no-repeat` : '#fdfbf7',
+            background: bgId ? `url(/api/files/${bgId}) center / 100% 100% no-repeat` : '#fdfbf7',
             border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden', userSelect: 'none', touchAction: 'none',
           }}>
           {fields.map((q, i) => q.hidden ? null : (
@@ -172,11 +173,23 @@ function TplEditor({ tpl, onClose, onSaved }) {
         )}
 
         {err && <p className="err">{err}</p>}
-        <div className="form-actions" style={{ flexWrap: 'wrap' }}>
+        <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn gold" onClick={save}>Save template</button>
           <button className="btn" onClick={addCustom}>+ Add custom field</button>
           <a className="btn" href={`/api/certs/templates/${tpl.id}/preview`} target="_blank" rel="noreferrer"
             title="Opens the real PDF with sample data — save first to see your latest changes">Preview PDF</a>
+          <label className="btn" style={{ cursor: 'pointer' }}>
+            Replace design…
+            <input type="file" accept="image/png,image/jpeg,application/pdf" style={{ display: 'none' }}
+              onChange={async (e) => {
+                if (!e.target.files.length) return;
+                try {
+                  const [up] = await apiUpload(e.target.files);
+                  const updated = await api.patch('/api/certs/templates/' + tpl.id, { bg_file_id: up.id });
+                  setBgId(updated.bg_file_id);
+                } catch (e2) { setErr(e2.message); }
+              }} />
+          </label>
           <button className="btn" onClick={onClose}>Close</button>
         </div>
       </div>
@@ -287,7 +300,7 @@ export default function Certificates() {
       <details className="card" style={{ marginBottom: 16 }} open={!templates.length}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>🖼 Templates ({templates.length}) — upload designs &amp; place the text</summary>
         <p className="muted mini" style={{ margin: '8px 0' }}>
-          Upload your certificate design (A4 landscape, JPG/PNG) — the editor then opens on the design
+          Upload your certificate design (A4 landscape — JPG, PNG or PDF) — the editor then opens on the design
           itself so you can <b>drag into place</b> the participant's name, the description, the training
           name, the date of issue, the authorised signatory, the scan-to-verify QR and any custom fields.
         </p>
@@ -312,8 +325,8 @@ export default function Certificates() {
             <div className="form-grid">
               <div><label>Template name *</label>
                 <input value={newTpl.name} onChange={(e) => setNewTpl({ ...newTpl, name: e.target.value })} placeholder="e.g. Avana gold border 2026" /></div>
-              <div><label>Certificate design (A4 landscape JPG/PNG)</label>
-                <input type="file" accept="image/png,image/jpeg" onChange={async (e) => {
+              <div><label>Certificate design (A4 landscape — JPG, PNG or PDF)</label>
+                <input type="file" accept="image/png,image/jpeg,application/pdf" onChange={async (e) => {
                   if (!e.target.files.length) return;
                   try {
                     const [f] = await apiUpload(e.target.files);

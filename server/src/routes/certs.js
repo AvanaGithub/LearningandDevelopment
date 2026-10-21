@@ -18,6 +18,36 @@ router.use(requireRole('admin'));
 
 const fmtD = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
 
+// Templates may be uploaded as PDFs — page 1 is converted to a PNG
+// (poppler's pdftoppm) because both the editor and pdfkit need an image.
+async function pdfBgToPng(fileId, userId) {
+  const { execFile } = require('child_process');
+  const src = path.join(UPLOAD_DIR, fileId);
+  const outBase = path.join(UPLOAD_DIR, 'tmp_' + crypto.randomBytes(6).toString('hex'));
+  await new Promise((resolve, reject) => {
+    execFile('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', '-singlefile', src, outBase],
+      (e) => (e ? reject(Object.assign(new Error('The PDF could not be converted to an image — upload the design as JPG/PNG instead. (' + e.message.slice(0, 120) + ')'), { status: 400 })) : resolve()));
+  });
+  const buf = fs.readFileSync(outBase + '.png');
+  fs.unlinkSync(outBase + '.png');
+  const id = crypto.randomBytes(12).toString('hex') + '.png';
+  fs.writeFileSync(path.join(UPLOAD_DIR, id), buf);
+  await query('INSERT INTO files (id, orig_name, mime, size, uploaded_by) VALUES ($1,$2,$3,$4,$5)',
+    [id, 'certificate-template.png', 'image/png', buf.length, userId || null]);
+  return id;
+}
+
+// A PDF background becomes its page-1 PNG; images pass through untouched.
+async function resolveBg(fileId, userId) {
+  if (!fileId) return null;
+  const { rows } = await query('SELECT mime, orig_name FROM files WHERE id=$1', [fileId]);
+  if (!rows.length) return null;
+  if (/pdf/i.test(rows[0].mime || '') || /\.pdf$/i.test(rows[0].orig_name || '')) {
+    return pdfBgToPng(fileId, userId);
+  }
+  return fileId;
+}
+
 // Issue one certificate (shared with the automatic workflow). t needs
 // first_day/last_day; tpl may be null (built-in design); extra holds the
 // generation-form texts (description, signatory, custom fields). Throws on
@@ -99,12 +129,13 @@ router.post('/templates', express.json(), async (req, res, next) => {
     const layout = b.layout && Array.isArray(b.layout.fields)
       ? b.layout
       : { fields: JSON.parse(JSON.stringify(DEFAULT_FIELDS)) };
+    const bg = await resolveBg(b.bg_file_id || null, req.user.id);
     const { rows } = await query(
       'INSERT INTO cert_templates (name, bg_file_id, layout) VALUES ($1,$2,$3) RETURNING *',
-      [b.name.trim(), b.bg_file_id || null, JSON.stringify(layout)]);
+      [b.name.trim(), bg, JSON.stringify(layout)]);
     await audit(req.user.id, 'cert.template_create', 'cert_template', rows[0].id, { name: b.name });
     res.status(201).json(rows[0]);
-  } catch (e) { next(e); }
+  } catch (e) { e.status === 400 ? res.status(400).json({ error: e.message }) : next(e); }
 });
 
 router.patch('/templates/:id', express.json(), async (req, res, next) => {
@@ -115,7 +146,8 @@ router.patch('/templates/:id', express.json(), async (req, res, next) => {
     const b = req.body || {};
     const f = {
       name: b.name?.trim() || cur[0].name,
-      bg_file_id: b.bg_file_id !== undefined ? (b.bg_file_id || null) : cur[0].bg_file_id,
+      bg_file_id: b.bg_file_id !== undefined
+        ? await resolveBg(b.bg_file_id || null, req.user.id) : cur[0].bg_file_id,
       // A fields layout is stored as-is; legacy layouts keep their defaults.
       layout: b.layout
         ? (Array.isArray(b.layout.fields) ? b.layout : { ...DEFAULT_LAYOUT, ...b.layout })
@@ -127,7 +159,7 @@ router.patch('/templates/:id', express.json(), async (req, res, next) => {
       [id, f.name, f.bg_file_id, JSON.stringify(f.layout), f.active]);
     await audit(req.user.id, 'cert.template_update', 'cert_template', id, { changes: b });
     res.json(rows[0]);
-  } catch (e) { next(e); }
+  } catch (e) { e.status === 400 ? res.status(400).json({ error: e.message }) : next(e); }
 });
 
 // Sample PDF so the layout can be adjusted against the real background.
