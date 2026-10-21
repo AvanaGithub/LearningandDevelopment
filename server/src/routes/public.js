@@ -163,6 +163,21 @@ router.post('/fb/:token', express.json(), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---- Assessment QR / share link: forwards to the Microsoft Form ----------
+
+router.get('/assessment/:token', async (req, res, next) => {
+  try {
+    const tok = String(req.params.token || '');
+    if (!/^[a-f0-9]{16,64}$/.test(tok)) return res.status(404).json({ error: 'This link is not valid any more.' });
+    const { rows } = await query(
+      `SELECT a.name, a.atype, a.external_form_url, t.title, t.batch
+       FROM assessments a JOIN trainings t ON t.id=a.training_id
+       WHERE a.public_token=$1 AND t.status <> 'cancelled'`, [tok]);
+    if (!rows.length) return res.status(404).json({ error: 'This link is not valid any more.' });
+    res.json(rows[0]);
+  } catch (e) { next(e); }
+});
+
 // ---- Certificate verification (the QR on every certificate) -------------
 
 router.get('/cert/:certNo', async (req, res, next) => {

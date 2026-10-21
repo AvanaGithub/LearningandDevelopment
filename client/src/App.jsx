@@ -19,6 +19,7 @@ import PublicFeedback from './pages/PublicFeedback.jsx';
 import PublicNominate from './pages/PublicNominate.jsx';
 import PublicApprove from './pages/PublicApprove.jsx';
 import PublicCert from './pages/PublicCert.jsx';
+import PublicAssessment from './pages/PublicAssessment.jsx';
 import LearnerPortal from './pages/LearnerPortal.jsx';
 import Mavericks from './pages/Mavericks.jsx';
 import NewJoiners from './pages/NewJoiners.jsx';
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/p/nom/:token" element={<PublicNominate />} />
           <Route path="/p/approve/:token" element={<PublicApprove />} />
           <Route path="/p/cert/:certNo" element={<PublicCert />} />
+          <Route path="/p/as/:token" element={<PublicAssessment />} />
           <Route path="/login" element={auth.user ? <Navigate to="/" replace /> : <Login />} />
           {auth.user?.role === 'learner' ? (
             <>

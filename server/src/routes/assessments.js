@@ -13,13 +13,13 @@ const ASSESS_TYPES = ['Written Assessment', 'Presentation', 'Teach Back', 'Produ
 
 router.use(requireRole('leader'));
 
-// Light list for tab badges: every assessment with its training id.
+// Every assessment with its completion count, for the tab's main list.
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await query(
-      `SELECT a.id, a.training_id, a.name, a.atype, a.assess_date,
+      `SELECT a.*,
               (SELECT count(*)::int FROM assessment_scores s WHERE s.assessment_id=a.id) AS score_count
-       FROM assessments a ORDER BY a.id`);
+       FROM assessments a ORDER BY a.assess_date NULLS LAST, a.id`);
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -63,9 +63,10 @@ router.post('/training/:tid', requireRole('admin'), express.json(), async (req, 
     if (!t.length) return res.status(404).json({ error: 'Training not found' });
     const f = pickA(req.body || {});
     const { rows } = await query(
-      `INSERT INTO assessments (training_id, name, atype, max_marks, assess_date, external_form_url, workbook_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [tid, f.name, f.atype, f.max_marks, f.assess_date, f.external_form_url, f.workbook_url]);
+      `INSERT INTO assessments (training_id, name, atype, max_marks, assess_date, external_form_url, workbook_url, public_token)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [tid, f.name, f.atype, f.max_marks, f.assess_date, f.external_form_url, f.workbook_url,
+       require('crypto').randomBytes(12).toString('hex')]);
     await audit(req.user.id, 'assessment.create', 'assessment', rows[0].id, { training_id: tid, name: f.name });
     res.status(201).json(rows[0]);
   } catch (e) { e.status === 400 ? res.status(400).json({ error: e.message }) : next(e); }
