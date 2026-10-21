@@ -72,8 +72,18 @@ function generateCertPdf({ bgPath, bgDims, layout, values, verifyUrl, name, trai
         drawDefaultBackground(doc, !fields, W, H);
       }
       if (fields) {
-        for (const f of fields) {
+        // "Hide area" boxes paint over placeholder text baked into the
+        // design image, so they go down first, under every real field.
+        const ordered = [...fields.filter((f) => f.type === 'cover'), ...fields.filter((f) => f.type !== 'cover')];
+        for (const f of ordered) {
           if (f.hidden) continue;
+          if (f.type === 'cover') {
+            const cw = ((Number(f.w) || 20) / 100) * W;
+            const ch = ((Number(f.h) || 5) / 100) * H;
+            doc.rect((Number(f.x) / 100) * W - cw / 2, (Number(f.y) / 100) * H - ch / 2, cw, ch)
+              .fill(f.color || '#ffffff');
+            continue;
+          }
           if (f.type === 'qr') {
             if (!verifyUrl) continue;
             const q = ((Number(f.qsize) || 9) / 100) * W;

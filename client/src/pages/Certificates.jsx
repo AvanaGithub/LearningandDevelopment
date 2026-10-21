@@ -61,8 +61,59 @@ function TplEditor({ tpl, onClose, onSaved }) {
     ? (dims.w >= dims.h ? 841.89 : 841.89 * (dims.w / dims.h)) : 841.89;
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
+  const [dirty, setDirty] = useState(false);
 
-  const upd = (i, patch) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  const upd = (i, patch) => {
+    setDirty(true);
+    setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  };
+
+  // The design image, decoded once, so "Hide area" boxes can pick up the
+  // colour of the design right around them.
+  const pixRef = useRef(null);
+  useEffect(() => {
+    pixRef.current = null;
+    if (!bgId) return;
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      pixRef.current = { ctx, w: c.width, h: c.height };
+    };
+    img.src = '/api/files/' + bgId;
+  }, [bgId]);
+
+  // Average of four points just outside the box's edges.
+  const sampleAround = (q) => {
+    const p = pixRef.current;
+    if (!p) return null;
+    const pts = [
+      [q.x - q.w / 2 - 0.8, q.y], [q.x + q.w / 2 + 0.8, q.y],
+      [q.x, q.y - q.h / 2 - 0.6], [q.x, q.y + q.h / 2 + 0.6],
+    ];
+    let r = 0, g = 0, b = 0, n = 0;
+    for (const [xp, yp] of pts) {
+      const px = Math.round((Math.min(99.5, Math.max(0.5, xp)) / 100) * (p.w - 1));
+      const py = Math.round((Math.min(99.5, Math.max(0.5, yp)) / 100) * (p.h - 1));
+      const d = p.ctx.getImageData(px, py, 1, 1).data;
+      r += d[0]; g += d[1]; b += d[2]; n++;
+    }
+    const hex = (v) => Math.round(v / n).toString(16).padStart(2, '0');
+    return '#' + hex(r) + hex(g) + hex(b);
+  };
+  const matchColour = (i) => {
+    const q = fields[i];
+    const c = q && sampleAround(q);
+    if (c) upd(i, { color: c });
+  };
+
+  const endDrag = () => {
+    const i = dragRef.current;
+    dragRef.current = null;
+    if (i !== null && fields[i]?.type === 'cover' && !fields[i].manual_color) matchColour(i);
+  };
 
   const posFromEvent = (ev) => {
     const r = canvasRef.current.getBoundingClientRect();
@@ -75,19 +126,49 @@ function TplEditor({ tpl, onClose, onSaved }) {
     upd(dragRef.current, posFromEvent(ev));
   };
 
+  const persist = () => api.patch('/api/certs/templates/' + tpl.id, { name: name.trim() || tpl.name, layout: { fields } })
+    .then(() => setDirty(false));
+
   const save = async () => {
     try {
-      await api.patch('/api/certs/templates/' + tpl.id, { name: name.trim() || tpl.name, layout: { fields } });
-      toast('Template saved — open Preview to see the real PDF.');
+      await persist();
+      toast('Template saved.');
       onSaved();
     } catch (e) { setErr(e.message); }
+  };
+
+  // Save first so the preview never shows a stale layout; the tab is opened
+  // synchronously so popup blockers allow it.
+  const preview = async () => {
+    const w = window.open('about:blank', '_blank');
+    try {
+      await persist();
+      if (w) w.location.href = `/api/certs/templates/${tpl.id}/preview?t=${Date.now()}`;
+    } catch (e) { if (w) w.close(); setErr(e.message); }
+  };
+
+  const close = () => {
+    if (dirty && !confirm('You have unsaved changes on this template. Close without saving?')) return;
+    onClose();
   };
 
   const addCustom = () => {
     const label = prompt('Name of the new field (e.g. Trainer signature, Grade):');
     if (!label?.trim()) return;
     const key = 'custom_' + Date.now().toString(36);
+    setDirty(true);
     setFields((fs) => [...fs, { key, label: label.trim(), x: 50, y: 80, size: 12, color: '#374151', align: 'center', w: 40, value: '' }]);
+    setSel(fields.length);
+  };
+
+  // A box painted in the design's own colour, to blank out placeholder
+  // text that is part of the design image (e.g. "[Signature]").
+  const addCover = () => {
+    const key = 'cover_' + Date.now().toString(36);
+    const q = { key, label: 'Hidden area', type: 'cover', x: 50, y: 50, w: 20, h: 4, color: '#ffffff' };
+    q.color = sampleAround(q) || q.color;
+    setDirty(true);
+    setFields((fs) => [...fs, q]);
     setSel(fields.length);
   };
 
@@ -97,20 +178,23 @@ function TplEditor({ tpl, onClose, onSaved }) {
   const scale = (canvasRef.current?.getBoundingClientRect().width || 820) / pageW;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={close}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900, width: '96vw' }}>
         <h3 style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          🖼 <input value={name} onChange={(e) => setName(e.target.value)} style={{ fontSize: 15, fontWeight: 600, flex: 1 }} />
+          🖼 <input value={name} onChange={(e) => { setName(e.target.value); setDirty(true); }} style={{ fontSize: 15, fontWeight: 600, flex: 1 }} />
+          {dirty && <span className="pill warn mini">unsaved</span>}
         </h3>
         <p className="muted mini" style={{ margin: '4px 0 8px' }}>
           <b>Drag each box</b> onto the right spot of your design. Click a box to change its size,
           colour, width or wording below. The boxes show sample text — the real certificate prints each
-          participant's own details.
+          participant's own details. The design should be <b>blank</b> where these go — if it already
+          has sample text printed in it (a name, a date, "[Signature]"…), cover that with
+          <b> + Hide area</b>.
         </p>
         <div ref={canvasRef}
           onMouseMove={onMove}
-          onMouseUp={() => { dragRef.current = null; }}
-          onMouseLeave={() => { dragRef.current = null; }}
+          onMouseUp={endDrag}
+          onMouseLeave={endDrag}
           style={{
             position: 'relative', width: '100%', aspectRatio: ratio,
             background: bgId ? `url(/api/files/${bgId}) center / 100% 100% no-repeat` : '#fdfbf7',
@@ -122,6 +206,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
               style={{
                 position: 'absolute', left: q.x + '%', top: q.y + '%',
                 transform: 'translate(-50%, -50%)', cursor: 'move',
+                zIndex: q.type === 'cover' ? 1 : 2,
                 outline: sel === i ? '2px solid #C8930A' : '1px dashed rgba(200,147,10,.55)',
                 background: sel === i ? 'rgba(200,147,10,.10)' : 'rgba(255,255,255,.08)',
                 padding: '1px 4px', borderRadius: 4, whiteSpace: 'nowrap', maxWidth: '96%',
@@ -129,6 +214,9 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 ...(q.type === 'qr'
                   ? { width: (q.qsize || 9) + '%', aspectRatio: '1', display: 'flex', alignItems: 'center',
                       justifyContent: 'center', fontSize: 11, color: '#555', background: 'repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 0 0 / 10px 10px' }
+                  : q.type === 'cover'
+                  ? { width: (q.w || 20) + '%', height: (q.h || 4) + '%', padding: 0, background: q.color || '#fff',
+                      outline: sel === i ? '2px solid #C8930A' : '1px dotted rgba(120,120,120,.6)' }
                   : q.type === 'img'
                   ? { width: (q.w || 18) + '%', minHeight: 24, display: 'flex', alignItems: 'center',
                       justifyContent: 'center', fontSize: 11, color: '#777', padding: 0 }
@@ -136,6 +224,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
                       fontWeight: q.bold ? 700 : 400 }),
               }}>
               {q.type === 'qr' ? 'QR'
+                : q.type === 'cover' ? null
                 : q.type === 'img'
                 ? (q.file_id
                   ? <img src={'/api/files/' + q.file_id} alt="" draggable={false}
@@ -153,7 +242,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 ? <input value={f.label} onChange={(e) => upd(sel, { label: e.target.value })} style={{ width: 140 }} />
                 : f.label}
             </b>
-            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && (
+            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && f.type !== 'cover' && (
               <select value={f.type === 'img' ? 'img' : 'text'} style={{ fontSize: 12 }}
                 onChange={(e) => upd(sel, e.target.value === 'img'
                   ? { type: 'img', w: f.w && f.w <= 40 ? f.w : 18 }
@@ -168,6 +257,21 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 <input type="number" min="4" max="25" style={{ width: 64 }} value={f.qsize || 9}
                   onChange={(e) => upd(sel, { qsize: Number(e.target.value) || 9 })} />
                 <span className="muted mini">Scanning it opens the hub's verification page for that certificate.</span>
+              </>
+            ) : f.type === 'cover' ? (
+              <>
+                <label className="muted mini">width %</label>
+                <input type="number" min="1" max="100" step="0.5" style={{ width: 64 }} value={f.w || 20}
+                  onChange={(e) => upd(sel, { w: Number(e.target.value) || 20 })} />
+                <label className="muted mini">height %</label>
+                <input type="number" min="0.5" max="100" step="0.5" style={{ width: 64 }} value={f.h || 4}
+                  onChange={(e) => upd(sel, { h: Number(e.target.value) || 4 })} />
+                <label className="muted mini">colour</label>
+                <input type="color" value={f.color || '#ffffff'}
+                  onChange={(e) => upd(sel, { color: e.target.value, manual_color: true })} />
+                <button className="btn" type="button" title="Pick up the design's colour around this box"
+                  onClick={() => { upd(sel, { manual_color: false }); matchColour(sel); }}>Match design colour</button>
+                <span className="muted mini">Covers text printed in the design — size it over the text, drop it, and it takes the surrounding colour.</span>
               </>
             ) : f.type === 'img' ? (
               <>
@@ -202,13 +306,13 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 </label>
               </>
             )}
-            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && f.type !== 'img' && (
+            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && f.type !== 'img' && f.type !== 'cover' && (
               <input style={{ flex: 1, minWidth: 220 }} value={f.value || ''}
                 placeholder={f.key === 'desc' ? 'Default description (editable while generating)' : 'Default text (editable while generating)'}
                 onChange={(e) => upd(sel, { value: e.target.value })} />
             )}
             <button className="btn link" title="Remove this field from the certificate"
-              onClick={() => { setFields((fs) => fs.filter((_, j) => j !== sel)); setSel(0); }}>✕ remove</button>
+              onClick={() => { setDirty(true); setFields((fs) => fs.filter((_, j) => j !== sel)); setSel(0); }}>✕ remove</button>
           </div>
         )}
 
@@ -216,8 +320,8 @@ function TplEditor({ tpl, onClose, onSaved }) {
         <div className="form-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn gold" onClick={save}>Save template</button>
           <button className="btn" onClick={addCustom}>+ Add custom field</button>
-          <a className="btn" href={`/api/certs/templates/${tpl.id}/preview`} target="_blank" rel="noreferrer"
-            title="Opens the real PDF with sample data — save first to see your latest changes">Preview PDF</a>
+          <button className="btn" onClick={addCover}>+ Hide area</button>
+          <button className="btn" onClick={preview} title="Saves, then opens the real PDF with sample data">Save &amp; preview PDF</button>
           <label className="btn" style={{ cursor: 'pointer' }}>
             Replace design…
             <input type="file" accept="image/png,image/jpeg,application/pdf" style={{ display: 'none' }}
@@ -231,7 +335,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 } catch (e2) { setErr(e2.message); }
               }} />
           </label>
-          <button className="btn" onClick={onClose}>Close</button>
+          <button className="btn" onClick={close}>Close</button>
         </div>
       </div>
     </div>
@@ -263,7 +367,7 @@ export default function Certificates() {
   // The chosen template's fillable fields drive the generation inputs.
   const chosenTpl = templates.find((t) => t.id === Number(tplId));
   const fillable = (Array.isArray(chosenTpl?.layout?.fields) ? chosenTpl.layout.fields : [])
-    .filter((f) => f.type !== 'qr' && f.type !== 'img' && !AUTO_KEYS.includes(f.key) && !f.hidden);
+    .filter((f) => f.type !== 'qr' && f.type !== 'img' && f.type !== 'cover' && !AUTO_KEYS.includes(f.key) && !f.hidden);
   useEffect(() => {
     const v = {};
     fillable.forEach((f) => { v[f.key] = f.value || ''; });
