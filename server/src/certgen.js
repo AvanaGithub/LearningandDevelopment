@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
+const sizeOf = require('image-size');
 
 // Personalised certificate PDFs (A4 landscape).
 //
@@ -31,18 +32,30 @@ const DEFAULT_FIELDS = [
   { key: 'training', label: 'Training name', x: 50, y: 64, size: 16, color: '#1f2937', bold: true, align: 'center', w: 80 },
   { key: 'dates', label: 'Dates & location', x: 50, y: 71, size: 11, color: '#6b7280', align: 'center', w: 80 },
   { key: 'issue_date', label: 'Date of issue', x: 18, y: 88, size: 11, color: '#374151', align: 'center', w: 28 },
-  { key: 'signatory', label: 'Authorised signatory', x: 82, y: 88, size: 11, color: '#374151', align: 'center', w: 30, value: '' },
+  { key: 'signatory', label: 'Authorised signatory', type: 'img', x: 82, y: 86, w: 18 },
   { key: 'qr', label: 'Scan-to-verify QR', type: 'qr', x: 91, y: 15, qsize: 9 },
   { key: 'cert_no', label: 'Certificate number', x: 50, y: 96, size: 8, color: '#9ca3af', align: 'center', w: 60 },
 ];
 
-// A4 landscape in points.
-const W = 841.89, H = 595.28;
+// The page takes the uploaded design's proportions (longest side scaled
+// to the A4 base length); A4 landscape when there is no design.
+const BASE = 841.89;
+function pageDims(bgDims) {
+  const w = Number(bgDims?.w), h = Number(bgDims?.h);
+  if (w > 0 && h > 0) {
+    return w >= h ? { W: BASE, H: (h / w) * BASE } : { H: BASE, W: (w / h) * BASE };
+  }
+  return { W: 841.89, H: 595.28 };
+}
 
-// values: {name, training, dates, desc, issue_date, signatory, cert_no,
-// <custom keys>}; verifyUrl feeds the QR.
-function generateCertPdf({ bgPath, layout, values, verifyUrl, name, training, dates, certNo }) {
+// Image fields (signature etc.) live in the same uploads store.
+const FILES_DIR = path.join(__dirname, '..', 'uploads');
+
+// values: {name, training, dates, desc, issue_date, cert_no, <custom
+// keys>}; verifyUrl feeds the QR; bgDims {w,h} sets the page proportions.
+function generateCertPdf({ bgPath, bgDims, layout, values, verifyUrl, name, training, dates, certNo }) {
   const vals = values || { name, training, dates, cert_no: certNo };
+  const { W, H } = pageDims(bgDims);
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: [W, H], margin: 0 });
@@ -54,9 +67,9 @@ function generateCertPdf({ bgPath, layout, values, verifyUrl, name, training, da
       const fields = Array.isArray(layout?.fields) ? layout.fields : null;
       if (bgPath && fs.existsSync(bgPath)) {
         try { doc.image(bgPath, 0, 0, { width: W, height: H }); }
-        catch (e) { drawDefaultBackground(doc, !fields); }
+        catch (e) { drawDefaultBackground(doc, !fields, W, H); }
       } else {
-        drawDefaultBackground(doc, !fields);
+        drawDefaultBackground(doc, !fields, W, H);
       }
       if (fields) {
         for (const f of fields) {
@@ -66,6 +79,21 @@ function generateCertPdf({ bgPath, layout, values, verifyUrl, name, training, da
             const q = ((Number(f.qsize) || 9) / 100) * W;
             const png = await QRCode.toBuffer(verifyUrl, { margin: 1, width: 512 });
             doc.image(png, (Number(f.x) / 100) * W - q / 2, (Number(f.y) / 100) * H - q / 2, { width: q, height: q });
+            continue;
+          }
+          // Image field (signature etc.): drawn centred on its position,
+          // width as % of the page, aspect preserved.
+          if (f.type === 'img') {
+            if (!f.file_id) continue;
+            const fp = path.join(FILES_DIR, String(f.file_id).replace(/[^\w.-]/g, ''));
+            if (!fs.existsSync(fp)) continue;
+            let dim;
+            try { dim = sizeOf(fs.readFileSync(fp)); } catch { continue; }
+            if (!dim?.width || !dim?.height) continue;
+            const drawW = ((Number(f.w) || 18) / 100) * W;
+            const drawH = drawW * (dim.height / dim.width);
+            try { doc.image(fp, (Number(f.x) / 100) * W - drawW / 2, (Number(f.y) / 100) * H - drawH / 2, { width: drawW }); }
+            catch (e) { /* unreadable image — skip rather than fail the batch */ }
             continue;
           }
           const text = String(vals[f.key] ?? f.value ?? '').trim();
@@ -102,7 +130,7 @@ function generateCertPdf({ bgPath, layout, values, verifyUrl, name, training, da
   });
 }
 
-function drawDefaultBackground(doc, legacyWording) {
+function drawDefaultBackground(doc, legacyWording, W = 841.89, H = 595.28) {
   doc.rect(0, 0, W, H).fill('#fdfbf7');
   doc.lineWidth(3).strokeColor('#C8930A').rect(24, 24, W - 48, H - 48).stroke();
   doc.lineWidth(1).strokeColor('#e3d5b8').rect(32, 32, W - 64, H - 64).stroke();

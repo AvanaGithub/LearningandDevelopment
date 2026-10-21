@@ -38,14 +38,22 @@ async function pdfBgToPng(fileId, userId) {
 }
 
 // A PDF background becomes its page-1 PNG; images pass through untouched.
+// Returns {id, w, h} — the pixel size drives the PDF page proportions.
+function measureBg(fileId) {
+  try {
+    const dim = require('image-size')(fs.readFileSync(path.join(UPLOAD_DIR, fileId)));
+    return { w: dim?.width || null, h: dim?.height || null };
+  } catch { return { w: null, h: null }; }
+}
 async function resolveBg(fileId, userId) {
   if (!fileId) return null;
   const { rows } = await query('SELECT mime, orig_name FROM files WHERE id=$1', [fileId]);
   if (!rows.length) return null;
+  let id = fileId;
   if (/pdf/i.test(rows[0].mime || '') || /\.pdf$/i.test(rows[0].orig_name || '')) {
-    return pdfBgToPng(fileId, userId);
+    id = await pdfBgToPng(fileId, userId);
   }
-  return fileId;
+  return { id, ...measureBg(id) };
 }
 
 // Issue one certificate (shared with the automatic workflow). t needs
@@ -65,6 +73,7 @@ async function issueCertFor(t, e, tpl, issuedBy, extra) {
   }
   const pdf = await generateCertPdf({
     bgPath: tpl?.bg_file_id ? path.join(UPLOAD_DIR, tpl.bg_file_id) : null,
+    bgDims: tpl ? { w: tpl.bg_w, h: tpl.bg_h } : null,
     layout: tpl?.layout,
     values: {
       name: e.name, training: label,
@@ -117,6 +126,16 @@ router.get('/templates', async (req, res, next) => {
       `SELECT ct.*, f.orig_name AS bg_name FROM cert_templates ct
        LEFT JOIN files f ON f.id = ct.bg_file_id
        WHERE ct.active ORDER BY ct.id DESC`);
+    // Templates saved before the sizing change get measured on first read.
+    for (const r of rows) {
+      if (r.bg_file_id && !r.bg_w) {
+        const d = measureBg(r.bg_file_id);
+        if (d.w) {
+          await query('UPDATE cert_templates SET bg_w=$2, bg_h=$3 WHERE id=$1', [r.id, d.w, d.h]);
+          r.bg_w = d.w; r.bg_h = d.h;
+        }
+      }
+    }
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -131,8 +150,8 @@ router.post('/templates', express.json(), async (req, res, next) => {
       : { fields: JSON.parse(JSON.stringify(DEFAULT_FIELDS)) };
     const bg = await resolveBg(b.bg_file_id || null, req.user.id);
     const { rows } = await query(
-      'INSERT INTO cert_templates (name, bg_file_id, layout) VALUES ($1,$2,$3) RETURNING *',
-      [b.name.trim(), bg, JSON.stringify(layout)]);
+      'INSERT INTO cert_templates (name, bg_file_id, layout, bg_w, bg_h) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [b.name.trim(), bg?.id || null, JSON.stringify(layout), bg?.w || null, bg?.h || null]);
     await audit(req.user.id, 'cert.template_create', 'cert_template', rows[0].id, { name: b.name });
     res.status(201).json(rows[0]);
   } catch (e) { e.status === 400 ? res.status(400).json({ error: e.message }) : next(e); }
@@ -144,10 +163,11 @@ router.patch('/templates/:id', express.json(), async (req, res, next) => {
     const { rows: cur } = await query('SELECT * FROM cert_templates WHERE id=$1', [id]);
     if (!cur.length) return res.status(404).json({ error: 'Not found' });
     const b = req.body || {};
+    const bg = b.bg_file_id !== undefined
+      ? await resolveBg(b.bg_file_id || null, req.user.id)
+      : { id: cur[0].bg_file_id, w: cur[0].bg_w, h: cur[0].bg_h };
     const f = {
       name: b.name?.trim() || cur[0].name,
-      bg_file_id: b.bg_file_id !== undefined
-        ? await resolveBg(b.bg_file_id || null, req.user.id) : cur[0].bg_file_id,
       // A fields layout is stored as-is; legacy layouts keep their defaults.
       layout: b.layout
         ? (Array.isArray(b.layout.fields) ? b.layout : { ...DEFAULT_LAYOUT, ...b.layout })
@@ -155,8 +175,8 @@ router.patch('/templates/:id', express.json(), async (req, res, next) => {
       active: b.active === undefined ? cur[0].active : Boolean(b.active),
     };
     const { rows } = await query(
-      'UPDATE cert_templates SET name=$2, bg_file_id=$3, layout=$4, active=$5 WHERE id=$1 RETURNING *',
-      [id, f.name, f.bg_file_id, JSON.stringify(f.layout), f.active]);
+      'UPDATE cert_templates SET name=$2, bg_file_id=$3, layout=$4, active=$5, bg_w=$6, bg_h=$7 WHERE id=$1 RETURNING *',
+      [id, f.name, bg?.id || null, JSON.stringify(f.layout), f.active, bg?.w || null, bg?.h || null]);
     await audit(req.user.id, 'cert.template_update', 'cert_template', id, { changes: b });
     res.json(rows[0]);
   } catch (e) { e.status === 400 ? res.status(400).json({ error: e.message }) : next(e); }
@@ -170,6 +190,7 @@ router.get('/templates/:id/preview', async (req, res, next) => {
     const t = rows[0];
     const pdf = await generateCertPdf({
       bgPath: t.bg_file_id ? path.join(UPLOAD_DIR, t.bg_file_id) : null,
+      bgDims: { w: t.bg_w, h: t.bg_h },
       layout: t.layout,
       values: {
         name: 'Participant Name',

@@ -22,7 +22,7 @@ const defaultFields = () => ([
   { key: 'training', label: 'Training name', x: 50, y: 64, size: 16, color: '#1f2937', bold: true, align: 'center', w: 80 },
   { key: 'dates', label: 'Dates & location', x: 50, y: 71, size: 11, color: '#6b7280', align: 'center', w: 80 },
   { key: 'issue_date', label: 'Date of issue', x: 18, y: 88, size: 11, color: '#374151', align: 'center', w: 28 },
-  { key: 'signatory', label: 'Authorised signatory', x: 82, y: 88, size: 11, color: '#374151', align: 'center', w: 30, value: '' },
+  { key: 'signatory', label: 'Authorised signatory', type: 'img', x: 82, y: 86, w: 18 },
   { key: 'qr', label: 'Scan-to-verify QR', type: 'qr', x: 91, y: 15, qsize: 9 },
   { key: 'cert_no', label: 'Certificate number', x: 50, y: 96, size: 8, color: '#9ca3af', align: 'center', w: 60 },
 ]);
@@ -52,8 +52,13 @@ function TplEditor({ tpl, onClose, onSaved }) {
   const [name, setName] = useState(tpl.name);
   const [fields, setFields] = useState(() => toFields(tpl.layout));
   const [bgId, setBgId] = useState(tpl.bg_file_id);
+  const [dims, setDims] = useState({ w: tpl.bg_w, h: tpl.bg_h });
   const [sel, setSel] = useState(0);
   const [err, setErr] = useState(null);
+  // The page takes the design's own proportions (A4 landscape fallback).
+  const ratio = dims?.w > 0 && dims?.h > 0 ? `${dims.w} / ${dims.h}` : '841.89 / 595.28';
+  const pageW = dims?.w > 0 && dims?.h > 0
+    ? (dims.w >= dims.h ? 841.89 : 841.89 * (dims.w / dims.h)) : 841.89;
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
 
@@ -88,9 +93,8 @@ function TplEditor({ tpl, onClose, onSaved }) {
 
   const f = fields[sel];
   const chipText = (q) => SAMPLE[q.key] || q.value || q.label;
-  // On-canvas font scale: the canvas is rendered at ~820px for an A4 width
-  // of 841.89pt, so pt sizes map almost 1:1 to px.
-  const scale = (canvasRef.current?.getBoundingClientRect().width || 820) / 841.89;
+  // On-canvas font scale: canvas px per PDF point.
+  const scale = (canvasRef.current?.getBoundingClientRect().width || 820) / pageW;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -108,7 +112,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
           onMouseUp={() => { dragRef.current = null; }}
           onMouseLeave={() => { dragRef.current = null; }}
           style={{
-            position: 'relative', width: '100%', aspectRatio: '841.89 / 595.28',
+            position: 'relative', width: '100%', aspectRatio: ratio,
             background: bgId ? `url(/api/files/${bgId}) center / 100% 100% no-repeat` : '#fdfbf7',
             border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden', userSelect: 'none', touchAction: 'none',
           }}>
@@ -125,10 +129,19 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 ...(q.type === 'qr'
                   ? { width: (q.qsize || 9) + '%', aspectRatio: '1', display: 'flex', alignItems: 'center',
                       justifyContent: 'center', fontSize: 11, color: '#555', background: 'repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 0 0 / 10px 10px' }
+                  : q.type === 'img'
+                  ? { width: (q.w || 18) + '%', minHeight: 24, display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', fontSize: 11, color: '#777', padding: 0 }
                   : { fontSize: Math.max(7, (q.size || 12) * scale), color: q.color || '#333',
                       fontWeight: q.bold ? 700 : 400 }),
               }}>
-              {q.type === 'qr' ? 'QR' : chipText(q)}
+              {q.type === 'qr' ? 'QR'
+                : q.type === 'img'
+                ? (q.file_id
+                  ? <img src={'/api/files/' + q.file_id} alt="" draggable={false}
+                      style={{ width: '100%', display: 'block', pointerEvents: 'none' }} />
+                  : '✍ ' + q.label)
+                : chipText(q)}
             </div>
           ))}
         </div>
@@ -140,12 +153,39 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 ? <input value={f.label} onChange={(e) => upd(sel, { label: e.target.value })} style={{ width: 140 }} />
                 : f.label}
             </b>
+            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && (
+              <select value={f.type === 'img' ? 'img' : 'text'} style={{ fontSize: 12 }}
+                onChange={(e) => upd(sel, e.target.value === 'img'
+                  ? { type: 'img', w: f.w && f.w <= 40 ? f.w : 18 }
+                  : { type: undefined, size: f.size || 12, w: f.w || 40 })}>
+                <option value="text">Text</option>
+                <option value="img">Image</option>
+              </select>
+            )}
             {f.type === 'qr' ? (
               <>
                 <label className="muted mini">QR size %</label>
                 <input type="number" min="4" max="25" style={{ width: 64 }} value={f.qsize || 9}
                   onChange={(e) => upd(sel, { qsize: Number(e.target.value) || 9 })} />
                 <span className="muted mini">Scanning it opens the hub's verification page for that certificate.</span>
+              </>
+            ) : f.type === 'img' ? (
+              <>
+                <label className="muted mini">width %</label>
+                <input type="number" min="4" max="60" style={{ width: 60 }} value={f.w || 18}
+                  onChange={(e) => upd(sel, { w: Number(e.target.value) || 18 })} />
+                <label className="btn" style={{ cursor: 'pointer' }}>
+                  {f.file_id ? 'Replace image…' : '⬆ Upload image…'}
+                  <input type="file" accept="image/png,image/jpeg" style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      if (!e.target.files.length) return;
+                      try {
+                        const [up] = await apiUpload(e.target.files);
+                        upd(sel, { file_id: up.id });
+                      } catch (e2) { setErr(e2.message); }
+                    }} />
+                </label>
+                <span className="muted mini">PNG with a transparent background looks best for signatures.</span>
               </>
             ) : (
               <>
@@ -162,7 +202,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
                 </label>
               </>
             )}
-            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && (
+            {!AUTO_KEYS.includes(f.key) && f.type !== 'qr' && f.type !== 'img' && (
               <input style={{ flex: 1, minWidth: 220 }} value={f.value || ''}
                 placeholder={f.key === 'desc' ? 'Default description (editable while generating)' : 'Default text (editable while generating)'}
                 onChange={(e) => upd(sel, { value: e.target.value })} />
@@ -187,6 +227,7 @@ function TplEditor({ tpl, onClose, onSaved }) {
                   const [up] = await apiUpload(e.target.files);
                   const updated = await api.patch('/api/certs/templates/' + tpl.id, { bg_file_id: up.id });
                   setBgId(updated.bg_file_id);
+                  setDims({ w: updated.bg_w, h: updated.bg_h });
                 } catch (e2) { setErr(e2.message); }
               }} />
           </label>
@@ -222,7 +263,7 @@ export default function Certificates() {
   // The chosen template's fillable fields drive the generation inputs.
   const chosenTpl = templates.find((t) => t.id === Number(tplId));
   const fillable = (Array.isArray(chosenTpl?.layout?.fields) ? chosenTpl.layout.fields : [])
-    .filter((f) => f.type !== 'qr' && !AUTO_KEYS.includes(f.key) && !f.hidden);
+    .filter((f) => f.type !== 'qr' && f.type !== 'img' && !AUTO_KEYS.includes(f.key) && !f.hidden);
   useEffect(() => {
     const v = {};
     fillable.forEach((f) => { v[f.key] = f.value || ''; });
