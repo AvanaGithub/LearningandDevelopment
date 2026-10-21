@@ -51,7 +51,8 @@ const DEFAULT_QUESTIONS = [
 router.get('/:trainingId', async (req, res, next) => {
   try {
     const trainingId = Number(req.params.trainingId);
-    const { rows: t } = await query('SELECT id, feedback_questions, external_form_url FROM trainings WHERE id=$1', [trainingId]);
+    const { rows: t } = await query(
+      'SELECT id, feedback_questions, external_form_url, fb_workbook_url, fb_last_synced, fb_sync_error FROM trainings WHERE id=$1', [trainingId]);
     if (!t.length) return res.status(404).json({ error: 'Not found' });
     const { rows: responses } = await query(
       `SELECT respondent, user_id, employee_id, scores, comment, created_at
@@ -68,6 +69,9 @@ router.get('/:trainingId', async (req, res, next) => {
     res.json({
       questions: t[0].feedback_questions || DEFAULT_QUESTIONS,
       external_form_url: t[0].external_form_url || null,
+      fb_workbook_url: t[0].fb_workbook_url || null,
+      fb_last_synced: t[0].fb_last_synced || null,
+      fb_sync_error: t[0].fb_sync_error || null,
       responses,
       participant_count: parts.length,
       pending,
@@ -81,9 +85,10 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
   try {
     const trainingId = Number(req.params.trainingId);
     const questions = (req.body?.questions || []).map(normQ).filter((x) => qT(x));
-    // Questions are optional when only the Microsoft Form link is being
-    // set — the stored in-hub questions then stay as they are.
-    const onlyExt = !questions.length && req.body?.external_form_url !== undefined;
+    // Questions are optional when only the Microsoft Form / workbook links
+    // are being set — the stored in-hub questions then stay as they are.
+    const onlyExt = !questions.length &&
+      (req.body?.external_form_url !== undefined || req.body?.workbook_url !== undefined);
     if (!onlyExt && (questions.length < 1 || questions.length > 50)) {
       return res.status(400).json({ error: 'Between 1 and 50 questions' });
     }
@@ -97,15 +102,50 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
       if (v.length > 500) return res.status(400).json({ error: 'The external form link is too long' });
       ext = v || null;
     }
+    // Optional response-workbook link for automatic score sync.
+    let wb = null;
+    if (req.body?.workbook_url !== undefined) {
+      const v = String(req.body.workbook_url || '').trim();
+      if (v && !/^https:\/\/\S+$/i.test(v)) {
+        return res.status(400).json({ error: 'The workbook link must start with https://' });
+      }
+      if (v.length > 500) return res.status(400).json({ error: 'The workbook link is too long' });
+      wb = v || null;
+    }
     const { rowCount } = await query(
       `UPDATE trainings SET
          feedback_questions = CASE WHEN $5::boolean THEN $2::jsonb ELSE feedback_questions END,
          external_form_url = CASE WHEN $3::boolean THEN $4 ELSE external_form_url END,
+         fb_workbook_url = CASE WHEN $6::boolean THEN $7 ELSE fb_workbook_url END,
+         fb_sync_error = CASE WHEN $6::boolean THEN NULL ELSE fb_sync_error END,
          updated_at=now() WHERE id=$1`,
-      [trainingId, JSON.stringify(questions), req.body?.external_form_url !== undefined, ext, !onlyExt]);
+      [trainingId, JSON.stringify(questions), req.body?.external_form_url !== undefined, ext, !onlyExt,
+       req.body?.workbook_url !== undefined, wb]);
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
-    await audit(req.user.id, 'feedback.form_update', 'training', trainingId, { questions, external_form_url: ext });
+    await audit(req.user.id, 'feedback.form_update', 'training', trainingId, { questions, external_form_url: ext, workbook_url: wb });
     res.json({ ok: true, questions });
+  } catch (e) { next(e); }
+});
+
+// Pull responses from the linked Microsoft Forms workbook right now (admin).
+router.post('/:trainingId/sync', requireRole('admin'), async (req, res, next) => {
+  try {
+    const trainingId = Number(req.params.trainingId);
+    const { rows: t } = await query(
+      'SELECT id, feedback_questions, fb_workbook_url FROM trainings WHERE id=$1', [trainingId]);
+    if (!t.length) return res.status(404).json({ error: 'Not found' });
+    if (!t[0].fb_workbook_url) {
+      return res.status(400).json({ error: 'No response workbook linked — open Edit form and paste the Form\'s "Open results in Excel" share link.' });
+    }
+    try {
+      const r = await require('../formsync').syncFeedback(t[0]);
+      await audit(req.user.id, 'feedback.sync', 'training', trainingId, r);
+      res.json({ ok: true, ...r });
+    } catch (e2) {
+      await query('UPDATE trainings SET fb_sync_error=$2, fb_last_synced=now() WHERE id=$1',
+        [trainingId, String(e2.message).slice(0, 400)]);
+      res.status(502).json({ error: e2.message });
+    }
   } catch (e) { next(e); }
 });
 

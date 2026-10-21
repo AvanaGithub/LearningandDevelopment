@@ -183,6 +183,7 @@ export default function Feedback() {
   const [builder, setBuilder] = useState(null);   // {t, checked:Set(labels), custom:[], newQ}
   const [importing, setImporting] = useState(null); // {t, questions, participants}
   const [qr, setQr] = useState(null);
+  const [syncing, setSyncing] = useState(false);
   const [err, setErr] = useState(null);
 
   const exportResults = (r) => toXlsx(
@@ -242,6 +243,7 @@ export default function Feedback() {
           .map((c) => ({ q: qText(c), type: qIsFile(c) ? 'file' : qIsText(c) ? 'text' : 'rating' })),
         newQ: '', paste: '',
         ext: d.external_form_url || '',
+        wb: d.fb_workbook_url || '',
       });
     } catch (e) { setErr(e.message); }
   };
@@ -249,7 +251,7 @@ export default function Feedback() {
     try {
       const questions = [...stdQs.filter((q) => builder.checked.has(q)),
         ...builder.custom.map((c) => (c.type === 'rating' ? c.q : { q: c.q, type: c.type }))];
-      const body = { external_form_url: builder.ext.trim() || null };
+      const body = { external_form_url: builder.ext.trim() || null, workbook_url: builder.wb.trim() || null };
       if (questions.length) body.questions = questions;
       await api.put(`/api/feedback/${builder.t.id}/form`, body);
       toast(builder.ext.trim()
@@ -375,8 +377,35 @@ export default function Feedback() {
               {' '}· scale 1–5
             </p>
             {results.external_form_url && (
-              <p className="muted mini">This training collects feedback on a <a href={results.external_form_url} target="_blank" rel="noreferrer">Microsoft Form</a> —
-                export responses there and use <b>Import</b> to bring the scores in.</p>
+              <p className="muted mini" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>
+                  This training collects feedback on a <a href={results.external_form_url} target="_blank" rel="noreferrer">Microsoft Form</a>
+                  {results.fb_workbook_url
+                    ? <> — responses <b>sync automatically</b> every hour.
+                        {results.fb_last_synced && <> Last checked {new Date(results.fb_last_synced).toLocaleString('en-IN')}.</>}
+                        {results.fb_sync_error && <span style={{ color: 'var(--crit)' }}> Sync problem: {results.fb_sync_error}</span>}</>
+                    : <> — link its response workbook in <b>Edit form</b> for automatic sync, or use <b>Import</b>.</>}
+                </span>
+                {isAdmin && results.fb_workbook_url && (
+                  <button className="btn" disabled={syncing} onClick={async () => {
+                    setSyncing(true);
+                    try {
+                      const r = await api.post(`/api/feedback/${results.t.id}/sync`, {});
+                      toast(`Synced — ${r.matched} respondent(s) matched${r.unmatched ? `, ${r.unmatched} not in the participant list` : ''}.`);
+                      const d = await api.get('/api/feedback/' + results.t.id);
+                      setResults({ t: results.t, ...d });
+                      load();
+                    } catch (e) {
+                      // Show the problem inline (the stored sync_error line).
+                      try {
+                        const d = await api.get('/api/feedback/' + results.t.id);
+                        setResults({ t: results.t, ...d });
+                      } catch { setErr(e.message); }
+                    }
+                    setSyncing(false);
+                  }}>⟳ Sync now</button>
+                )}
+              </p>
             )}
             {(results.pending || []).length > 0 && (
               <details style={{ margin: '6px 0 10px' }}>
@@ -446,6 +475,16 @@ export default function Feedback() {
                   The QR / link will open this Microsoft Form — the in-hub questions below are ignored while the link is set.
                 </p>
               : <p className="muted mini" style={{ marginTop: 4 }}>No link — the QR shows the simple in-hub form below (1–5 ratings and text answers only).</p>}
+
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginTop: 10 }}>
+              Response workbook link (automatic response sync)</label>
+            <input style={{ width: '100%' }} placeholder="https://… (Form → Responses → Open results in Excel → copy that file's share link)"
+              value={builder.wb} onChange={(e) => setBuilder({ ...builder, wb: e.target.value })} />
+            <p className="muted mini" style={{ marginTop: 4 }}>
+              {builder.wb.trim()
+                ? 'Responses pull in automatically every hour (plus a Sync now button on Results) — matched to the participants by their sign-in e-mail, so Results always shows who has completed and who is pending.'
+                : 'Optional — in the Form\'s Responses tab choose "Open results in Excel", then paste that workbook\'s share link here. Responses then sync into Results automatically; without it, use Import.'}
+            </p>
 
             <details style={{ marginTop: 12 }}>
               <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
