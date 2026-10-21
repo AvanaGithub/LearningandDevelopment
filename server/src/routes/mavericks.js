@@ -201,7 +201,8 @@ router.patch('/assessments/:aid', requireRole('admin'), express.json(), async (r
       max_marks: b.max_marks !== undefined && Number(b.max_marks) > 0 ? Number(b.max_marks) : cur[0].max_marks,
       assess_date: b.assess_date !== undefined ? (b.assess_date || null) : cur[0].assess_date,
       external_form_url: b.external_form_url !== undefined ? https(b.external_form_url) : cur[0].external_form_url,
-      workbook_url: b.workbook_url !== undefined ? https(b.workbook_url) : cur[0].workbook_url,
+      workbook_url: b.workbook_url !== undefined
+        ? require('../formsync').assertWorkbookUrl(https(b.workbook_url)) : cur[0].workbook_url,
     };
     const { rows } = await query(
       `UPDATE mav_assessments SET max_marks=$2, assess_date=$3, external_form_url=$4,

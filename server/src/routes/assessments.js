@@ -47,7 +47,7 @@ const pickA = (b) => ({
   max_marks: Number(b.max_marks) > 0 ? Number(b.max_marks) : 100,
   assess_date: b.assess_date || null,
   external_form_url: httpsOrNull(b.external_form_url),
-  workbook_url: httpsOrNull(b.workbook_url),
+  workbook_url: require('../formsync').assertWorkbookUrl(httpsOrNull(b.workbook_url)),
 });
 function httpsOrNull(u) {
   const s = String(u || '').trim();

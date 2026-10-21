@@ -27,7 +27,17 @@ const shareId = (url) =>
   'u!' + Buffer.from(String(url).trim()).toString('base64')
     .replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
 
+// A Forms link is the FORM, not its response workbook — the most common
+// paste mistake. Caught at save time and again before every download.
+const isFormsUrl = (u) => /\/\/(forms\.office\.com|forms\.cloud\.microsoft|forms\.microsoft\.com|forms\.office\.net)/i.test(String(u || ''));
+const FORMS_LINK_MSG = 'That is the Form\'s own link, not the response workbook. Open the Form → Responses → "Open results in Excel"; the workbook opens in Excel Online — there choose Share → Copy link (it looks like https://…sharepoint.com/:x:/…) and paste THAT.';
+function assertWorkbookUrl(u) {
+  if (u && isFormsUrl(u)) throw Object.assign(new Error(FORMS_LINK_MSG), { status: 400 });
+  return u;
+}
+
 async function downloadWorkbook(workbookUrl) {
+  if (isFormsUrl(workbookUrl)) throw new Error(FORMS_LINK_MSG);
   const g = await graphCreds();
   if (!g) throw new Error('Microsoft Graph is not configured (Settings → E-mail notifications)');
   const tok = await g.token();
@@ -36,7 +46,7 @@ async function downloadWorkbook(workbookUrl) {
     { headers: { Authorization: 'Bearer ' + tok } });
   if (!r.ok) {
     const txt = (await r.text()).slice(0, 200);
-    if (r.status === 403) throw new Error('Graph refused the workbook (403) — ask IT to grant the app the Files.Read.All application permission with admin consent.');
+    if (r.status === 403 || r.status === 401) throw new Error('Microsoft refused this link (403). Make sure it is the WORKBOOK\'s share link from Excel Online (Share → Copy link, looks like https://…sharepoint.com/:x:/…), not the Form link; if the link is right, ask IT to confirm the app\'s Files.Read.All admin consent.');
     if (r.status === 404 || r.status === 400) throw new Error('The workbook link could not be opened — paste the share link of the Form\'s "Open results in Excel" file. ' + txt);
     throw new Error(`Graph workbook download failed (${r.status}): ${txt}`);
   }
@@ -249,4 +259,4 @@ async function runFormsSync() {
   } catch (e) { console.error('[formsync]', e.message); }
 }
 
-module.exports = { syncTrainingAssessment, syncMavAssessment, syncFeedback, runFormsSync };
+module.exports = { syncTrainingAssessment, syncMavAssessment, syncFeedback, runFormsSync, assertWorkbookUrl };

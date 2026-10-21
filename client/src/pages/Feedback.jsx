@@ -483,7 +483,7 @@ export default function Feedback() {
             <p className="muted mini" style={{ marginTop: 4 }}>
               {builder.wb.trim()
                 ? 'Responses pull in automatically every hour (plus a Sync now button on Results) — matched to the participants by their sign-in e-mail, so Results always shows who has completed and who is pending.'
-                : 'Optional — in the Form\'s Responses tab choose "Open results in Excel", then paste that workbook\'s share link here. Responses then sync into Results automatically; without it, use Import.'}
+                : 'Optional — in the Form\'s Responses tab choose "Open results in Excel"; the workbook opens in Excel Online — there click Share → Copy link and paste it here (it looks like https://…sharepoint.com/:x:/…, NOT the forms.office.com link). Responses then sync into Results automatically; without it, use Import.'}
             </p>
 
             <details style={{ marginTop: 12 }}>

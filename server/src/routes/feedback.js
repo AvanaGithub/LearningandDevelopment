@@ -110,6 +110,8 @@ router.put('/:trainingId/form', requireRole('admin'), express.json(), async (req
         return res.status(400).json({ error: 'The workbook link must start with https://' });
       }
       if (v.length > 500) return res.status(400).json({ error: 'The workbook link is too long' });
+      try { require('../formsync').assertWorkbookUrl(v); }
+      catch (e2) { return res.status(400).json({ error: e2.message }); }
       wb = v || null;
     }
     const { rowCount } = await query(
