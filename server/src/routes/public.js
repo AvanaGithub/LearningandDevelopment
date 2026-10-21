@@ -163,6 +163,31 @@ router.post('/fb/:token', express.json(), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---- Certificate verification (the QR on every certificate) -------------
+
+router.get('/cert/:certNo', async (req, res, next) => {
+  try {
+    const no = String(req.params.certNo || '').trim();
+    if (!/^[\w-]{4,80}$/.test(no)) return res.status(404).json({ error: 'Certificate not found' });
+    const { rows } = await query(
+      `SELECT c.cert_no, c.issued_at, c.details, e.name AS employee, t.title, t.batch, t.location,
+              (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
+              (SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id) AS last_day
+       FROM certificates c
+       JOIN employees e ON e.id=c.employee_id
+       JOIN trainings t ON t.id=c.training_id
+       WHERE c.cert_no=$1`, [no]);
+    if (!rows.length) return res.status(404).json({ error: 'Certificate not found' });
+    const r = rows[0];
+    res.json({
+      valid: true, cert_no: r.cert_no, employee: r.employee,
+      training: `${r.title}${r.batch ? ' — ' + r.batch : ''}`,
+      location: r.location, first_day: r.first_day, last_day: r.last_day,
+      issued_at: r.issued_at, description: r.details?.desc || null,
+    });
+  } catch (e) { next(e); }
+});
+
 // ---- Budget approval by secure token link (no sign-in needed) -----------
 
 async function approvalByToken(token) {

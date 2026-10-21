@@ -4,8 +4,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { query } = require('../db');
 const { requireRole, audit } = require('../auth');
-const { generateCertPdf, DEFAULT_LAYOUT } = require('../certgen');
+const { generateCertPdf, DEFAULT_LAYOUT, DEFAULT_FIELDS } = require('../certgen');
 const { UPLOAD_DIR } = require('./files');
+const SITE = require('../config').baseUrl || 'https://academy.avanasurgical.com';
 
 // Certificate management: templates (background + layout) and bulk
 // generation of personalised PDFs for a training's participants.
@@ -18,29 +19,41 @@ router.use(requireRole('admin'));
 const fmtD = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
 
 // Issue one certificate (shared with the automatic workflow). t needs
-// first_day/last_day; tpl may be null (built-in design). Throws on a
-// duplicate via the unique constraint unless the caller checked first.
-async function issueCertFor(t, e, tpl, issuedBy) {
+// first_day/last_day; tpl may be null (built-in design); extra holds the
+// generation-form texts (description, signatory, custom fields). Throws on
+// a duplicate via the unique constraint unless the caller checked first.
+async function issueCertFor(t, e, tpl, issuedBy, extra) {
   const label = `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
   const dates = t.first_day
     ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} - ${fmtD(t.last_day)}`)
     : null;
   const certNo = `AVA-${new Date().getFullYear()}-${(t.code || 'TRG').replace(/\s+/g, '')}-${(e.zoho_emp_id || 'E' + e.id).replace(/\s+/g, '')}`;
+  const details = {};
+  for (const [k, v] of Object.entries(extra || {})) {
+    const s = String(v ?? '').trim().slice(0, 600);
+    if (s) details[k] = s;
+  }
   const pdf = await generateCertPdf({
     bgPath: tpl?.bg_file_id ? path.join(UPLOAD_DIR, tpl.bg_file_id) : null,
     layout: tpl?.layout,
-    name: e.name, training: label,
-    dates: [dates, t.location].filter(Boolean).join(' · '),
-    certNo,
+    values: {
+      name: e.name, training: label,
+      dates: [dates, t.location].filter(Boolean).join(' · '),
+      issue_date: fmtD(new Date()),
+      cert_no: certNo,
+      ...details,
+    },
+    verifyUrl: `${SITE}/p/cert/${certNo}`,
   });
   const fileId = crypto.randomBytes(12).toString('hex') + '.pdf';
   fs.writeFileSync(path.join(UPLOAD_DIR, fileId), pdf);
   await query('INSERT INTO files (id, orig_name, mime, size, uploaded_by) VALUES ($1,$2,$3,$4,$5)',
     [fileId, `Certificate - ${e.name} - ${label}.pdf`, 'application/pdf', pdf.length, issuedBy || null]);
   const { rows } = await query(
-    `INSERT INTO certificates (cert_no, training_id, employee_id, template_id, file_id, issued_by)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [certNo, t.id, e.id, tpl?.id || null, fileId, issuedBy || null]);
+    `INSERT INTO certificates (cert_no, training_id, employee_id, template_id, file_id, issued_by, details)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [certNo, t.id, e.id, tpl?.id || null, fileId, issuedBy || null,
+     Object.keys(details).length ? JSON.stringify(details) : null]);
   return rows[0];
 }
 
@@ -82,9 +95,13 @@ router.post('/templates', express.json(), async (req, res, next) => {
   try {
     const b = req.body || {};
     if (!b.name?.trim()) return res.status(400).json({ error: 'Template name is required' });
+    // New templates use the visual fields editor from the start.
+    const layout = b.layout && Array.isArray(b.layout.fields)
+      ? b.layout
+      : { fields: JSON.parse(JSON.stringify(DEFAULT_FIELDS)) };
     const { rows } = await query(
       'INSERT INTO cert_templates (name, bg_file_id, layout) VALUES ($1,$2,$3) RETURNING *',
-      [b.name.trim(), b.bg_file_id || null, JSON.stringify({ ...DEFAULT_LAYOUT, ...(b.layout || {}) })]);
+      [b.name.trim(), b.bg_file_id || null, JSON.stringify(layout)]);
     await audit(req.user.id, 'cert.template_create', 'cert_template', rows[0].id, { name: b.name });
     res.status(201).json(rows[0]);
   } catch (e) { next(e); }
@@ -99,7 +116,10 @@ router.patch('/templates/:id', express.json(), async (req, res, next) => {
     const f = {
       name: b.name?.trim() || cur[0].name,
       bg_file_id: b.bg_file_id !== undefined ? (b.bg_file_id || null) : cur[0].bg_file_id,
-      layout: b.layout ? { ...DEFAULT_LAYOUT, ...b.layout } : cur[0].layout,
+      // A fields layout is stored as-is; legacy layouts keep their defaults.
+      layout: b.layout
+        ? (Array.isArray(b.layout.fields) ? b.layout : { ...DEFAULT_LAYOUT, ...b.layout })
+        : cur[0].layout,
       active: b.active === undefined ? cur[0].active : Boolean(b.active),
     };
     const { rows } = await query(
@@ -119,10 +139,14 @@ router.get('/templates/:id/preview', async (req, res, next) => {
     const pdf = await generateCertPdf({
       bgPath: t.bg_file_id ? path.join(UPLOAD_DIR, t.bg_file_id) : null,
       layout: t.layout,
-      name: 'Participant Name',
-      training: 'Sample Training Programme — Batch 1',
-      dates: '01 Jan 2026 – 03 Jan 2026 · Chennai',
-      certNo: 'AVA-2026-SAMPLE-000',
+      values: {
+        name: 'Participant Name',
+        training: 'Sample Training Programme — Batch 1',
+        dates: '01 Jan 2026 - 03 Jan 2026 · Chennai',
+        issue_date: fmtD(new Date()),
+        cert_no: 'AVA-2026-SAMPLE-000',
+      },
+      verifyUrl: `${SITE}/p/cert/AVA-2026-SAMPLE-000`,
     });
     res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
     res.type('application/pdf').send(pdf);
@@ -177,12 +201,13 @@ router.post('/training/:tid/generate', express.json(), async (req, res, next) =>
       `SELECT e.id, e.name, e.zoho_emp_id FROM employees e
        JOIN training_participants p ON p.employee_id=e.id AND p.training_id=$1
        WHERE e.id = ANY($2::int[])`, [tid, ids]);
+    const extra = (b.values && typeof b.values === 'object') ? b.values : {};
     const issued = []; const skipped = [];
     for (const e of emps) {
       const { rows: dup } = await query(
         'SELECT cert_no FROM certificates WHERE training_id=$1 AND employee_id=$2', [tid, e.id]);
       if (dup.length) { skipped.push(e.name + ' (already issued ' + dup[0].cert_no + ')'); continue; }
-      await issueCertFor(t, e, tpl, req.user.id);
+      await issueCertFor(t, e, tpl, req.user.id, extra);
       issued.push(e.name);
     }
     await audit(req.user.id, 'cert.generate', 'training', tid,
