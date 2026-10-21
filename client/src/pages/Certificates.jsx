@@ -358,6 +358,27 @@ export default function Certificates() {
   const [err, setErr] = useState(null);
 
   const loadTemplates = () => api.get('/api/certs/templates').then(setTemplates).catch((e) => setErr(e.message));
+  // Default to the newest template rather than the built-in design — an
+  // uploaded template is almost always the one meant.
+  const [tplPicked, setTplPicked] = useState(false);
+  useEffect(() => {
+    if (!tplPicked && tplId === '' && templates.length) setTplId(String(templates[0].id));
+  }, [templates]);
+
+  const reissue = async () => {
+    const tplName = templates.find((x) => x.id === Number(tplId))?.name || 'the built-in design';
+    const n = (parts || []).filter((p) => p.cert_id).length;
+    if (!confirm(`Re-make the ${n} already-issued certificate(s) on this training with "${tplName}"?\n\n` +
+      'Certificate numbers and issue dates stay the same, so their QR codes keep working. ' +
+      'You can then e-mail the new versions.')) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post(`/api/certs/training/${tid}/reissue`, { template_id: tplId || null, values: genVals });
+      toast(`${r.reissued} certificate(s) re-issued with ${tplName} — use ✉ E-mail certificates to send the new versions.`);
+      loadParts(tid);
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
   useEffect(() => {
     loadTemplates();
     api.get('/api/trainings').then((rows) => setTrainings(rows.filter((t) => t.status !== 'cancelled')))
@@ -495,14 +516,19 @@ export default function Certificates() {
             <option value="">— choose a training —</option>
             {trainings.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.title}{x.batch ? ' — ' + x.batch : ''}</option>)}
           </select>
-          <select value={tplId} onChange={(e) => setTplId(e.target.value)}>
+          <select value={tplId} onChange={(e) => { setTplId(e.target.value); setTplPicked(true); }}
+            title="The design the certificates are printed on">
+            {templates.map((tp) => <option key={tp.id} value={tp.id}>Template: {tp.name}</option>)}
             <option value="">Built-in design</option>
-            {templates.map((tp) => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
           </select>
           {parts && (
             <>
               <button className="btn gold" disabled={busy || !checked.size} onClick={generate}>
                 {busy ? 'Working…' : `Generate for ${checked.size} participant(s)`}</button>
+              {parts.some((p) => p.cert_id) && (
+                <button className="btn" disabled={busy} onClick={reissue}
+                  title="Re-make already-issued certificates with the selected template (same numbers)">↻ Re-issue with this template</button>
+              )}
               <button className="btn" disabled={busy} onClick={() => emailAll(false)}>✉ E-mail certificates</button>
               <button className="btn" disabled={busy} onClick={() => emailAll(true)} title="Send again to everyone, incl. already e-mailed">✉ Re-send all</button>
             </>
@@ -549,6 +575,8 @@ export default function Certificates() {
                           <>
                             <a href={'/api/files/' + p.file_id} target="_blank" rel="noreferrer">📜 {p.cert_no}</a>
                             <span className="muted mini"> · {fmtDate(p.issued_at)}{p.emailed_at ? ' · ✉ sent' : ''}</span>
+                            <span className={'pill mini ' + (p.template_id ? 'soft' : 'warn')} style={{ marginLeft: 6 }}>
+                              {p.template_id ? p.template_name || 'template' : 'built-in design'}</span>
                           </>
                         ) : <span className="muted mini">—</span>}
                       </td>

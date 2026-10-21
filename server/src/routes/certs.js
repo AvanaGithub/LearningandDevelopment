@@ -60,17 +60,21 @@ async function resolveBg(fileId, userId) {
 // first_day/last_day; tpl may be null (built-in design); extra holds the
 // generation-form texts (description, signatory, custom fields). Throws on
 // a duplicate via the unique constraint unless the caller checked first.
-async function issueCertFor(t, e, tpl, issuedBy, extra) {
-  const label = `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
-  const dates = t.first_day
-    ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} - ${fmtD(t.last_day)}`)
-    : null;
-  const certNo = `AVA-${new Date().getFullYear()}-${(t.code || 'TRG').replace(/\s+/g, '')}-${(e.zoho_emp_id || 'E' + e.id).replace(/\s+/g, '')}`;
+const cleanDetails = (extra) => {
   const details = {};
   for (const [k, v] of Object.entries(extra || {})) {
     const s = String(v ?? '').trim().slice(0, 600);
     if (s) details[k] = s;
   }
+  return details;
+};
+
+// Render + store one certificate PDF; returns the new file id.
+async function renderCertFile(t, e, tpl, certNo, issuedOn, details, userId) {
+  const label = `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
+  const dates = t.first_day
+    ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} - ${fmtD(t.last_day)}`)
+    : null;
   const pdf = await generateCertPdf({
     bgPath: tpl?.bg_file_id ? path.join(UPLOAD_DIR, tpl.bg_file_id) : null,
     bgDims: tpl ? { w: tpl.bg_w, h: tpl.bg_h } : null,
@@ -78,7 +82,7 @@ async function issueCertFor(t, e, tpl, issuedBy, extra) {
     values: {
       name: e.name, training: label,
       dates: [dates, t.location].filter(Boolean).join(' · '),
-      issue_date: fmtD(new Date()),
+      issue_date: fmtD(issuedOn || new Date()),
       cert_no: certNo,
       ...details,
     },
@@ -87,7 +91,14 @@ async function issueCertFor(t, e, tpl, issuedBy, extra) {
   const fileId = crypto.randomBytes(12).toString('hex') + '.pdf';
   fs.writeFileSync(path.join(UPLOAD_DIR, fileId), pdf);
   await query('INSERT INTO files (id, orig_name, mime, size, uploaded_by) VALUES ($1,$2,$3,$4,$5)',
-    [fileId, `Certificate - ${e.name} - ${label}.pdf`, 'application/pdf', pdf.length, issuedBy || null]);
+    [fileId, `Certificate - ${e.name} - ${label}.pdf`, 'application/pdf', pdf.length, userId || null]);
+  return fileId;
+}
+
+async function issueCertFor(t, e, tpl, issuedBy, extra) {
+  const certNo = `AVA-${new Date().getFullYear()}-${(t.code || 'TRG').replace(/\s+/g, '')}-${(e.zoho_emp_id || 'E' + e.id).replace(/\s+/g, '')}`;
+  const details = cleanDetails(extra);
+  const fileId = await renderCertFile(t, e, tpl, certNo, new Date(), details, issuedBy);
   const { rows } = await query(
     `INSERT INTO certificates (cert_no, training_id, employee_id, template_id, file_id, issued_by, details)
      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
@@ -218,7 +229,8 @@ router.get('/training/:tid', async (req, res, next) => {
               (SELECT count(a.mark)::int FROM attendance a WHERE a.training_id=$1 AND a.employee_id=e.id) AS marked,
               coalesce((SELECT sum(CASE a.mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)
                         FROM attendance a WHERE a.training_id=$1 AND a.employee_id=e.id), 0)::float AS present_units,
-              c.id AS cert_id, c.cert_no, c.file_id, c.issued_at, c.emailed_at
+              c.id AS cert_id, c.cert_no, c.file_id, c.issued_at, c.emailed_at,
+              c.template_id, (SELECT ct.name FROM cert_templates ct WHERE ct.id=c.template_id) AS template_name
        FROM training_participants p
        JOIN employees e ON e.id = p.employee_id
        LEFT JOIN certificates c ON c.training_id = p.training_id AND c.employee_id = e.id
@@ -266,6 +278,47 @@ router.post('/training/:tid/generate', express.json(), async (req, res, next) =>
     await audit(req.user.id, 'cert.generate', 'training', tid,
       { issued: issued.length, skipped: skipped.length, template: tpl?.name || 'built-in' });
     res.json({ issued: issued.length, skipped });
+  } catch (e) { next(e); }
+});
+
+// Re-render already-issued certificates with a (new) template. The
+// certificate number and issue date stay the same, so printed QR codes keep
+// verifying; e-mail status resets so the new version can be sent.
+router.post('/training/:tid/reissue', express.json(), async (req, res, next) => {
+  try {
+    const tid = Number(req.params.tid);
+    const b = req.body || {};
+    const { rows: tr } = await query(
+      `SELECT t.*, (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) AS first_day,
+              (SELECT max(d.day) FROM training_days d WHERE d.training_id=t.id) AS last_day
+       FROM trainings t WHERE t.id=$1`, [tid]);
+    if (!tr.length) return res.status(404).json({ error: 'Training not found' });
+    let tpl = null;
+    if (b.template_id) {
+      const { rows: tp } = await query('SELECT * FROM cert_templates WHERE id=$1', [Number(b.template_id)]);
+      if (!tp.length) return res.status(400).json({ error: 'Template not found' });
+      tpl = tp[0];
+    }
+    const ids = Array.isArray(b.employee_ids) ? b.employee_ids.map(Number).filter(Boolean) : null;
+    const { rows: certs } = await query(
+      `SELECT c.*, e.name, e.zoho_emp_id FROM certificates c JOIN employees e ON e.id=c.employee_id
+       WHERE c.training_id=$1 ${ids ? 'AND c.employee_id = ANY($2::int[])' : ''} ORDER BY e.name`,
+      ids ? [tid, ids] : [tid]);
+    if (!certs.length) return res.status(400).json({ error: 'No issued certificates to re-issue on this training' });
+    const newDetails = b.values && typeof b.values === 'object' ? cleanDetails(b.values) : null;
+    let done = 0;
+    for (const c of certs) {
+      const details = newDetails || c.details || {};
+      const fileId = await renderCertFile(tr[0], { id: c.employee_id, name: c.name, zoho_emp_id: c.zoho_emp_id },
+        tpl, c.cert_no, c.issued_at, details, req.user.id);
+      await query(
+        `UPDATE certificates SET file_id=$2, template_id=$3, details=$4, emailed_at=NULL WHERE id=$1`,
+        [c.id, fileId, tpl?.id || null, Object.keys(details).length ? JSON.stringify(details) : null]);
+      done++;
+    }
+    await audit(req.user.id, 'cert.reissue', 'training', tid,
+      { reissued: done, template: tpl?.name || 'built-in', previous_files: certs.map((c) => c.file_id) });
+    res.json({ reissued: done });
   } catch (e) { next(e); }
 });
 

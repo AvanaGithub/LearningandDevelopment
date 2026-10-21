@@ -44,7 +44,12 @@ router.get('/:id', async (req, res, next) => {
     if (!/^[\w.-]+$/.test(id)) return res.status(400).json({ error: 'Bad file id' });
     const { rows } = await query('SELECT * FROM files WHERE id=$1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.setHeader('Content-Disposition', `inline; filename="${rows[0].orig_name.replace(/"/g, '')}"`);
+    // Headers must be plain ASCII: an ASCII fallback name plus the RFC 5987
+    // UTF-8 form for names with dashes, accents or non-Latin script.
+    const orig = rows[0].orig_name || 'file';
+    const ascii = orig.normalize('NFKD').replace(/[^\x20-\x7E]/g, '').replace(/["\\]/g, '').trim() || 'file';
+    res.setHeader('Content-Disposition',
+      `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(orig)}`);
     if (rows[0].mime) res.type(rows[0].mime);
     res.sendFile(path.join(UPLOAD_DIR, id));
   } catch (e) { next(e); }
