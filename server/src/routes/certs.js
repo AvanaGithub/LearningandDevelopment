@@ -129,6 +129,20 @@ async function emailCert(certId) {
   await query('UPDATE certificates SET emailed_at=now() WHERE id=$1', [c.id]);
 }
 
+// ---- fonts (for the editor's live preview) -------------------------------
+
+router.get('/fonts', (req, res) => res.json(require('../certfonts').fontList()));
+
+router.get('/fonts/:key/:variant', (req, res) => {
+  const { FONTS, pkgFile } = require('../certfonts');
+  const f = FONTS[req.params.key];
+  if (!f?.pkg || !/^(400|700)-(normal|italic)$/.test(req.params.variant)) return res.status(404).end();
+  const p = pkgFile(f.pkg, req.params.variant);
+  if (!p) return res.status(404).end();
+  res.setHeader('Cache-Control', 'private, max-age=604800');
+  res.type('font/woff').sendFile(p);
+});
+
 // ---- templates -----------------------------------------------------------
 
 router.get('/templates', async (req, res, next) => {

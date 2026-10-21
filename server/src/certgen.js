@@ -3,6 +3,11 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const sizeOf = require('image-size');
+const { resolveFont } = require('./certfonts');
+
+// Multi-line fields wrap inside their box; one-line fields auto-shrink.
+// Templates saved before the option existed: only the description wraps.
+const isMulti = (f) => (f.multiline === undefined ? f.key === 'desc' : Boolean(f.multiline));
 
 // Personalised certificate PDFs (A4 landscape).
 //
@@ -28,7 +33,7 @@ const DEFAULT_LAYOUT = {
 const DEFAULT_FIELDS = [
   { key: 'name', label: 'Participant name', x: 50, y: 42, size: 32, color: '#1f2937', bold: true, align: 'center', w: 80 },
   { key: 'desc', label: 'Description', x: 50, y: 54, size: 13, color: '#374151', align: 'center', w: 74,
-    value: 'for active participation in the training programme' },
+    multiline: true, lh: 1.5, value: 'for active participation in the training programme' },
   { key: 'training', label: 'Training name', x: 50, y: 64, size: 16, color: '#1f2937', bold: true, align: 'center', w: 80 },
   { key: 'dates', label: 'Dates & location', x: 50, y: 71, size: 11, color: '#6b7280', align: 'center', w: 80 },
   { key: 'issue_date', label: 'Date of issue', x: 18, y: 88, size: 11, color: '#374151', align: 'center', w: 28 },
@@ -106,17 +111,40 @@ function generateCertPdf({ bgPath, bgDims, layout, values, verifyUrl, name, trai
             catch (e) { /* unreadable image — skip rather than fail the batch */ }
             continue;
           }
-          const text = String(vals[f.key] ?? f.value ?? '').trim();
+          let text = String(vals[f.key] ?? f.value ?? '').replace(/\r\n/g, '\n').trim();
           if (!text) continue;
-          const size = Number(f.size) || 12;
-          const wPct = Number(f.w) || 60;
-          const boxW = (wPct / 100) * W;
+          if (f.upper) text = text.toUpperCase();
+          const multi = isMulti(f);
+          if (!multi) text = text.replace(/\s*\n\s*/g, ' ');
+          const boxW = ((Number(f.w) || 60) / 100) * W;
           const align = f.align === 'left' ? 'left' : f.align === 'right' ? 'right' : 'center';
           const x = align === 'center' ? (Number(f.x) / 100) * W - boxW / 2
             : align === 'left' ? (Number(f.x) / 100) * W
             : (Number(f.x) / 100) * W - boxW;
-          doc.font(f.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(f.color || '#333333');
-          doc.text(text, x, (Number(f.y) / 100) * H - size / 2, { width: boxW, align });
+          const sp = (Number(f.spacing) || 0) / 100;      // letter spacing, % of font size
+          const lh = Number(f.lh) || 1.2;                  // line spacing, × font size
+          let size = Number(f.size) || 12;
+          doc.font(resolveFont(f.font, f.bold, f.italic)).fillColor(f.color || '#333333');
+          // One-line fields shrink to fit their box instead of wrapping.
+          if (!multi) {
+            doc.fontSize(size);
+            const tw = doc.widthOfString(text, { characterSpacing: size * sp });
+            if (tw > boxW) size = Math.max(5, size * (boxW / tw) * 0.99);
+          }
+          doc.fontSize(size);
+          const clh = doc.currentLineHeight();
+          const lineGap = multi ? lh * size - clh : 0;
+          const opts = { width: boxW, align, characterSpacing: size * sp, lineGap };
+          // Centre the text block on the field's position, as the editor does.
+          let top;
+          if (multi) {
+            const h = doc.heightOfString(text, opts);
+            const lines = Math.max(1, Math.round((h + lineGap) / (lh * size)));
+            top = (Number(f.y) / 100) * H - (lines * lh * size) / 2 + (lh * size - clh) / 2;
+          } else {
+            top = (Number(f.y) / 100) * H - clh / 2;
+          }
+          doc.text(text, x, top, opts);
         }
         doc.end();
         return;
