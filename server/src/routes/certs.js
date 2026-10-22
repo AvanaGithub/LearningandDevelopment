@@ -60,6 +60,22 @@ async function resolveBg(fileId, userId) {
 // first_day/last_day; tpl may be null (built-in design); extra holds the
 // generation-form texts (description, signatory, custom fields). Throws on
 // a duplicate via the unique constraint unless the caller checked first.
+// Certificate number: AVA-<year>-<6 random characters>, e.g. AVA-2026-K7Q3XP.
+// Random rather than sequential so the public verification page can't be
+// walked to list every holder; no personal data in it. Look-alike
+// characters (0/O, 1/I/L) are left out so it reads and types cleanly.
+const CERT_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+async function newCertNo() {
+  const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const code = [...crypto.randomBytes(6)].map((b) => CERT_ALPHABET[b % CERT_ALPHABET.length]).join('');
+    const no = `AVA-${year}-${code}`;
+    const { rows } = await query('SELECT 1 FROM certificates WHERE cert_no=$1', [no]);
+    if (!rows.length) return no;   // the UNIQUE constraint remains the final guard
+  }
+  throw new Error('Could not allocate a unique certificate number — please try again');
+}
+
 const cleanDetails = (extra) => {
   const details = {};
   for (const [k, v] of Object.entries(extra || {})) {
@@ -96,7 +112,7 @@ async function renderCertFile(t, e, tpl, certNo, issuedOn, details, userId) {
 }
 
 async function issueCertFor(t, e, tpl, issuedBy, extra) {
-  const certNo = `AVA-${new Date().getFullYear()}-${(t.code || 'TRG').replace(/\s+/g, '')}-${(e.zoho_emp_id || 'E' + e.id).replace(/\s+/g, '')}`;
+  const certNo = await newCertNo();
   const details = cleanDetails(extra);
   const fileId = await renderCertFile(t, e, tpl, certNo, new Date(), details, issuedBy);
   const { rows } = await query(
