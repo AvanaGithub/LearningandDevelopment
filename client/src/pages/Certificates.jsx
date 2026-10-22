@@ -57,12 +57,15 @@ export default function Certificates() {
     setGenVals(v);
   }, [tplId, templates]);
 
+  const [notPresent, setNotPresent] = useState(0);
   const loadParts = async (id) => {
-    setTid(id); setParts(null); setChecked(new Set());
+    setTid(id); setParts(null); setChecked(new Set()); setNotPresent(0);
     if (!id) return;
     try {
-      const rows = await api.get('/api/certs/training/' + id);
+      const d = await api.get('/api/certs/training/' + id);
+      const rows = d.participants;
       setParts(rows);
+      setNotPresent(d.not_present || 0);
       setChecked(new Set(rows.filter((p) => !p.cert_id && p.att_pct !== null && p.att_pct >= ELIGIBLE_PCT).map((p) => p.id)));
     } catch (e) { setErr(e.message); }
   };
@@ -216,7 +219,9 @@ export default function Certificates() {
           </div>
         )}
         {t && <p className="muted mini">{fmtRange(t.days || [])}{t.location ? ' · ' + t.location : ''} ·
-          eligibility: ≥{ELIGIBLE_PCT}% attendance (pre-ticked); tick others to override.</p>}
+          only participants <b>marked present</b> are listed; ≥{ELIGIBLE_PCT}% attendance is pre-ticked, tick others to override.
+          {notPresent > 0 && <> · <b>{notPresent}</b> participant(s) not marked present are left out — mark them on the
+          Attendance tab if they did attend.</>}</p>}
         {err && <p className="err" onClick={() => setErr(null)}>{err}</p>}
         {parts && (
           <div style={{ overflowX: 'auto' }}>
@@ -237,8 +242,10 @@ export default function Certificates() {
                       <td className="muted mini">{p.zoho_emp_id || '—'}</td>
                       <td>{p.name}</td>
                       <td style={{ textAlign: 'right' }}>{p.att_pct === null ? <span className="muted mini">not marked</span> : p.att_pct + '%'}</td>
-                      <td>{eligible ? <span className="pill good mini">Eligible</span>
-                        : <span className="pill crit mini" title={p.att_pct === null ? 'No attendance marked yet' : `Below ${ELIGIBLE_PCT}%`}>Not eligible</span>}</td>
+                      <td>{!p.present
+                        ? <span className="pill crit mini" title="Already holds a certificate but is no longer marked present — consider revoking">Not present ⚠</span>
+                        : eligible ? <span className="pill good mini">Eligible</span>
+                        : <span className="pill warn mini" title={`Attended part of the training — below ${ELIGIBLE_PCT}%`}>Below {ELIGIBLE_PCT}%</span>}</td>
                       <td>
                         {p.cert_id ? (
                           <>
@@ -253,7 +260,8 @@ export default function Certificates() {
                     </tr>
                   );
                 })}
-                {!parts.length && <tr><td colSpan={7} className="muted">This training has no participants.</td></tr>}
+                {!parts.length && <tr><td colSpan={7} className="muted">
+                  {notPresent ? 'Nobody on this training is marked present yet — mark attendance first.' : 'This training has no participants.'}</td></tr>}
               </tbody>
             </table>
           </div>

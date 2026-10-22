@@ -249,10 +249,16 @@ router.get('/training/:tid', async (req, res, next) => {
        JOIN employees e ON e.id = p.employee_id
        LEFT JOIN certificates c ON c.training_id = p.training_id AND c.employee_id = e.id
        WHERE p.training_id=$1 ORDER BY e.name`, [tid]);
-    res.json(participants.map((r) => ({
+    // Only people marked present (P or half-day) on at least one day can get
+    // a certificate. Anyone already holding one stays listed so it can be
+    // revoked if their attendance was corrected afterwards.
+    const rows = participants.map((r) => ({
       ...r,
+      present: r.present_units > 0,
       att_pct: r.day_count && r.marked ? Math.round((r.present_units / r.day_count) * 100) : null,
-    })));
+    }));
+    const shown = rows.filter((r) => r.present || r.cert_id);
+    res.json({ participants: shown, not_present: rows.length - shown.length });
   } catch (e) { next(e); }
 });
 
@@ -276,12 +282,18 @@ router.post('/training/:tid/generate', express.json(), async (req, res, next) =>
       if (!tp.length) return res.status(400).json({ error: 'Template not found' });
       tpl = tp[0];
     }
+    // Enforced here, not just in the list: no attendance mark of P or H on
+    // this training means no certificate.
     const { rows: emps } = await query(
       `SELECT e.id, e.name, e.zoho_emp_id FROM employees e
        JOIN training_participants p ON p.employee_id=e.id AND p.training_id=$1
-       WHERE e.id = ANY($2::int[])`, [tid, ids]);
+       WHERE e.id = ANY($2::int[])
+         AND EXISTS (SELECT 1 FROM attendance a WHERE a.training_id=$1 AND a.employee_id=e.id AND a.mark IN ('P','H'))`,
+      [tid, ids]);
     const extra = (b.values && typeof b.values === 'object') ? b.values : {};
     const issued = []; const skipped = [];
+    const notPresent = ids.length - emps.length;
+    if (notPresent > 0) skipped.push(`${notPresent} participant(s) not marked present`);
     for (const e of emps) {
       const { rows: dup } = await query(
         'SELECT cert_no FROM certificates WHERE training_id=$1 AND employee_id=$2', [tid, e.id]);

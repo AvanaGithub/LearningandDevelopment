@@ -121,7 +121,9 @@ async function kick(tid) {
         continue;
       }
       // Step: certificate (auto mode only; manual stays on the Certificates tab).
-      if (t.req_certificate && t.cert_auto && !p.cert_id) {
+      // Requires an actual Present / half-day mark — unlike the nudges above,
+      // a training with no attendance marked yet issues nothing.
+      if (t.req_certificate && t.cert_auto && !p.cert_id && p.present_units > 0) {
         const c = await certs.issueCertFor(t, p, tpl, null);
         if (p.email) await certs.emailCert(c.id).catch((e) => console.error('[wf cert mail]', p.email, e.message));
         console.log(`[workflow] auto-issued ${c.cert_no} for ${p.name}`);
