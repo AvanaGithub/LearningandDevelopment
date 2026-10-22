@@ -5,8 +5,9 @@ import { inr } from './api.js';
 //  * SPENT = the Actual entered on each row of the event's Expenses table
 //    (one row per location, or a "Company-wide" row), plus any older expense
 //    lines still on record. Each amount is counted once.
-//  * Remaining = approved − spent; Variance = spent − approved (positive =
-//    over budget). With no approved budget yet, the estimate is the basis.
+//  * Variance = approved − spent: positive = under budget (saved),
+//    negative = over budget. With no approved budget yet, the estimate is
+//    the basis.
 
 export const n = (v) => Number(v) || 0;
 export const has = (v) => v !== null && v !== undefined && v !== '';
@@ -46,7 +47,7 @@ export function summarize(ev) {
     pending: Math.max(0, spent - paid),
     overpaid: Math.max(0, paid - spent),
     remaining: basis !== null ? basis - spent : null,
-    variance: basis !== null ? spent - basis : null,
+    variance: basis !== null ? basis - spent : null,
     companySpent,
     locationSpent: spent - companySpent,
     unallocated: Math.max(0, companySpent - allocatedTotal),

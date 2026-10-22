@@ -58,7 +58,7 @@ export default function OrgDev() {
 
   // ---- report tables (shared by screen + Excel/CSV) ----
   const eventHeader = ['Event', 'Category', 'Expense type', 'From', 'To', 'Locations', 'Total headcount', 'Participants',
-    'Estimated', 'Requested', 'Approved', 'Spent', 'Company-wide spend', 'Remaining', 'Variance (spent − budget)',
+    'Estimated', 'Requested', 'Approved', 'Spent', 'Company-wide spend', 'Remaining', 'Variance (budget − spent)',
     'Cost per person', 'Approval'];
   const eventRows = (list) => list.map(({ ev, s }) => [
     ev.name, ev.category || '', ev.expense_type === 'company' ? 'Company-wide' : 'Location-wise',
@@ -67,8 +67,8 @@ export default function OrgDev() {
     s.companySpent, signed(s.remaining), signed(s.variance),
     s.perHead === null ? '' : Math.round(s.perHead), ev.apr_status ? (APR[ev.apr_status] || [ev.apr_status])[0] : '']);
   const locRep = byLocation(filtered);
-  const locHeader = ['Location', 'Events', 'Headcount (sum)', 'Estimated', 'Approved', 'Actual', 'Variance (actual − budget)'];
-  const locVar = (l) => { const b = l.approved || l.est; return b ? l.total - b : ''; };
+  const locHeader = ['Location', 'Events', 'Headcount (sum)', 'Estimated', 'Approved', 'Actual', 'Variance (budget − actual)'];
+  const locVar = (l) => { const b = l.approved || l.est; return b ? b - l.total : ''; };
   const locRows = [
     ...locRep.rows.map((l) => [l.location, l.events, l.headcount, l.est, l.approved, l.total, locVar(l)]),
     ...(locRep.unallocated ? [['Company-wide (earlier lines)', '', '', '', '', locRep.unallocated, '']] : []),
@@ -106,7 +106,7 @@ export default function OrgDev() {
   const ft = tot(fsums);
   const tdR = { textAlign: 'right', whiteSpace: 'nowrap' };
   const varCell = (v) => (v === null || v === '' ? <span className="muted">—</span>
-    : <span style={{ color: v > 0 ? 'var(--crit)' : v < 0 ? 'var(--good)' : 'inherit' }}>{v > 0 ? '+' : v < 0 ? '−' : ''}{rs(Math.abs(v))}</span>);
+    : <span style={{ color: v > 0 ? 'var(--good)' : v < 0 ? 'var(--crit)' : 'inherit' }}>{v > 0 ? '+' : v < 0 ? '−' : ''}{rs(Math.abs(v))}</span>);
   const maxBar = Math.max(1, ...fsums.map(({ s }) => Math.max(s.basis || 0, s.spent)));
 
   return (
@@ -216,7 +216,7 @@ export default function OrgDev() {
                     <td>
                       <div title={`${s.basisLabel} ${rs(s.basis || 0)}`} style={{ height: 7, background: 'var(--line)', borderRadius: 4, width: `${((s.basis || 0) / maxBar) * 100}%`, minWidth: 2 }} />
                       <div title={`spent ${rs(s.spent)}`} style={{ height: 7, marginTop: 3, borderRadius: 4, minWidth: 2,
-                        background: s.variance > 0 ? 'var(--crit)' : 'var(--good)', width: `${(s.spent / maxBar) * 100}%` }} />
+                        background: s.variance < 0 ? 'var(--crit)' : 'var(--good)', width: `${(s.spent / maxBar) * 100}%` }} />
                     </td>
                   </tr>
                 ))}

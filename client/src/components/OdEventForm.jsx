@@ -148,9 +148,9 @@ export default function OdEventForm({ event, cats, knownLocs, onClose, onSaved }
           <Card label="Spent" value={rs(s.spent)} sub={s.companySpent ? `${rs(s.companySpent)} company-wide` : null} />
           <Card label="Remaining" value={s.remaining !== null ? rs(s.remaining) : '—'} tone={s.remaining !== null && s.remaining < 0 ? 'crit' : null}
             sub={s.basis !== null ? `of ${s.basisLabel} budget` : 'no budget yet'} />
-          <Card label="Variance" tone={s.variance > 0 ? 'crit' : s.variance < 0 ? 'good' : null}
+          <Card label="Variance" tone={s.variance > 0 ? 'good' : s.variance < 0 ? 'crit' : null}
             value={s.variance === null ? '—' : (s.variance > 0 ? '+' : s.variance < 0 ? '−' : '') + rs(Math.abs(s.variance))}
-            sub={s.variance === null ? '' : s.variance > 0 ? `over ${s.basisLabel}` : s.variance < 0 ? `under ${s.basisLabel}` : 'on budget'} />
+            sub={s.variance === null ? '' : s.variance > 0 ? `under ${s.basisLabel}` : s.variance < 0 ? `over ${s.basisLabel}` : 'on budget'} />
         </div>
 
         <Section title="Event details">
