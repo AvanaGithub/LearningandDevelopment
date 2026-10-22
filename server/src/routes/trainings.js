@@ -15,6 +15,10 @@ const listSelect = `
     (SELECT count(*)::int FROM attendance a WHERE a.training_id = t.id) AS marked_count
   FROM trainings t`;
 
+// Mavericks programme trainings are visible to leaders and above only.
+const NOT_MAVERICKS = `coalesce(t.category, '') !~* 'maverick' AND t.title !~* 'maverick'`;
+const hidesMavericks = (user) => ['manager', 'learner'].includes(user.role);
+
 // Any signed-in role can view trainings and the calendar.
 router.get('/', async (req, res, next) => {
   try {
@@ -37,6 +41,7 @@ router.get('/', async (req, res, next) => {
       params.push(Number(employee_id));
       cond.push(`EXISTS (SELECT 1 FROM training_participants p WHERE p.training_id = t.id AND p.employee_id = $${params.length})`);
     }
+    if (hidesMavericks(req.user)) cond.push(NOT_MAVERICKS);
     const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
     const { rows } = await query(`${listSelect} ${where} ORDER BY t.id DESC LIMIT 500`, params);
     // The QR token is an admin credential — managers browse without it.
@@ -48,7 +53,8 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const { rows } = await query(`${listSelect} WHERE t.id = $1`, [id]);
+    const { rows } = await query(
+      `${listSelect} WHERE t.id = $1${hidesMavericks(req.user) ? ' AND ' + NOT_MAVERICKS : ''}`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     const { rows: parts } = await query(
       `SELECT e.id, e.name, e.zoho_emp_id, e.entity, e.division, e.department, e.email, p.comment,

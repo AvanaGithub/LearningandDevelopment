@@ -10,7 +10,9 @@ const BATCH_STATUS = ['active', 'completed', 'closed'];
 const ASSESS_TYPES = ['Written Assessment', 'Presentation', 'Teach Back', 'Product Demonstration',
   'Viva', 'Final Assessment', 'Reassessment'];
 
-router.get('/', async (req, res, next) => {
+// Leaders and above only — managers and learners must not see Mavericks
+// batches or their dates (the calendar simply shows none for them).
+router.get('/', requireRole('leader'), async (req, res, next) => {
   try {
     const { rows } = await query(
       `SELECT b.*, (SELECT count(*)::int FROM mav_members m WHERE m.batch_id=b.id) AS member_count

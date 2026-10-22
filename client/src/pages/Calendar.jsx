@@ -62,7 +62,7 @@ export default function Calendar() {
           <span style={{ flex: 1 }} />
           <span className="pill soft mini">Internal</span>
           <span className="pill crit mini">External</span>
-          <span className="pill warn mini">Mavericks — blocked</span>
+          {mavs.length > 0 && <span className="pill warn mini">Mavericks — blocked</span>}
           <span className="muted mini">• = mandatory</span>
         </div>
         <div className="cal">

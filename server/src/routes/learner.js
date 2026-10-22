@@ -55,6 +55,7 @@ router.get('/overview', async (req, res, next) => {
               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
        FROM trainings t
        WHERE t.nom_self AND t.status IN ('planned','confirmed','in_progress')
+         AND coalesce(t.category, '') !~* 'maverick' AND t.title !~* 'maverick'
          AND (t.nom_deadline IS NULL OR t.nom_deadline >= $2::date)
          AND NOT EXISTS (SELECT 1 FROM training_participants p WHERE p.training_id=t.id AND p.employee_id=$1)
        ORDER BY t.id DESC`, [me.id, today]);
@@ -64,6 +65,7 @@ router.get('/overview', async (req, res, next) => {
               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
        FROM trainings t
        WHERE t.status IN ('planned','confirmed','in_progress')
+         AND coalesce(t.category, '') !~* 'maverick' AND t.title !~* 'maverick'
          AND EXISTS (SELECT 1 FROM training_days d WHERE d.training_id=t.id AND d.day >= $1::date)
        ORDER BY (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) LIMIT 20`, [today]);
     const { rows: external } = await query(
