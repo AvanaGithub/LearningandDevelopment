@@ -391,9 +391,10 @@ async function budgetContext(apr) {
         _dates: fmtD(e.event_date)
           ? (e.end_date && e.end_date !== e.event_date ? `${fmtD(e.event_date)} – ${fmtD(e.end_date)}` : fmtD(e.event_date))
           : 'dates to be announced',
-        location: e.location, mode: null, trainer_name: null,
+        location: e.expense_type === 'company' ? `Company-wide${e.location && e.location !== 'Company-wide' ? ' · ' + e.location : ''}` : e.location,
+        mode: null, trainer_name: null,
       },
-      participants: e.employee_count,
+      participants: e.participants || e.employee_count,
     };
   }
   const tr = await loadTraining(apr.training_id);

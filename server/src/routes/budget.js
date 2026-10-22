@@ -118,6 +118,7 @@ router.post('/od/:id/request', express.json(), async (req, res, next) => {
       `INSERT INTO budget_approvals (od_event_id, requested_by, requester_name, approver_email, approver_name, amount, note, token)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [oid, req.user.id, req.user.name, ap.email.toLowerCase(), ap.name || null, amount, b.note?.trim() || null, token]);
+    await query('UPDATE od_events SET requested_budget=$2, updated_at=now() WHERE id=$1', [oid, amount]);
     await audit(req.user.id, 'budget.od_request', 'od_event', oid, { approver: ap.email, amount });
     let mail_ok = true, mail_error = null;
     try { await require('../mailer').budgetRequest(rows[0]); }

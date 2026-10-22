@@ -11,6 +11,16 @@ export const toXlsx = (name, header, rows, sheet = 'Data') => {
   XLSX.writeFile(wb, name);
 };
 
+// Same data as a .csv download (UTF-8 with BOM so Excel shows ₹ and names right).
+export const toCsv = (name, header, rows) => {
+  const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet([header, ...rows]));
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
 // Multi-sheet workbook (used by the audit evidence pack).
 export const toWorkbook = (name, sheets) => {
   const wb = XLSX.utils.book_new();
