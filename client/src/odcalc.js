@@ -2,27 +2,27 @@ import { inr } from './api.js';
 
 // Organization Development money rules — the single source for every OD
 // screen and report, so the figures always agree:
-//  * SPENT = sum of the expense lines' actual amounts. Nothing else.
-//  * A line is tagged to one location, or Company-wide. Allocating a
-//    company-wide line across locations only changes the location-wise
-//    view; it is never added to the total again.
+//  * SPENT = the Actual entered on each row of the event's Expenses table
+//    (one row per location, or a "Company-wide" row), plus any older expense
+//    lines still on record. Each amount is counted once.
 //  * Remaining = approved − spent; Variance = spent − approved (positive =
 //    over budget). With no approved budget yet, the estimate is the basis.
-//  * Paid comes from payments; Pending = spent − paid.
 
 export const n = (v) => Number(v) || 0;
 export const has = (v) => v !== null && v !== undefined && v !== '';
 export const rs = (v) => '₹' + inr(v);
 const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 const sum = (arr, f) => arr.reduce((s, x) => s + n(f(x)), 0);
+export const COMPANY_WIDE = 'Company-wide';
+export const isCompanyRow = (l) => same(l.location, COMPANY_WIDE);
 
 export function summarize(ev) {
   const locs = ev.locations || [];
   const items = ev.items || [];
   const pays = ev.payments || [];
-  const spent = sum(items, (i) => i.actual_amount);
   const companyItems = items.filter((i) => !i.location);
-  const companySpent = sum(companyItems, (i) => i.actual_amount);
+  const spent = sum(locs, (l) => l.actual) + sum(items, (i) => i.actual_amount);
+  const companySpent = sum(locs.filter(isCompanyRow), (l) => l.actual) + sum(companyItems, (i) => i.actual_amount);
   const paid = sum(pays, (p) => p.amt);
   const estimated = n(ev.est_budget);
   const approved = has(ev.approved_budget) ? n(ev.approved_budget) : null;
@@ -31,7 +31,7 @@ export function summarize(ev) {
   const basisLabel = approved !== null ? 'approved' : 'estimated';
 
   const byLoc = locs.map((l) => {
-    const direct = sum(items.filter((i) => i.location && same(i.location, l.location)), (i) => i.actual_amount);
+    const direct = n(l.actual) + sum(items.filter((i) => i.location && same(i.location, l.location)), (i) => i.actual_amount);
     const allocated = companyItems.reduce((s, i) =>
       s + sum((i.allocations || []).filter((a) => same(a.location, l.location)), (a) => a.amount), 0);
     const paidHere = sum(pays.filter((p) => p.location && same(p.location, l.location)), (p) => p.amt);
@@ -55,6 +55,7 @@ export function summarize(ev) {
       headcount: sum(locs, (l) => l.headcount),
       est: sum(locs, (l) => l.est_budget),
       approved: sum(locs, (l) => l.approved_budget),
+      actual: sum(locs, (l) => l.actual),
       direct: sum(byLoc, (l) => l.direct),
       allocated: allocatedTotal,
       total: sum(byLoc, (l) => l.total),
@@ -68,10 +69,18 @@ export function summarize(ev) {
   };
 }
 
-// Expense lines grouped by category (across any set of events).
+// Spending grouped by category (across any set of events): each Expenses
+// row's category, plus any older expense lines still on record.
 export function byCategory(events) {
   const g = {};
   for (const ev of events) {
+    for (const l of ev.locations || []) {
+      if (!has(l.est_budget) && !has(l.approved_budget) && !has(l.actual)) continue;
+      const k = l.category || 'Uncategorised';
+      const o = (g[k] = g[k] || { category: k, lines: 0, est: 0, approved: 0, actual: 0, company: 0 });
+      o.lines++; o.est += n(l.est_budget); o.approved += n(l.approved_budget); o.actual += n(l.actual);
+      if (isCompanyRow(l)) o.company += n(l.actual);
+    }
     for (const i of ev.items || []) {
       const k = i.category || 'Uncategorised';
       const o = (g[k] = g[k] || { category: k, lines: 0, est: 0, approved: 0, actual: 0, company: 0 });

@@ -150,6 +150,7 @@ function clean(b) {
       headcount: int(l.headcount, `${loc} headcount`),
       est_budget: num(l.est_budget, `${loc} estimated budget`),
       approved_budget: num(l.approved_budget, `${loc} approved budget`),
+      actual: num(l.actual, `${loc} actual`),
       category: txt(l.category, 80),
       remarks: txt(l.remarks, 500),
     });
@@ -204,20 +205,22 @@ function clean(b) {
 
   // The legacy summary columns stay filled for the rest of the hub (mails).
   ev.location = locations.map((l) => l.location).join(', ') || (ev.expense_type === 'company' ? 'Company-wide' : null);
-  ev.actual = items.reduce((s, i) => s + (i.actual_amount || 0), 0);
-  return { ev, locations, items, payments };
+  ev.actual = locations.reduce((s, l) => s + (l.actual || 0), 0) + items.reduce((s, i) => s + (i.actual_amount || 0), 0);
+  // The event screen no longer edits expense lines or payments: when the
+  // request leaves them out, the stored ones are kept as they are.
+  return { ev, locations, items, payments, hasItems: Array.isArray(b.items), hasPayments: Array.isArray(b.payments) };
 }
 
-async function writeChildren(client, eventId, locations, items) {
+async function writeChildren(client, eventId, locations, items, hasItems) {
   await client.query('DELETE FROM od_locations WHERE event_id=$1', [eventId]);
-  await client.query('DELETE FROM od_items WHERE event_id=$1', [eventId]);
   for (const [i, l] of locations.entries()) {
     await client.query(
-      `INSERT INTO od_locations (event_id, location, headcount, est_budget, approved_budget, category, remarks, sort)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [eventId, l.location, l.headcount, l.est_budget, l.approved_budget, l.category, l.remarks, i]);
+      `INSERT INTO od_locations (event_id, location, headcount, est_budget, approved_budget, actual, category, remarks, sort)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [eventId, l.location, l.headcount, l.est_budget, l.approved_budget, l.actual, l.category, l.remarks, i]);
   }
-  for (const [i, it] of items.entries()) {
+  if (hasItems) await client.query('DELETE FROM od_items WHERE event_id=$1', [eventId]);
+  for (const [i, it] of (hasItems ? items : []).entries()) {
     await client.query(
       `INSERT INTO od_items (event_id, category, description, quantity, est_amount, approved_amount, actual_amount,
          location, allocations, remarks, files, sort)
@@ -226,6 +229,14 @@ async function writeChildren(client, eventId, locations, items) {
        it.location, JSON.stringify(it.allocations), it.remarks, JSON.stringify(it.files), i]);
   }
 }
+
+// The event's stored total spend = per-location actuals + any expense lines
+// still on record (lines are no longer edited, but old ones stay counted).
+const recomputeActual = (client, id) => client.query(
+  `UPDATE od_events SET actual =
+     (SELECT coalesce(sum(actual), 0) FROM od_locations WHERE event_id=$1) +
+     (SELECT coalesce(sum(actual_amount), 0) FROM od_items WHERE event_id=$1)
+   WHERE id=$1`, [id]);
 
 const EV_COLS = ['name', 'category', 'event_date', 'end_date', 'expense_type', 'employee_count', 'participants',
   'est_budget', 'requested_budget', 'approved_budget', 'notes', 'files', 'location', 'actual'];
@@ -241,7 +252,8 @@ router.post('/', express.json({ limit: '2mb' }), async (req, res, next) => {
     const { rows } = await client.query(
       `INSERT INTO od_events (${EV_COLS.join(',')}, payments, created_by) VALUES (${ph}, $${EV_COLS.length + 1}, $${EV_COLS.length + 2}) RETURNING id`,
       [...evVals(data.ev), JSON.stringify(data.payments), req.user.id]);
-    await writeChildren(client, rows[0].id, data.locations, data.items);
+    await writeChildren(client, rows[0].id, data.locations, data.items, data.hasItems);
+    await recomputeActual(client, rows[0].id);
     await client.query('COMMIT');
     await audit(req.user.id, 'od.create', 'od_event', rows[0].id, { name: data.ev.name, locations: data.locations.length, lines: data.items.length });
     res.status(201).json({ id: rows[0].id });
@@ -264,8 +276,9 @@ router.put('/:id', express.json({ limit: '2mb' }), async (req, res, next) => {
     const set = EV_COLS.map((k, i) => `${k}=$${i + 2}`).join(', ');
     await client.query(
       `UPDATE od_events SET ${set}, payments=$${EV_COLS.length + 2}, updated_at=now() WHERE id=$1`,
-      [id, ...evVals(data.ev), JSON.stringify(data.payments)]);
-    await writeChildren(client, id, data.locations, data.items);
+      [id, ...evVals(data.ev), JSON.stringify(data.hasPayments ? data.payments : cur[0].payments)]);
+    await writeChildren(client, id, data.locations, data.items, data.hasItems);
+    await recomputeActual(client, id);
     await client.query('COMMIT');
     await audit(req.user.id, 'od.update', 'od_event', id,
       { previous: { event: cur[0], locations: prevLocs, items: prevItems } }, req.body?.reason);

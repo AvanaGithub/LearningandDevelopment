@@ -3,7 +3,7 @@ import { api, fmtDate } from '../api.js';
 import { useToast } from '../App.jsx';
 import { toXlsx, toCsv, toWorkbook } from '../xlsx.js';
 import OdEventForm from '../components/OdEventForm.jsx';
-import { summarize, byCategory, byLocation, n, rs } from '../odcalc.js';
+import { summarize, byCategory, byLocation, n, rs, isCompanyRow } from '../odcalc.js';
 
 const APR = {
   pending: ['Pending approval', 'warn'], approved: ['Approved', 'good'],
@@ -52,35 +52,37 @@ export default function OrgDev() {
   const sums = useMemo(() => (rows || []).map((ev) => ({ ev, s: summarize(ev) })), [rows]);
   const fsums = useMemo(() => filtered.map((ev) => ({ ev, s: summarize(ev) })), [filtered]);
   const tot = (list) => list.reduce((a, { s }) => ({
-    est: a.est + s.estimated, approved: a.approved + (s.approved || 0), spent: a.spent + s.spent,
-    company: a.company + s.companySpent, paid: a.paid + s.paid, pending: a.pending + s.pending,
-  }), { est: 0, approved: 0, spent: 0, company: 0, paid: 0, pending: 0 });
+    est: a.est + s.estimated, approved: a.approved + (s.approved || 0), spent: a.spent + s.spent, company: a.company + s.companySpent,
+    remaining: a.remaining + (s.remaining || 0),
+  }), { est: 0, approved: 0, spent: 0, company: 0, remaining: 0 });
 
   // ---- report tables (shared by screen + Excel/CSV) ----
   const eventHeader = ['Event', 'Category', 'Expense type', 'From', 'To', 'Locations', 'Total headcount', 'Participants',
     'Estimated', 'Requested', 'Approved', 'Spent', 'Company-wide spend', 'Remaining', 'Variance (spent − budget)',
-    'Paid', 'Pending payment', 'Cost per person', 'Approval'];
+    'Cost per person', 'Approval'];
   const eventRows = (list) => list.map(({ ev, s }) => [
     ev.name, ev.category || '', ev.expense_type === 'company' ? 'Company-wide' : 'Location-wise',
     iso(ev.event_date), iso(ev.end_date), (ev.locations || []).map((l) => l.location).join(', '),
     n(ev.employee_count), ev.participants ?? '', s.estimated, s.requested ?? '', s.approved ?? '', s.spent,
-    s.companySpent, signed(s.remaining), signed(s.variance), s.paid, s.pending,
+    s.companySpent, signed(s.remaining), signed(s.variance),
     s.perHead === null ? '' : Math.round(s.perHead), ev.apr_status ? (APR[ev.apr_status] || [ev.apr_status])[0] : '']);
   const locRep = byLocation(filtered);
-  const locHeader = ['Location', 'Events', 'Headcount (sum)', 'Estimated', 'Approved', 'Spent at location', 'Company-wide allocated', 'Total spend', 'Paid'];
+  const locHeader = ['Location', 'Events', 'Headcount (sum)', 'Estimated', 'Approved', 'Actual', 'Variance (actual − budget)'];
+  const locVar = (l) => { const b = l.approved || l.est; return b ? l.total - b : ''; };
   const locRows = [
-    ...locRep.rows.map((l) => [l.location, l.events, l.headcount, l.est, l.approved, l.direct, l.allocated, l.total, l.paid]),
-    ...(locRep.unallocated ? [['Company-wide (not allocated)', '', '', '', '', '', '', locRep.unallocated, '']] : []),
+    ...locRep.rows.map((l) => [l.location, l.events, l.headcount, l.est, l.approved, l.total, locVar(l)]),
+    ...(locRep.unallocated ? [['Company-wide (earlier lines)', '', '', '', '', locRep.unallocated, '']] : []),
   ];
   const catRep = byCategory(filtered);
-  const catHeader = ['Category', 'Lines', 'Estimated', 'Approved', 'Actual', 'of which company-wide', 'Share of spend'];
+  const catHeader = ['Category', 'Rows', 'Estimated', 'Approved', 'Actual', 'of which company-wide', 'Share of spend'];
   const totalSpent = tot(fsums).spent;
   const catRows = catRep.map((c) => [c.category, c.lines, c.est, c.approved, c.actual, c.company,
     totalSpent ? Math.round((c.actual / totalSpent) * 1000) / 10 + '%' : '']);
-  const cwHeader = ['Event', 'Category', 'Description', 'Qty', 'Estimated', 'Approved', 'Actual', 'Allocated to locations', 'Remarks'];
-  const cwRows = filtered.flatMap((ev) => (ev.items || []).filter((i) => !i.location).map((i) => [
-    ev.name, i.category || '', i.description || '', i.quantity ?? '', n(i.est_amount), n(i.approved_amount), n(i.actual_amount),
-    (i.allocations || []).map((a) => `${a.location} ${a.amount}`).join('; '), i.remarks || '']));
+  const cwHeader = ['Event', 'Category', 'Estimated', 'Approved', 'Actual', 'Remarks'];
+  const cwRows = filtered.flatMap((ev) => [
+    ...(ev.locations || []).filter(isCompanyRow).map((l) => [ev.name, l.category || '', n(l.est_budget), n(l.approved_budget), n(l.actual), l.remarks || '']),
+    ...(ev.items || []).filter((i) => !i.location).map((i) => [ev.name, i.category || '', n(i.est_amount), n(i.approved_amount), n(i.actual_amount), [i.description, i.remarks].filter(Boolean).join(' · ')]),
+  ]);
   const stamp = new Date().toISOString().slice(0, 10);
   const exportBtns = (base, header, data) => (
     <span style={{ display: 'inline-flex', gap: 6 }}>
@@ -89,17 +91,13 @@ export default function OrgDev() {
     </span>
   );
   const exportAll = () => {
-    const lineRows = filtered.flatMap((ev) => (ev.items || []).map((i) => [
-      ev.name, i.category || '', i.description || '', i.quantity ?? '', n(i.est_amount), n(i.approved_amount), n(i.actual_amount),
-      i.location || 'Company-wide', (i.allocations || []).map((a) => `${a.location} ${a.amount}`).join('; '), i.remarks || '',
-      (i.files || []).map((d) => d.name).join('; ')]));
-    const payRows = filtered.flatMap((ev) => (ev.payments || []).map((p) => [ev.name, p.date || '', n(p.amt), p.location || 'Company-wide', p.reference || '', p.note || '']));
+    const expRows = filtered.flatMap((ev) => (ev.locations || []).map((l) => [
+      ev.name, l.location, l.headcount ?? '', n(l.est_budget), n(l.approved_budget), n(l.actual), l.category || '', l.remarks || '']));
     toWorkbook(`OD-expenses-${stamp}.xlsx`, [
       { sheet: 'Events', header: eventHeader, rows: eventRows(fsums) },
+      { sheet: 'Expenses by event', header: ['Event', 'Location', 'Headcount', 'Estimated', 'Approved', 'Actual', 'Expense category', 'Remarks'], rows: expRows },
       { sheet: 'Locations', header: locHeader, rows: locRows },
       { sheet: 'Categories', header: catHeader, rows: catRows },
-      { sheet: 'Expense lines', header: ['Event', 'Category', 'Description', 'Qty', 'Estimated', 'Approved', 'Actual', 'Location', 'Allocations', 'Remarks', 'Documents'], rows: lineRows },
-      { sheet: 'Payments', header: ['Event', 'Date', 'Amount', 'Location', 'Reference', 'Note'], rows: payRows },
       { sheet: 'Company-wide', header: cwHeader, rows: cwRows },
     ]);
   };
@@ -107,7 +105,7 @@ export default function OrgDev() {
   const all = tot(sums);
   const ft = tot(fsums);
   const tdR = { textAlign: 'right', whiteSpace: 'nowrap' };
-  const varCell = (v) => (v === null ? <span className="muted">—</span>
+  const varCell = (v) => (v === null || v === '' ? <span className="muted">—</span>
     : <span style={{ color: v > 0 ? 'var(--crit)' : v < 0 ? 'var(--good)' : 'inherit' }}>{v > 0 ? '+' : v < 0 ? '−' : ''}{rs(Math.abs(v))}</span>);
   const maxBar = Math.max(1, ...fsums.map(({ s }) => Math.max(s.basis || 0, s.spent)));
 
@@ -124,17 +122,16 @@ export default function OrgDev() {
       </div>
       <p className="muted mini">
         Confidential — visible only to authorised OD users, the budget approvers and the super admin.
-        Spent is always the total of each event's expense lines; company-wide purchases can be allocated
-        across locations without being counted twice.
+        Spent is the total of the Actual column in each event's Expenses table.
       </p>
       {err && <p className="err" onClick={() => setErr(null)}>{err}</p>}
 
       {!rows ? <p className="muted">Loading…</p> : tab === 'events' ? (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table style={{ minWidth: 1100 }}>
+          <table style={{ minWidth: 1000 }}>
             <thead><tr><th>Event</th><th>Dates</th><th>Locations</th><th style={tdR}>Headcount</th>
               <th style={tdR}>Approved</th><th style={tdR}>Spent</th><th style={tdR}>Remaining</th><th style={tdR}>Variance</th>
-              <th style={tdR}>Paid / pending</th><th>Approval</th><th /></tr></thead>
+              <th>Approval</th><th /></tr></thead>
             <tbody>
               {sums.map(({ ev, s }) => (
                 <tr key={ev.id}>
@@ -148,13 +145,12 @@ export default function OrgDev() {
                   <td className="muted mini">{dateRange(ev)}</td>
                   <td className="mini">{(ev.locations || []).length
                     ? (ev.locations.length > 3 ? `${ev.locations.length} locations` : ev.locations.map((l) => l.location).join(', '))
-                    : <span className="muted">{ev.expense_type === 'company' ? 'Company-wide' : '—'}</span>}</td>
+                    : <span className="muted">—</span>}</td>
                   <td style={tdR}>{ev.participants ? `${ev.participants} / ` : ''}{n(ev.employee_count) || '—'}</td>
                   <td style={tdR}>{s.approved !== null ? rs(s.approved) : <span className="muted" title="No approved budget yet — estimate shown">{rs(s.estimated)} est.</span>}</td>
                   <td style={tdR}>{rs(s.spent)}</td>
                   <td style={{ ...tdR, color: s.remaining !== null && s.remaining < 0 ? 'var(--crit)' : 'inherit' }}>{s.remaining !== null ? rs(s.remaining) : '—'}</td>
                   <td style={tdR}>{varCell(s.variance)}</td>
-                  <td style={tdR}>{rs(s.paid)}<div className="muted mini">{s.overpaid ? <span style={{ color: 'var(--crit)' }}>paid {rs(s.overpaid)} over spend</span> : `${rs(s.pending)} pending`}</div></td>
                   <td>{ev.apr_status
                     ? <span className={'pill mini ' + (APR[ev.apr_status] || ['', 'soft'])[1]} title={ev.apr_comment ? `${ev.apr_approver || ''}: ${ev.apr_comment}` : ev.apr_approver || ''}>
                         {(APR[ev.apr_status] || [ev.apr_status])[0]}</span>
@@ -169,11 +165,10 @@ export default function OrgDev() {
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
                   <td colSpan={4}>All events ({sums.length})</td>
                   <td style={tdR}>{rs(all.approved)}</td><td style={tdR}>{rs(all.spent)}</td>
-                  <td colSpan={2} className="muted mini" style={{ fontWeight: 400 }}>{rs(all.company)} company-wide</td>
-                  <td style={tdR}>{rs(all.paid)}<div className="muted mini">{rs(all.pending)} pending</div></td><td colSpan={2} />
+                  <td colSpan={4} className="muted mini" style={{ fontWeight: 400 }}>{all.company ? `${rs(all.company)} company-wide` : ''}</td>
                 </tr>
               )}
-              {!sums.length && <tr><td colSpan={11} className="muted">No OD events yet — add the first one.</td></tr>}
+              {!sums.length && <tr><td colSpan={10} className="muted">No OD events yet — add the first one.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -196,35 +191,36 @@ export default function OrgDev() {
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
             {[['Events', filtered.length, false], ['Estimated', ft.est], ['Approved', ft.approved], ['Spent', ft.spent],
-              ['Company-wide spend', ft.company], ['Paid', ft.paid], ['Pending payment', ft.pending]].map(([k, val, money = true]) => (
+              ['Remaining', ft.remaining], ['Company-wide spend', ft.company]].map(([k, val, money = true]) => (
               <div key={k} className="card" style={{ flex: '1 1 130px', margin: 0, padding: '10px 14px' }}>
                 <div className="muted mini" style={{ textTransform: 'uppercase' }}>{k}</div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{money ? rs(val) : val}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: money && val < 0 ? 'var(--crit)' : 'inherit' }}>{money ? rs(val) : val}</div>
               </div>
             ))}
           </div>
 
           <div className="card" style={{ overflowX: 'auto' }}>
             <div className="toolbar"><h3 style={{ fontSize: 14, margin: 0, flex: 1 }}>Event-wise expenses · budget vs actual</h3>{exportBtns('OD-events', eventHeader, eventRows(fsums))}</div>
-            <table style={{ minWidth: 980 }}>
+            <table style={{ minWidth: 860 }}>
               <thead><tr><th>Event</th><th>Category</th><th style={tdR}>Estimated</th><th style={tdR}>Approved</th><th style={tdR}>Spent</th>
-                <th style={tdR}>Variance</th><th style={{ width: 220 }}>Budget vs actual</th><th style={tdR}>Paid</th><th style={tdR}>Pending</th></tr></thead>
+                <th style={tdR}>Remaining</th><th style={tdR}>Variance</th><th style={{ width: 220 }}>Budget vs actual</th></tr></thead>
               <tbody>
                 {fsums.map(({ ev, s }) => (
                   <tr key={ev.id} style={{ cursor: 'pointer' }} onClick={() => setOpen(ev)} title="Open the full breakdown">
                     <td><b>{ev.name}</b><div className="muted mini">{dateRange(ev)}</div></td>
                     <td className="mini">{ev.category || '—'}</td>
                     <td style={tdR}>{rs(s.estimated)}</td><td style={tdR}>{s.approved !== null ? rs(s.approved) : '—'}</td>
-                    <td style={tdR}>{rs(s.spent)}</td><td style={tdR}>{varCell(s.variance)}</td>
+                    <td style={tdR}>{rs(s.spent)}</td>
+                    <td style={{ ...tdR, color: s.remaining !== null && s.remaining < 0 ? 'var(--crit)' : 'inherit' }}>{s.remaining !== null ? rs(s.remaining) : '—'}</td>
+                    <td style={tdR}>{varCell(s.variance)}</td>
                     <td>
                       <div title={`${s.basisLabel} ${rs(s.basis || 0)}`} style={{ height: 7, background: 'var(--line)', borderRadius: 4, width: `${((s.basis || 0) / maxBar) * 100}%`, minWidth: 2 }} />
                       <div title={`spent ${rs(s.spent)}`} style={{ height: 7, marginTop: 3, borderRadius: 4, minWidth: 2,
                         background: s.variance > 0 ? 'var(--crit)' : 'var(--good)', width: `${(s.spent / maxBar) * 100}%` }} />
                     </td>
-                    <td style={tdR}>{rs(s.paid)}</td><td style={tdR}>{rs(s.pending)}</td>
                   </tr>
                 ))}
-                {!fsums.length && <tr><td colSpan={9} className="muted">No events match the filters.</td></tr>}
+                {!fsums.length && <tr><td colSpan={8} className="muted">No events match the filters.</td></tr>}
               </tbody>
             </table>
             <p className="muted mini">Grey bar = budget (approved, or the estimate until approved) · coloured bar = spent (red when over budget). Click an event for its complete breakdown.</p>
@@ -237,14 +233,16 @@ export default function OrgDev() {
               <tbody>
                 {locRep.rows.map((l) => (
                   <tr key={l.location}><td><b>{l.location}</b></td><td style={tdR}>{l.events}</td><td style={tdR}>{l.headcount || '—'}</td>
-                    <td style={tdR}>{rs(l.est)}</td><td style={tdR}>{rs(l.approved)}</td><td style={tdR}>{rs(l.direct)}</td>
-                    <td style={tdR}>{l.allocated ? rs(l.allocated) : '—'}</td><td style={{ ...tdR, fontWeight: 700 }}>{rs(l.total)}</td><td style={tdR}>{rs(l.paid)}</td></tr>
+                    <td style={tdR}>{rs(l.est)}</td><td style={tdR}>{rs(l.approved)}</td>
+                    <td style={{ ...tdR, fontWeight: 700 }}>{rs(l.total)}</td><td style={tdR}>{varCell(locVar(l))}</td></tr>
                 ))}
                 {locRep.unallocated > 0 && (
-                  <tr><td className="muted">Company-wide (not allocated)</td><td colSpan={6} /><td style={{ ...tdR, fontWeight: 700 }}>{rs(locRep.unallocated)}</td><td /></tr>
+                  <tr><td className="muted">Company-wide (earlier lines)</td><td colSpan={4} /><td style={{ ...tdR, fontWeight: 700 }}>{rs(locRep.unallocated)}</td><td /></tr>
                 )}
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
-                  <td>Total</td><td colSpan={6} className="muted mini" style={{ fontWeight: 400 }}>equals total spent — allocations are not counted twice</td>
+                  <td>Total</td><td colSpan={2} />
+                  <td style={tdR}>{rs(locRep.rows.reduce((a, l) => a + l.est, 0))}</td>
+                  <td style={tdR}>{rs(locRep.rows.reduce((a, l) => a + l.approved, 0))}</td>
                   <td style={tdR}>{rs(locRep.rows.reduce((a, l) => a + l.total, 0) + locRep.unallocated)}</td><td />
                 </tr>
               </tbody>
@@ -260,7 +258,7 @@ export default function OrgDev() {
                   <tr key={r[0]}><td><b>{r[0]}</b></td><td style={tdR}>{r[1]}</td><td style={tdR}>{rs(r[2])}</td><td style={tdR}>{rs(r[3])}</td>
                     <td style={{ ...tdR, fontWeight: 700 }}>{rs(r[4])}</td><td style={tdR}>{r[5] ? rs(r[5]) : '—'}</td><td style={tdR}>{r[6]}</td></tr>
                 ))}
-                {!catRows.length && <tr><td colSpan={7} className="muted">No expense lines yet.</td></tr>}
+                {!catRows.length && <tr><td colSpan={7} className="muted">No expenses recorded yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -268,14 +266,13 @@ export default function OrgDev() {
           <div className="card" style={{ overflowX: 'auto' }}>
             <div className="toolbar"><h3 style={{ fontSize: 14, margin: 0, flex: 1 }}>Company-wide expenditure — {rs(ft.company)}</h3>{exportBtns('OD-company-wide', cwHeader, cwRows)}</div>
             <table>
-              <thead><tr>{cwHeader.map((h, i) => <th key={h} style={i >= 3 && i <= 6 ? tdR : {}}>{h}</th>)}</tr></thead>
+              <thead><tr>{cwHeader.map((h, i) => <th key={h} style={i >= 2 && i <= 4 ? tdR : {}}>{h}</th>)}</tr></thead>
               <tbody>
                 {cwRows.map((r, i) => (
-                  <tr key={i}><td>{r[0]}</td><td className="mini">{r[1]}</td><td>{r[2]}</td><td style={tdR}>{r[3]}</td>
-                    <td style={tdR}>{rs(r[4])}</td><td style={tdR}>{rs(r[5])}</td><td style={{ ...tdR, fontWeight: 700 }}>{rs(r[6])}</td>
-                    <td className="mini">{r[7] || <span className="muted">not allocated</span>}</td><td className="mini">{r[8]}</td></tr>
+                  <tr key={i}><td>{r[0]}</td><td className="mini">{r[1] || '—'}</td><td style={tdR}>{rs(r[2])}</td><td style={tdR}>{rs(r[3])}</td>
+                    <td style={{ ...tdR, fontWeight: 700 }}>{rs(r[4])}</td><td className="mini">{r[5]}</td></tr>
                 ))}
-                {!cwRows.length && <tr><td colSpan={9} className="muted">No company-wide expense lines.</td></tr>}
+                {!cwRows.length && <tr><td colSpan={6} className="muted">No company-wide expenses.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -291,7 +288,7 @@ export default function OrgDev() {
         <div className="modal-backdrop" onClick={() => setCatEdit(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
             <h3>OD categories</h3>
-            <p className="muted mini">One per line. Renaming or removing a category doesn't change lines already saved with the old name.</p>
+            <p className="muted mini">One per line. Renaming or removing a category doesn't change rows already saved with the old name.</p>
             <div className="form-grid">
               <div><label>Expense categories</label>
                 <textarea rows={10} style={{ width: '100%', fontFamily: 'inherit', fontSize: 13 }} value={catEdit.expense}
