@@ -18,7 +18,7 @@ const isText = (f) => !f.type || f.type === 'text';
 const SAMPLE = {
   name: 'Participant Name', training: 'Training Name — Batch 1',
   dates: '01 Jan 2026 - 03 Jan 2026 · Chennai', issue_date: '21 Oct 2026',
-  cert_no: 'AVA-2026-K7Q3XP',
+  cert_no: 'AVA-2026-482913',
 };
 const SNAP = 0.8;          // % of the page within which a guide catches
 

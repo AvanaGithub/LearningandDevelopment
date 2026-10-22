@@ -60,15 +60,13 @@ async function resolveBg(fileId, userId) {
 // first_day/last_day; tpl may be null (built-in design); extra holds the
 // generation-form texts (description, signatory, custom fields). Throws on
 // a duplicate via the unique constraint unless the caller checked first.
-// Certificate number: AVA-<year>-<6 random characters>, e.g. AVA-2026-K7Q3XP.
+// Certificate number: AVA-<year>-<6 random digits>, e.g. AVA-2026-482913.
 // Random rather than sequential so the public verification page can't be
-// walked to list every holder; no personal data in it. Look-alike
-// characters (0/O, 1/I/L) are left out so it reads and types cleanly.
-const CERT_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+// walked to list every holder; no personal data in it.
 async function newCertNo() {
   const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const code = [...crypto.randomBytes(6)].map((b) => CERT_ALPHABET[b % CERT_ALPHABET.length]).join('');
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
     const no = `AVA-${year}-${code}`;
     const { rows } = await query('SELECT 1 FROM certificates WHERE cert_no=$1', [no]);
     if (!rows.length) return no;   // the UNIQUE constraint remains the final guard
@@ -238,9 +236,9 @@ router.get('/templates/:id/preview', async (req, res, next) => {
         training: 'Sample Training Programme — Batch 1',
         dates: '01 Jan 2026 - 03 Jan 2026 · Chennai',
         issue_date: fmtD(new Date()),
-        cert_no: 'AVA-2026-SAMPLE-000',
+        cert_no: 'AVA-2026-000000',
       },
-      verifyUrl: `${SITE}/p/cert/AVA-2026-SAMPLE-000`,
+      verifyUrl: `${SITE}/p/cert/AVA-2026-000000`,
     });
     res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
     res.type('application/pdf').send(pdf);
