@@ -145,8 +145,29 @@ function fill(tpl, map, asHtml) {
   let out = String(tpl || '');
   for (const [k, v] of Object.entries(map)) out = out.split(`{${k}}`).join(v || '');
   if (!asHtml) return out;
-  out = out.split('\n').filter((line) => !/^[^:\n]{1,40}:\s*$/.test(line.trim())).join('\n');
-  return esc(out).replace(/\n/g, '<br>');
+  const lines = out.split('\n').filter((line) => !/^[^:\n]{1,40}:\s*$/.test(line.trim()));
+  // Consecutive "Label: value" lines become a two-column details table.
+  let html = '';
+  let rows = [];
+  const flush = () => {
+    if (!rows.length) return;
+    html += `<table style="border-collapse:collapse;margin:4px 0 12px;font-size:14px">${rows.join('')}</table>`;
+    rows = [];
+  };
+  for (const line of lines) {
+    const m = line.trim().match(/^([A-Za-z][^:\n]{0,40}):\s+(.+)$/);
+    if (m) {
+      rows.push(`<tr><td style="padding:4px 18px 4px 0;color:#8a7a5c;vertical-align:top;white-space:nowrap">${esc(m[1])}</td>`
+        + `<td style="padding:4px 0;font-weight:600;color:#2b2317">${esc(m[2])}</td></tr>`);
+      continue;
+    }
+    const wasTable = rows.length > 0;
+    flush();
+    if (line.trim()) html += esc(line) + '<br>';
+    else if (!wasTable) html += '<br>';
+  }
+  flush();
+  return html;
 }
 
 async function loadTraining(trainingId) {
@@ -159,10 +180,24 @@ async function loadTraining(trainingId) {
   const t = rows[0];
   t._label = `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
   t._dates = fmtD(t.first_day)
-    ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} → ${fmtD(t.last_day)}`)
+    ? (t.first_day === t.last_day ? fmtD(t.first_day) : `${fmtD(t.first_day)} – ${fmtD(t.last_day)} (${t.day_count} days)`)
     : 'dates to be announced';
+  t._location = (t.location || '').trim() || 'To be announced';
+  t._trainer = t.trainer_type === 'external'
+    ? [t.agency, t.trainer_name].filter(Boolean).join(' — ') || 'External trainer'
+    : t.trainer_name || 'Internal trainer';
+  const hpd = Number(t.hours_per_day) || 0;
+  t._duration = t.day_count
+    ? `${t.day_count} day${t.day_count === 1 ? '' : 's'}${hpd ? ` · ${hpd} h per day (${hpd * t.day_count} h total)` : ''}`
+    : '';
   return t;
 }
+
+// Placeholders every training mail can use.
+const trainingFields = (tr) => ({
+  training: tr._label, code: tr.code, dates: tr._dates, location: tr._location,
+  mode: tr.mode || '', trainer: tr._trainer, duration: tr._duration,
+});
 
 // One mail to every newly nominated/assigned employee (who has an e-mail),
 // with a sign-in link to the hub.
@@ -180,15 +215,14 @@ async function notifyNomination({ trainingId, employeeIds, source, byName, slot 
     const tpl = await templates();
     const mapFor = (name) => ({
       name, kind: source === 'admin' ? 'assignment' : 'nomination', verb,
-      training: tr._label, code: tr.code, dates: tr._dates, mode: tr.mode || '',
-      slot: slot || '', how: bySrc,
+      ...trainingFields(tr), slot: slot || '', how: bySrc,
     });
     for (const e of emps) {
       if (!e.email) continue;
       const map = mapFor(e.name);
       sendMail(c, e.email, fill(tpl.nominee_subject, map, false),
         `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
-           ${LOGO}<p>${fill(tpl.nominee_body, map, true)}</p>${SITE_BTN}${FOOT}
+           ${LOGO}<div>${fill(tpl.nominee_body, map, true)}</div>${SITE_BTN}${FOOT}
          </div>`)
         .catch((err) => console.error('[mail]', e.email, err.message));
     }
@@ -219,12 +253,12 @@ async function announceSelfNomination(trainingId) {
     const tpl = await templates();
     for (const e of eligible) {
       const map = {
-        name: e.name, training: tr._label, code: tr.code, dates: tr._dates,
-        mode: tr.mode || '', deadline: tr.nom_deadline ? fmtD(tr.nom_deadline) : '', link,
+        name: e.name, ...trainingFields(tr),
+        deadline: tr.nom_deadline ? fmtD(tr.nom_deadline) : '', link,
       };
       await sendMail(c, e.email, fill(tpl.announce_subject, map, false),
         `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
-           ${LOGO}<p>${fill(tpl.announce_body, map, true)}</p>
+           ${LOGO}<div>${fill(tpl.announce_body, map, true)}</div>
            <p><a href="${link}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Nominate myself</a></p>
            ${FOOT}
          </div>`)

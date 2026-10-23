@@ -36,9 +36,9 @@ const DEFAULTS = {
   // the logo, "open the hub" button and footer are added automatically.
   email_templates: {
     nominee_subject: 'Training {kind} — {training}',
-    nominee_body: 'Dear {name},\n\nYou have been {verb} the training below:\n\nTraining: {training} ({code})\nDates: {dates}\nMode: {mode}\nPreferred slot: {slot}\nHow: {how}\n\nPlease block the dates in your calendar. Attendance is recorded on the training day.',
+    nominee_body: 'Dear {name},\n\nYou have been {verb} the training below.\n\nTraining: {training}\nTraining code: {code}\nDates: {dates}\nDuration: {duration}\nLocation: {location}\nTraining mode: {mode}\nTrainer: {trainer}\nPreferred slot: {slot}\nHow you were assigned: {how}\n\nPlease block the dates in your calendar. Attendance is recorded on the training day.',
     announce_subject: 'Nominations open — {training}',
-    announce_body: 'Dear {name},\n\nNominations are now open for the training below — you can nominate yourself.\n\nTraining: {training} ({code})\nDates: {dates}\nMode: {mode}\nNominate by: {deadline}\n\nUse the button below — you will sign in with Zoho so the nomination is recorded in your name.',
+    announce_body: 'Dear {name},\n\nNominations are now open for the training below — you can nominate yourself.\n\nTraining: {training}\nTraining code: {code}\nDates: {dates}\nDuration: {duration}\nLocation: {location}\nTraining mode: {mode}\nTrainer: {trainer}\nNominate by: {deadline}\n\nUse the button below — you will sign in with Zoho so the nomination is recorded in your name.',
   },
   // Who can approve training budget requests (Training Plan → Budget
   // approval). Editable by the super admin on the Settings screen.

@@ -334,9 +334,9 @@ export default function Settings() {
           const set = (k, v) => setTplDraft({ ...td, [k]: v });
           const blocks = [
             { sKey: 'nominee_subject', bKey: 'nominee_body', title: 'Nomination / assignment mail (to the employee)',
-              ph: '{name} {kind} {verb} {training} {code} {dates} {mode} {slot} {how}' },
+              ph: '{name} {kind} {verb} {training} {code} {dates} {duration} {location} {mode} {trainer} {slot} {how}' },
             { sKey: 'announce_subject', bKey: 'announce_body', title: 'Nominations-open invitation (to eligible employees)',
-              ph: '{name} {training} {code} {dates} {mode} {deadline} {link}' },
+              ph: '{name} {training} {code} {dates} {duration} {location} {mode} {trainer} {deadline} {link}' },
           ];
           return (
             <details className="card scard setcard" style={{ marginBottom: 16 }}>
