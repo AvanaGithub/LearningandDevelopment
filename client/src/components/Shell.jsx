@@ -27,13 +27,15 @@ export default function Shell() {
     refresh();
   };
 
+  // Reload after switching so every page re-fetches under the new role —
+  // otherwise data loaded as super admin stays on screen in the preview.
   const viewAs = async (role) => {
     await fetch('/auth/view-as', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: role || null }),
     });
-    refresh();
+    window.location.reload();
   };
 
   return (

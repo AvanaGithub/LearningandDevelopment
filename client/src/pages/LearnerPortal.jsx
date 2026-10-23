@@ -27,7 +27,7 @@ export default function LearnerPortal() {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: null }),
     });
-    refresh();
+    window.location.reload();
   };
 
   const checkin = async (t) => {
