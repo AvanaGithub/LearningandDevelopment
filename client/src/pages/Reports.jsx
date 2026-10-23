@@ -14,6 +14,195 @@ const CSTAT = {
 };
 const SRC = { self: 'Self', manager: 'Manager', leader: 'Leader', admin: 'Admin' };
 
+// ---- Training attendance report (from–to dates) ---------------------------
+
+const AST = {
+  attended: ['Attended', 'good'], partial: ['Partially attended', 'warn'],
+  absent: ['Absent', 'crit'], leave: ['Leave', 'neutral'], not_marked: ['Not marked', 'soft'],
+};
+const isoDay = (d) => {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const fyStart = () => {
+  const now = new Date();
+  return new Date(now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1, 3, 1);
+};
+const dayRange = (days) => {
+  if (!days || !days.length) return '—';
+  if (days.length === 1) return fmtDate(days[0]);
+  return `${fmtDate(days[0])} – ${fmtDate(days[days.length - 1])} (${days.length} days)`;
+};
+
+function AttendanceReport({ onClose }) {
+  const today = new Date();
+  const [from, setFrom] = useState(isoDay(fyStart()));
+  const [to, setTo] = useState(isoDay(today));
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [view, setView] = useState('summary');
+  const [f, setF] = useState({ trn: [], dept: [], div: [], ent: [], status: [] });
+
+  const run = async (a = from, b = to) => {
+    setBusy(true); setErr(null);
+    try { setData(await api.get(`/api/reports/attendance?from=${a}&to=${b}`)); } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  useEffect(() => { run(); }, []);
+  const preset = (a, b) => { setFrom(isoDay(a)); setTo(isoDay(b)); run(isoDay(a), isoDay(b)); };
+  const y = today.getFullYear(); const m = today.getMonth();
+
+  const ok = (arr, v) => !arr.length || arr.includes(v);
+  const trns = data?.trainings || [];
+  const byT = Object.fromEntries(trns.map((t) => [t.id, t]));
+  const parts = (data?.participants || []).filter((p) =>
+    ok(f.trn, p.training_id) && ok(f.dept, p.department) && ok(f.div, p.division) && ok(f.ent, p.entity) && ok(f.status, p.status));
+  const peopleFiltered = f.dept.length || f.div.length || f.ent.length || f.status.length;
+
+  // One summary row per training, built from the (filtered) participants.
+  const summary = trns.filter((t) => ok(f.trn, t.id)).map((t) => {
+    const ps = parts.filter((p) => p.training_id === t.id);
+    const c = (s) => ps.filter((p) => p.status === s).length;
+    const marked = ps.length - c('not_marked');
+    const attended = c('attended') + c('partial');
+    return { t, assigned: ps.length, attended, partial: c('partial'), absent: c('absent'), leave: c('leave'),
+      notMarked: c('not_marked'), pct: marked ? Math.round((attended / marked) * 100) : null };
+  }).filter((r) => !peopleFiltered || r.assigned);
+  const T = summary.reduce((a, r) => ({
+    assigned: a.assigned + r.assigned, attended: a.attended + r.attended, partial: a.partial + r.partial,
+    absent: a.absent + r.absent, leave: a.leave + r.leave, notMarked: a.notMarked + r.notMarked,
+  }), { assigned: 0, attended: 0, partial: 0, absent: 0, leave: 0, notMarked: 0 });
+  const tMarked = T.assigned - T.notMarked;
+  const tPct = tMarked ? Math.round((T.attended / tMarked) * 100) : null;
+
+  const trainer = (t) => (t.trainer_type === 'external' ? t.agency || 'External' : t.trainer_name || 'Internal');
+  const tName = (t) => `${t.title}${t.batch ? ' — ' + t.batch : ''}`;
+  const sumHeader = ['Code', 'Training', 'Dates', 'Location', 'Trainer', 'Assigned', 'Attended', 'of which partially',
+    'Absent', 'Leave', 'Not marked', 'Attendance %'];
+  const sumRows = summary.map((r) => [r.t.code, tName(r.t), dayRange(r.t.days), r.t.location || '', trainer(r.t),
+    r.assigned, r.attended, r.partial, r.absent, r.leave, r.notMarked, r.pct === null ? '' : r.pct + '%']);
+  const detHeader = ['Code', 'Training', 'Dates', 'Location', 'Employee', 'Zoho ID', 'Entity', 'Department', 'Division',
+    'Reporting manager', 'Status', 'Days present', 'Attendance %', 'Hours'];
+  const detRows = parts.map((p) => {
+    const t = byT[p.training_id];
+    return [t.code, tName(t), dayRange(t.days), t.location || '', p.name + (p.active ? '' : ' (inactive)'), p.zoho_emp_id || '',
+      entLabel(p.entity), p.department || '', p.division || '', (p.manager || '').replace(/^mentor:\s*/i, ''),
+      AST[p.status][0], `${p.present_days}/${p.day_count}`, p.att_pct === null ? '' : p.att_pct + '%', p.hours];
+  });
+  const exportAll = () => toWorkbook(`Training-attendance-${from}-to-${to}.xlsx`, [
+    { sheet: 'Summary', header: sumHeader, rows: [...sumRows,
+      ['', 'TOTAL', '', '', '', T.assigned, T.attended, T.partial, T.absent, T.leave, T.notMarked, tPct === null ? '' : tPct + '%']] },
+    { sheet: 'Participants', header: detHeader, rows: detRows },
+  ]);
+
+  const uniq = (k) => [...new Set((data?.participants || []).map((p) => p[k]).filter(Boolean))].sort();
+  const tdR = { textAlign: 'right' };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1240, width: '97vw' }}>
+        <h3>Training attendance report</h3>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label className="muted mini">From date<br /><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label className="muted mini">To date<br /><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          <button className="btn gold" disabled={busy || !from || !to || from > to} onClick={() => run()}>{busy ? 'Loading…' : 'Run'}</button>
+          <span className="muted mini">Quick:</span>
+          <button className="btn" onClick={() => preset(new Date(y, m, 1), today)}>This month</button>
+          <button className="btn" onClick={() => preset(new Date(y, m - 1, 1), new Date(y, m, 0))}>Last month</button>
+          <button className="btn" onClick={() => preset(new Date(y, m - 2, 1), today)}>Last 3 months</button>
+          <button className="btn" onClick={() => preset(fyStart(), today)}>This FY</button>
+        </div>
+        {from > to && <p className="err">The From date is after the To date.</p>}
+        {data && (
+          <div className="toolbar" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+            <MSel label="Trainings" options={trns.map((t) => ({ v: t.id, t: `${t.code} ${tName(t)}` }))} sel={f.trn} onChange={(v) => setF({ ...f, trn: v })} />
+            <MSel label="Departments" options={uniq('department').map((v) => ({ v, t: v }))} sel={f.dept} onChange={(v) => setF({ ...f, dept: v })} />
+            <MSel label="Divisions" options={uniq('division').map((v) => ({ v, t: v }))} sel={f.div} onChange={(v) => setF({ ...f, div: v })} />
+            <MSel label="Entities" options={uniq('entity').map((v) => ({ v, t: entLabel(v) }))} sel={f.ent} onChange={(v) => setF({ ...f, ent: v })} />
+            <MSel label="Status" options={Object.entries(AST).map(([v, [t]]) => ({ v, t }))} sel={f.status} onChange={(v) => setF({ ...f, status: v })} />
+          </div>
+        )}
+        {err && <p className="err">{err}</p>}
+
+        {data && (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
+              {[['Trainings', summary.length], ['Assigned', T.assigned], ['Attended', T.attended, 'good'],
+                ['Absent', T.absent, 'crit'], ['Leave', T.leave], ['Not marked', T.notMarked],
+                ['Attendance %', tPct === null ? '—' : tPct + '%']].map(([k, v, tone]) => (
+                <div key={k} className="card" style={{ flex: '1 1 110px', margin: 0, padding: '8px 12px' }}>
+                  <div className="muted mini" style={{ textTransform: 'uppercase' }}>{k}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: tone ? `var(--${tone})` : 'inherit' }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <button className={'btn' + (view === 'summary' ? ' gold' : '')} onClick={() => setView('summary')}>By training ({summary.length})</button>
+              <button className={'btn' + (view === 'detail' ? ' gold' : '')} onClick={() => setView('detail')}>By participant ({parts.length})</button>
+              <span className="muted mini" style={{ flex: 1 }}>
+                Attended = present on at least one day (partially = not every day) · Attendance % = attended ÷ participants whose attendance is marked.
+              </span>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: '55vh', overflowY: 'auto' }}>
+              {view === 'summary' ? (
+                <table>
+                  <thead><tr>{sumHeader.map((h, i) => <th key={h} style={i >= 5 ? tdR : {}}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {summary.map((r) => (
+                      <tr key={r.t.id} style={{ cursor: 'pointer' }} title="Show this training's participants"
+                        onClick={() => { setF({ ...f, trn: [r.t.id] }); setView('detail'); }}>
+                        <td className="muted mini">{r.t.code}</td><td><b>{tName(r.t)}</b></td>
+                        <td className="mini">{dayRange(r.t.days)}</td><td className="mini">{r.t.location || '—'}</td>
+                        <td className="mini">{trainer(r.t)}</td>
+                        <td style={tdR}>{r.assigned}</td>
+                        <td style={{ ...tdR, color: 'var(--good)', fontWeight: 700 }}>{r.attended}</td>
+                        <td style={tdR}>{r.partial || '—'}</td>
+                        <td style={{ ...tdR, color: r.absent ? 'var(--crit)' : 'inherit', fontWeight: r.absent ? 700 : 400 }}>{r.absent}</td>
+                        <td style={tdR}>{r.leave || '—'}</td><td style={tdR}>{r.notMarked || '—'}</td>
+                        <td style={tdR}>{r.pct === null ? '—' : r.pct + '%'}</td>
+                      </tr>
+                    ))}
+                    {summary.length > 0 && (
+                      <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
+                        <td /><td>Total</td><td colSpan={3} />
+                        <td style={tdR}>{T.assigned}</td><td style={tdR}>{T.attended}</td><td style={tdR}>{T.partial}</td>
+                        <td style={tdR}>{T.absent}</td><td style={tdR}>{T.leave}</td><td style={tdR}>{T.notMarked}</td>
+                        <td style={tdR}>{tPct === null ? '—' : tPct + '%'}</td>
+                      </tr>
+                    )}
+                    {!summary.length && <tr><td colSpan={12} className="muted">No trainings in this date range{peopleFiltered ? ' for these filters' : ''}.</td></tr>}
+                  </tbody>
+                </table>
+              ) : (
+                <table>
+                  <thead><tr>{detHeader.map((h) => <th key={h}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {parts.map((p, i) => (
+                      <tr key={p.training_id + '-' + p.employee_id}>
+                        {detRows[i].map((c, j) => (
+                          <td key={j} className={j <= 3 || j === 5 ? 'mini' : undefined}>
+                            {j === 10 ? <span className={'pill mini ' + AST[p.status][1]}>{c}</span> : c}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    {!parts.length && <tr><td colSpan={detHeader.length} className="muted">No participants in this selection.</td></tr>}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+        <div className="form-actions">
+          {data && <button className="btn gold" onClick={exportAll}>⬇ Excel (summary + participants)</button>}
+          <button className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Searchable multi-select: type to filter, tick one or many, Open runs the
 // report for the whole selection. Scales past 100 entries.
 function Picker({ label, options, onPick }) {
@@ -80,6 +269,7 @@ export default function Reports() {
   const canExpense = isAdmin || me.role === 'leader';
   const toast = useToast();
   const [open, setOpen] = useState(null);   // {title, header, rows, note}
+  const [attOpen, setAttOpen] = useState(false); // training attendance report
   const [emps, setEmps] = useState([]);
   const [trns, setTrns] = useState([]);
   const [comp, setComp] = useState(null);       // compliance dataset {trainings, rows}
@@ -342,6 +532,7 @@ export default function Reports() {
   });
 
   const CARDS = [
+    { name: 'Training attendance report', desc: 'Pick a from–to date range: per training how many were assigned, attended, absent, on leave or not marked — plus every participant\'s status. Excel export.', run: () => setAttOpen(true) },
     { name: 'Individual employee training hours (passport)', desc: 'Type to search, tick one or several employees — full history with attendance-weighted hours (former employees included).', picker: { options: emps.map((e) => ({ v: e.id, t: e.active ? e.name : `${e.name} (inactive)` })), onPick: passport } },
     { name: 'Report by training', desc: 'Tick one training for its day-wise grid, or several for a combined summary.', picker: { options: trns.map((t) => ({ v: t.id, t: `${t.code} ${t.title}${t.batch ? ' — ' + t.batch : ''}` })), onPick: byTraining } },
     { name: 'Training register', desc: 'One row per training: batch, location, dates, head-count and the participant name list.', run: register },
@@ -533,6 +724,8 @@ export default function Reports() {
           </div>
         );
       })()}
+
+      {attOpen && <AttendanceReport onClose={() => setAttOpen(false)} />}
 
       {open && (
         <div className="modal-backdrop" onClick={() => setOpen(null)}>

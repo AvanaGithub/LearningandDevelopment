@@ -3,6 +3,73 @@ const { query } = require('../db');
 
 const router = express.Router();
 
+// Training attendance report: every training with at least one day in
+// [from, to], each participant's status from the attendance marks, and the
+// per-training counts. Status rules (all of a training's days count):
+//   no marks at all          → Not marked
+//   present on every day     → Attended            (H counts as half a day)
+//   present on some days     → Partially attended
+//   no presence, any Leave   → Leave (if never marked Absent)
+//   otherwise                → Absent
+// Managers see only their own reportees; Mavericks stays leader-and-above.
+router.get('/attendance', async (req, res, next) => {
+  try {
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    const from = iso.test(req.query.from || '') ? req.query.from : '1900-01-01';
+    const to = iso.test(req.query.to || '') ? req.query.to : '2999-12-31';
+    const lowRole = ['manager', 'learner'].includes(req.user.role);
+    const { rows: trainings } = await query(
+      `SELECT t.id, t.code, t.title, t.batch, t.category, t.mode, t.location, t.status,
+              t.trainer_type, t.trainer_name, t.agency, t.hours_per_day, t.mandatory,
+              (SELECT json_agg(to_char(d.day, 'YYYY-MM-DD') ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
+       FROM trainings t
+       WHERE t.status <> 'cancelled'
+         AND EXISTS (SELECT 1 FROM training_days d WHERE d.training_id=t.id AND d.day BETWEEN $1::date AND $2::date)
+         ${lowRole ? `AND coalesce(t.category, '') !~* 'maverick' AND t.title !~* 'maverick'` : ''}
+       ORDER BY (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id), t.id`, [from, to]);
+    if (!trainings.length) return res.json({ from, to, trainings: [], participants: [] });
+
+    const params = [trainings.map((t) => t.id)];
+    let scope = '';
+    if (req.user.role === 'manager') {
+      params.push(String(req.user.name || '').trim().toLowerCase());
+      scope = `AND lower(btrim(regexp_replace(coalesce(e.manager,''), '^mentor:\\s*', '', 'i'))) = $2`;
+    }
+    const { rows: parts } = await query(
+      `SELECT p.training_id, e.id AS employee_id, e.name, e.zoho_emp_id, e.entity, e.department, e.division,
+              e.designation, e.manager, e.location, e.active,
+              count(*) FILTER (WHERE a.mark = 'P')::int AS p,
+              count(*) FILTER (WHERE a.mark = 'H')::int AS h,
+              count(*) FILTER (WHERE a.mark = 'A')::int AS a,
+              count(*) FILTER (WHERE a.mark = 'L')::int AS l
+       FROM training_participants p
+       JOIN employees e ON e.id = p.employee_id
+       LEFT JOIN attendance a ON a.training_id = p.training_id AND a.employee_id = p.employee_id
+       WHERE p.training_id = ANY($1::int[]) ${scope}
+       GROUP BY p.training_id, e.id
+       ORDER BY e.name`, params);
+
+    const byId = Object.fromEntries(trainings.map((t) => [t.id, t]));
+    const participants = parts.map((r) => {
+      const t = byId[r.training_id];
+      const dayCount = (t.days || []).length;
+      const units = r.p + r.h * 0.5;
+      const marked = r.p + r.h + r.a + r.l;
+      const status = !marked ? 'not_marked'
+        : dayCount && units >= dayCount ? 'attended'
+        : units > 0 ? 'partial'
+        : r.l > 0 && r.a === 0 ? 'leave'
+        : 'absent';
+      return {
+        ...r, day_count: dayCount, present_days: units, status,
+        att_pct: marked && dayCount ? Math.round((units / dayCount) * 100) : null,
+        hours: Math.round(units * Number(t.hours_per_day || 0) * 10) / 10,
+      };
+    });
+    res.json({ from, to, trainings, participants });
+  } catch (e) { next(e); }
+});
+
 // Training hours per employee: hours_per_day × (P=1, H=0.5) over marked days.
 router.get('/manhours', async (req, res, next) => {
   try {
