@@ -14,6 +14,135 @@ const CSTAT = {
 };
 const SRC = { self: 'Self', manager: 'Manager', leader: 'Leader', admin: 'Admin' };
 
+// ---- Shared results window with filters -------------------------------------
+// Every simple report opens here. Filters are built from the data itself:
+//  * search across all columns;
+//  * drop-downs for category-like columns (entity, department, status …);
+//  * From / To dates when the report gives each row a date (a day or a
+//    [first, last] range — rows overlapping the range stay), or re-runs on
+//    the server when the figures themselves depend on the range;
+//  * live totals for amount / count columns; Excel exports what is shown.
+
+const FILTER_HINT = /^(employee|training|entity|department|division|status|category|type|mode|location|approval|trainer|result|grade|provider|validity|batch|payment status|detail)$/i;
+const NO_FILTER = /^(code|zoho id|employee id|participants|notes|files|dates|submitted|comment|description|remark|last held|re-training due|completed on|doj|month|days in)$/i;
+const SUMMABLE = /₹|hours|budget|actual|paid|pending|variance|participants|responses|planned|completed|running|postponed|cancelled|affected|onward|return|amount|total|days$/i;
+const NOT_SUMMABLE = /avg|overall|%|score|rate|days in|days attended/i;
+const asNum = (v) => (typeof v === 'number' ? v : (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : null));
+const overlaps = (d, from, to) => {
+  if (!d) return false;
+  const [a, b] = Array.isArray(d) ? d : [d, d];
+  return (!from || (b || a) >= from) && (!to || a <= to);
+};
+
+function ReportView({ title, header, rows: rows0, note: note0, dates: dates0, refetch, onClose }) {
+  const today = new Date();
+  const [data, setData] = useState({ rows: rows0, dates: dates0, note: note0 });
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState({});         // column index → selected values
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const { rows, dates, note } = data;
+  const hasDates = Boolean(refetch) || (dates || []).some(Boolean);
+
+  // Category-like columns become drop-downs (known headers first, max 7).
+  const filterCols = header.map((h, i) => {
+    if (NO_FILTER.test(h)) return null;
+    const vals = rows.map((r) => r[i]).filter((v) => v !== '' && v !== null && v !== undefined && v !== '—');
+    if (!vals.length || vals.every((v) => asNum(v) !== null)) return null;
+    const distinct = [...new Set(vals.map(String))];
+    if (distinct.length < 2 || distinct.some((v) => v.length > 70)) return null;
+    if (!(distinct.length <= 25 || (FILTER_HINT.test(h) && distinct.length <= 200))) return null;
+    return { i, h, options: distinct.sort((a, b) => a.localeCompare(b)).map((v) => ({ v, t: v })), known: FILTER_HINT.test(h) };
+  }).filter(Boolean).sort((a, b) => (b.known - a.known) || (a.i - b.i)).slice(0, 7);
+
+  const ql = q.trim().toLowerCase();
+  const shown = rows.map((r, k) => ({ r, d: dates?.[k] })).filter(({ r, d }) =>
+    (!ql || r.some((c) => String(c ?? '').toLowerCase().includes(ql))) &&
+    filterCols.every(({ i }) => !(sel[i] || []).length || sel[i].includes(String(r[i] ?? ''))) &&
+    (refetch || (!from && !to) || overlaps(d, from, to))).map((x) => x.r);
+
+  const sumCols = header.map((h, i) => SUMMABLE.test(h) && !NOT_SUMMABLE.test(h) &&
+    rows.length > 0 && rows.every((r) => r[i] === '' || r[i] === null || r[i] === undefined || asNum(r[i]) !== null));
+  const totals = header.map((h, i) => (sumCols[i] ? shown.reduce((a, r) => a + (asNum(r[i]) || 0), 0) : null));
+  const hasTotals = totals.some((t) => t !== null) && shown.length > 1;
+  const fmtTot = (v, h) => (/₹|budget|actual|paid|pending|variance|amount|onward|return/i.test(h) ? inr(v) : Math.round(v * 10) / 10);
+
+  // Server-side date range (reports whose figures depend on the range).
+  const applyServer = async (a = from, b = to) => {
+    setBusy(true); setErr(null);
+    try { setData(await refetch(a, b)); } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  const preset = (a, b) => {
+    const fa = a ? isoDay(a) : ''; const fb = b ? isoDay(b) : '';
+    setFrom(fa); setTo(fb);
+    if (refetch) applyServer(fa, fb);
+  };
+  const y = today.getFullYear(); const m = today.getMonth();
+  const active = (ql ? 1 : 0) + filterCols.filter(({ i }) => (sel[i] || []).length).length + (from || to ? 1 : 0);
+  const clearAll = () => { setQ(''); setSel({}); if (from || to) preset(null, null); };
+
+  const exportRows = hasTotals
+    ? [...shown, totals.map((t, i) => (i === 0 && t === null ? 'TOTAL' : t === null ? '' : t))]
+    : shown;
+  const fileName = title.replace(/[^\w]+/g, '-') + (from || to ? `-${from || 'start'}-to-${to || 'today'}` : '') + '.xlsx';
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1180, width: '96vw' }}>
+        <h3>{title}</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 6 }}>
+          <input placeholder="Search all columns…" value={q} onChange={(e) => setQ(e.target.value)} style={{ minWidth: 200, flex: '1 1 200px' }} />
+          {filterCols.map(({ i, h, options }) => (
+            <MSel key={i} label={h} options={options} sel={sel[i] || []} onChange={(v) => setSel({ ...sel, [i]: v })} />
+          ))}
+        </div>
+        {hasDates && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 8 }}>
+            <label className="muted mini">From<br /><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+            <label className="muted mini">To<br /><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+            {refetch && <button className="btn gold" disabled={busy || (from && to && from > to)} onClick={() => applyServer()}>{busy ? 'Loading…' : 'Apply dates'}</button>}
+            <button className="btn" onClick={() => preset(new Date(y, m, 1), today)}>This month</button>
+            <button className="btn" onClick={() => preset(new Date(y, m - 1, 1), new Date(y, m, 0))}>Last month</button>
+            <button className="btn" onClick={() => preset(fyStart(), today)}>This FY</button>
+            {(from || to) && <button className="btn link" onClick={() => preset(null, null)}>clear dates</button>}
+          </div>
+        )}
+        {from && to && from > to && <p className="err">The From date is after the To date.</p>}
+        {err && <p className="err">{err}</p>}
+        <p className="muted mini" style={{ margin: '8px 0 4px' }}>
+          Showing <b>{shown.length}</b> of {rows.length} row(s)
+          {active > 0 && <> · {active} filter(s) on · <button className="btn link mini" style={{ padding: 0 }} onClick={clearAll}>clear all</button></>}
+          {refetch && (from || to) && ' · figures recalculated for the chosen dates'}
+        </p>
+        <div style={{ overflowX: 'auto', maxHeight: '58vh', overflowY: 'auto' }}>
+          <table>
+            <thead><tr>{header.map((h, i) => <th key={h + i} style={sumCols[i] ? { textAlign: 'right' } : {}}>{h}</th>)}</tr></thead>
+            <tbody>
+              {shown.map((r, k) => <tr key={k}>{r.map((c, j) => <td key={j} style={sumCols[j] ? { textAlign: 'right' } : {}}>{c}</td>)}</tr>)}
+              {hasTotals && (
+                <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
+                  {totals.map((t, i) => <td key={i} style={t !== null ? { textAlign: 'right' } : {}}>
+                    {i === 0 && t === null ? 'Total' : t === null ? '' : fmtTot(t, header[i])}</td>)}
+                </tr>
+              )}
+              {!shown.length && <tr><td colSpan={header.length} className="muted">{rows.length ? 'No rows match these filters.' : 'No data in scope yet.'}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {note && <p className="muted mini" style={{ marginTop: 8 }}>{note}</p>}
+        <div className="form-actions">
+          <button className="btn gold" disabled={!shown.length} onClick={() => toXlsx(fileName, header, exportRows)}>
+            ⬇ Excel{active ? ' (filtered)' : ''}</button>
+          <button className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Training attendance report (from–to dates) ---------------------------
 
 const AST = {
@@ -270,6 +399,7 @@ export default function Reports() {
   const toast = useToast();
   const [open, setOpen] = useState(null);   // {title, header, rows, note}
   const [attOpen, setAttOpen] = useState(false); // training attendance report
+  const [evOpen, setEvOpen] = useState(null);    // evidence pack date choice
   const [emps, setEmps] = useState([]);
   const [trns, setTrns] = useState([]);
   const [comp, setComp] = useState(null);       // compliance dataset {trainings, rows}
@@ -284,7 +414,14 @@ export default function Reports() {
     api.get('/api/trainings').then(setTrns).catch(() => {});
   }, []);
 
-  const show = (title, header, rows, note) => setOpen({ title, header, rows, note });
+  // opts.dates: per-row date ('YYYY-MM-DD' or [first, last]) for the From/To
+  // filter; opts.refetch(from, to): reports recalculated on the server.
+  const show = (title, header, rows, note, opts = {}) => setOpen({ title, header, rows, note, ...opts });
+  const span = (days) => {
+    const ds = (days || []).map((d) => String(d).slice(0, 10)).sort();
+    return ds.length ? [ds[0], ds[ds.length - 1]] : null;
+  };
+  const trnSpan = (id) => span(trns.find((t) => t.id === id)?.days);
   const guard = (fn) => (...a) => fn(...a).catch((e) => setErr(e.message));
 
   /* ---------- live reports ---------- */
@@ -303,7 +440,8 @@ export default function Reports() {
     show(multi ? `Training passport — ${picks.length} employees` : `Training passport — ${picks[0].t}`,
       [...(multi ? ['Employee'] : []), 'Code', 'Training', 'Dates', 'Status', 'Attendance %', 'Hours'],
       rows,
-      rows.length ? `Total training hours — ${totals}` : 'No trainings on record yet.');
+      rows.length ? `Total training hours (all dates) — ${totals}` : 'No trainings on record yet.',
+      { dates: results.flatMap(({ r }) => r.map((x) => (x.first_day ? [x.first_day.slice(0, 10), x.last_day.slice(0, 10)] : null))) });
   });
 
   const byTraining = guard(async (picks) => {
@@ -344,7 +482,8 @@ export default function Reports() {
     show(`Training report — ${picks.length} trainings`,
       ['Training', 'Participant', 'Zoho ID', 'Entity', 'Days attended', 'Attendance %', 'Hours'],
       rows,
-      'Combined summary — open a single training for its day-wise grid.');
+      'Combined summary — open a single training for its day-wise grid.',
+      { dates: results.flatMap(([detail]) => detail.participants.map(() => span(detail.days))) });
   });
 
   const externalCourses = guard(async () => {
@@ -354,7 +493,8 @@ export default function Reports() {
       r.map((x) => [x.name, x.zoho_emp_id || '', x.department || '', entLabel(x.entity), x.course, x.provider || '',
         x.completed_on ? fmtDate(x.completed_on) : '', (x.files || []).map((f) => f.name).join('; '),
         x.notes || '', fmtDate(x.created_at)]),
-      'Submitted by employees from their learner portal ("Other courses & certifications"). Open an employee on the Employees tab to download the attached files.');
+      'Submitted by employees from their learner portal ("Other courses & certifications"). Open an employee on the Employees tab to download the attached files. The date filter uses the completion date (or the submission date when none was given).',
+      { dates: r.map((x) => String(x.completed_on || x.created_at || '').slice(0, 10) || null) });
   });
 
   const register = guard(async () => {
@@ -364,14 +504,23 @@ export default function Reports() {
       r.map((x) => [x.code, x.title, x.batch || '', x.location || '', fmtRange(x.days), x.day_count,
         x.category || '', x.mode || '', x.trainer_type === 'external' ? (x.agency || x.trainer_name) : x.trainer_name,
         x.participant_count, x.participants || '']),
-      'One row per training with its participant head-count and name list. Set the location on the training form.');
+      'One row per training with its participant head-count and name list. Set the location on the training form.',
+      { dates: r.map((x) => span(x.days)) });
   });
 
   const manhours = guard(async () => {
-    const r = await api.get('/api/reports/manhours');
-    show('Training man-hours per employee', ['Employee', 'Entity', 'Division', 'Department', 'Status', 'Hours'],
-      r.map((x) => [x.name, entLabel(x.entity), x.division || '', x.department || '', x.active ? 'Active' : 'Inactive', Number(x.hours)]),
-      'Hours = hours per day × attendance (P = full, H = half). Deactivated employees stay listed while they have recorded hours. Target: 16 h per employee per year.');
+    // Hours are summed on the server, so a date range re-runs the query.
+    const build = async (from = '', to = '') => {
+      const r = await api.get(`/api/reports/manhours?from=${from}&to=${to}`);
+      return {
+        rows: r.map((x) => [x.name, entLabel(x.entity), x.division || '', x.department || '', x.location || '',
+          x.active ? 'Active' : 'Inactive', Number(x.hours)]),
+        note: `Hours = hours per day × attendance (P = full, H = half)${from || to ? `, counting only training days from ${from ? fmtDate(from) : 'the start'} to ${to ? fmtDate(to) : 'today'}` : ' across all dates'}. Deactivated employees stay listed while they have recorded hours. Target: 16 h per employee per year.`,
+      };
+    };
+    const first = await build();
+    show('Training man-hours per employee', ['Employee', 'Entity', 'Division', 'Department', 'Location', 'Status', 'Hours'],
+      first.rows, first.note, { refetch: build });
   });
 
   const compliance = guard(async () => {
@@ -401,7 +550,8 @@ export default function Reports() {
           x.responses, x.participant_count, x.avg_score ?? '—',
           a.n ? (a.sum / a.n).toFixed(2) : '—'];
       }),
-      'Trainer overall = response-weighted average across every training the trainer delivered.');
+      'Trainer overall = response-weighted average across every training the trainer delivered (all dates).',
+      { dates: r.map((x) => trnSpan(x.id)) });
   });
 
   const adherence = guard(async () => {
@@ -416,16 +566,18 @@ export default function Reports() {
       else if (t.status === 'cancelled') byMonth[k].cancelled++;
       else byMonth[k].running++;
     });
+    const months = Object.keys(byMonth).sort();
     show('Planned vs actual — calendar adherence',
       ['Month', 'Planned', 'Completed', 'Still running', 'Postponed', 'Cancelled', 'Adherence'],
-      Object.keys(byMonth).sort().map((k) => {
+      months.map((k) => {
         const m = byMonth[k];
         const decided = m.completed + m.postponed + m.cancelled;
         return [new Date(k + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
           m.planned, m.completed, m.running, m.postponed, m.cancelled,
           decided ? Math.round(m.completed / decided * 100) + '%' : '—'];
       }),
-      'Adherence = completed ÷ (completed + postponed + cancelled) per calendar month of the first training day.');
+      'Adherence = completed ÷ (completed + postponed + cancelled) per calendar month of the first training day.',
+      { dates: months.map((k) => [k + '-01', isoDay(new Date(Number(k.slice(0, 4)), Number(k.slice(5, 7)), 0))]) });
   });
 
   const joiners = guard(async () => {
@@ -441,11 +593,13 @@ export default function Reports() {
           ind ? `${ind.attended}/${ind.day_count} days` : '—',
           done ? 'Completed' : ind ? 'In progress' : 'NOT ENROLLED'];
       }),
-      'Everyone who joined in the last 12 months, against trainings in the Induction category.');
+      'Everyone who joined in the last 12 months, against trainings in the Induction category. The date filter uses the date of joining.',
+      { dates: r.employees.map((e) => (e.date_joined ? String(e.date_joined).slice(0, 10) : null)) });
   });
 
   const overdue = guard(async () => {
     const rows = [];
+    const dueDates = [];
     const today = new Date();
     trns.filter((t) => t.validity_months && t.status === 'completed' && (t.days || []).length).forEach((t) => {
       const last = new Date(t.days[t.days.length - 1]);
@@ -455,13 +609,15 @@ export default function Reports() {
       if (daysLeft <= 60) {
         rows.push([t.code, t.title + (t.batch ? ' — ' + t.batch : ''), fmtDate(last), t.validity_months + ' months',
           fmtDate(due), daysLeft < 0 ? `OVERDUE by ${-daysLeft} days` : `due in ${daysLeft} days`, t.participant_count + ' participants']);
+        dueDates.push(isoDay(due));
       }
     });
     show('Overdue & expiring re-trainings',
       ['Code', 'Training', 'Last held', 'Validity', 'Re-training due', 'Status', 'Affected'],
       rows,
-      rows.length ? 'Everything overdue or falling due within 60 days, from each completed training\'s validity period.'
-        : 'Nothing is overdue or due within 60 days. Set "Re-training validity (months)" on trainings to drive this report.');
+      rows.length ? 'Everything overdue or falling due within 60 days, from each completed training\'s validity period. The date filter uses the re-training due date.'
+        : 'Nothing is overdue or due within 60 days. Set "Re-training validity (months)" on trainings to drive this report.',
+      { dates: dueDates });
   });
 
   const openComp = guard(async (view) => {
@@ -482,12 +638,14 @@ export default function Reports() {
           Number(x.budget), Number(x.actual), paid, Number(x.actual) - paid, Number(x.budget) - Number(x.actual),
           x.approval, status];
       }),
-      `Pending = actual − paid · Variance = budget − actual. Total actual: ₹${inr(r.reduce((a, x) => a + Number(x.actual), 0))}.`);
+      'Pending = actual − paid · Variance = budget − actual. The date filter uses the linked training\'s dates (or the day the record was created).',
+      { dates: r.map((x) => trnSpan(x.training_id) || (x.created_at ? String(x.created_at).slice(0, 10) : null)) });
   });
 
   const expByEmployee = guard(async (picks) => {
     const r = await api.get('/api/expenses');
     const rows = [];
+    const rowDates = [];
     const totals = [];
     for (const emp of picks) {
       const plainName = emp.t.replace(/ \(inactive\)$/, '').toLowerCase();
@@ -501,6 +659,7 @@ export default function Reports() {
           sum += tot;
           rows.push([emp.t, x.training_label, x.category || '', x.other_detail || '', x.dates || '',
             Number(p.onward) || 0, Number(p.ret) || 0, Number(p.amt) || 0, tot]);
+          rowDates.push(trnSpan(x.training_id) || (x.created_at ? String(x.created_at).slice(0, 10) : null));
         });
       }
       totals.push(`${emp.t}: ₹${inr(sum)}`);
@@ -510,12 +669,13 @@ export default function Reports() {
       rows,
       rows.length
         ? `From the per-participant breakups on expense records. Totals — ${totals.join(' · ')}.`
-        : 'No per-participant amounts recorded for this selection yet — add them on the expense records (Per-participant amounts section).');
+        : 'No per-participant amounts recorded for this selection yet — add them on the expense records (Per-participant amounts section).',
+      { dates: rowDates });
   });
 
-  const evidencePack = guard(async () => {
-    const d = await api.get('/api/reports/evidence');
-    toWorkbook(`Audit-Evidence-Pack-${new Date().toISOString().slice(0, 10)}.xlsx`, [
+  const evidencePack = guard(async (from = '', to = '') => {
+    const d = await api.get(`/api/reports/evidence?from=${from}&to=${to}`);
+    toWorkbook(`Audit-Evidence-Pack-${from || to ? `${from || 'start'}-to-${to || 'today'}` : new Date().toISOString().slice(0, 10)}.xlsx`, [
       { sheet: 'Trainings', header: ['Code', 'Title', 'Batch', 'Category', 'Mode', 'Trainer type', 'Trainer', 'Agency', 'Hours per day', 'Seats', 'Mandatory', 'Status', 'Validity months', 'Days'],
         rows: d.trainings.map((t) => [t.code, t.title, t.batch || '', t.category || '', t.mode || '', t.trainer_type, t.trainer_name || '', t.agency || '', Number(t.hours_per_day), t.seats, t.mandatory ? 'Yes' : 'No', t.status, t.validity_months || '', t.days || '']) },
       { sheet: 'Participants', header: ['Training', 'Title', 'Employee', 'Zoho ID', 'Entity', 'Division', 'Department'],
@@ -553,7 +713,7 @@ export default function Reports() {
       { name: 'Expense report', desc: 'Budget, actual, paid, pending and variance per training, with approval and payment status.', run: expenseReport },
       { name: 'Expenses by employee', desc: 'Pick one or several employees — every amount mapped to them in the per-participant breakups.', picker: { options: emps.map((e) => ({ v: e.id, t: e.active ? e.name : `${e.name} (inactive)` })), onPick: expByEmployee } },
     ] : []),
-    ...(isAdmin ? [{ name: 'Audit-ready evidence pack', desc: 'One Excel workbook: trainings, participants, attendance with timestamps, feedback, expenses and the audit trail.', run: evidencePack, download: true }] : []),
+    ...(isAdmin ? [{ name: 'Audit-ready evidence pack', desc: 'One Excel workbook: trainings, participants, attendance with timestamps, feedback, expenses and the audit trail — for all dates or a from–to range.', run: () => setEvOpen({ from: '', to: '' }), download: true }] : []),
   ];
 
   return (
@@ -727,23 +887,24 @@ export default function Reports() {
 
       {attOpen && <AttendanceReport onClose={() => setAttOpen(false)} />}
 
-      {open && (
-        <div className="modal-backdrop" onClick={() => setOpen(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900 }}>
-            <h3>{open.title}</h3>
-            <div style={{ overflowX: 'auto', marginTop: 10 }}>
-              <table>
-                <thead><tr>{open.header.map((h) => <th key={h}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {open.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}
-                  {!open.rows.length && <tr><td colSpan={open.header.length} className="muted">No data in scope yet.</td></tr>}
-                </tbody>
-              </table>
+      {open && <ReportView key={open.title + open.rows.length} {...open} onClose={() => setOpen(null)} />}
+
+      {evOpen && (
+        <div className="modal-backdrop" onClick={() => setEvOpen(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <h3>Audit-ready evidence pack</h3>
+            <p className="muted mini">Leave both dates empty for everything on record, or pick a range: trainings held in it with their
+              participants, attendance, feedback and expenses, plus the audit trail for those dates.</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label className="muted mini">From<br /><input type="date" value={evOpen.from} onChange={(e) => setEvOpen({ ...evOpen, from: e.target.value })} /></label>
+              <label className="muted mini">To<br /><input type="date" value={evOpen.to} onChange={(e) => setEvOpen({ ...evOpen, to: e.target.value })} /></label>
+              <button className="btn link" onClick={() => setEvOpen({ from: isoDay(fyStart()), to: isoDay(new Date()) })}>This FY</button>
             </div>
-            {open.note && <p className="muted mini" style={{ marginTop: 8 }}>{open.note}</p>}
+            {evOpen.from && evOpen.to && evOpen.from > evOpen.to && <p className="err">The From date is after the To date.</p>}
             <div className="form-actions">
-              <button className="btn gold" onClick={() => toXlsx(open.title.replace(/[^\w]+/g, '-') + '.xlsx', open.header, open.rows)}>⬇ Excel</button>
-              <button className="btn" onClick={() => setOpen(null)}>Close</button>
+              <button className="btn gold" disabled={Boolean(evOpen.from && evOpen.to && evOpen.from > evOpen.to)}
+                onClick={() => { evidencePack(evOpen.from, evOpen.to); setEvOpen(null); }}>⬇ Download pack</button>
+              <button className="btn" onClick={() => setEvOpen(null)}>Cancel</button>
             </div>
           </div>
         </div>

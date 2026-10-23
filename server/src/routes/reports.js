@@ -3,6 +3,12 @@ const { query } = require('../db');
 
 const router = express.Router();
 
+// Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD; missing ends are open.
+const dateRange = (q) => {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  return { from: iso.test(q.from || '') ? q.from : '1900-01-01', to: iso.test(q.to || '') ? q.to : '2999-12-31' };
+};
+
 // Training attendance report: every training with at least one day in
 // [from, to], each participant's status from the attendance marks, and the
 // per-training counts. Status rules (all of a training's days count):
@@ -14,9 +20,7 @@ const router = express.Router();
 // Managers see only their own reportees; Mavericks stays leader-and-above.
 router.get('/attendance', async (req, res, next) => {
   try {
-    const iso = /^\d{4}-\d{2}-\d{2}$/;
-    const from = iso.test(req.query.from || '') ? req.query.from : '1900-01-01';
-    const to = iso.test(req.query.to || '') ? req.query.to : '2999-12-31';
+    const { from, to } = dateRange(req.query);
     const lowRole = ['manager', 'learner'].includes(req.user.role);
     const { rows: trainings } = await query(
       `SELECT t.id, t.code, t.title, t.batch, t.category, t.mode, t.location, t.status,
@@ -74,16 +78,18 @@ router.get('/attendance', async (req, res, next) => {
 router.get('/manhours', async (req, res, next) => {
   try {
     // Deactivated employees keep their history: they stay in the report
-    // whenever they have recorded hours.
+    // whenever they have recorded hours. Optional from/to: only attendance
+    // days inside the range count.
+    const { from, to } = dateRange(req.query);
     const { rows } = await query(
-      `SELECT e.id, e.name, e.entity, e.division, e.department, e.active,
+      `SELECT e.id, e.name, e.entity, e.division, e.department, e.location, e.active,
               coalesce(round(sum(t.hours_per_day * CASE a.mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END)::numeric, 1), 0) AS hours
        FROM employees e
-       LEFT JOIN attendance a ON a.employee_id = e.id
+       LEFT JOIN attendance a ON a.employee_id = e.id AND a.day BETWEEN $1::date AND $2::date
        LEFT JOIN trainings t ON t.id = a.training_id
        GROUP BY e.id
        HAVING e.active OR sum(CASE a.mark WHEN 'P' THEN 1 WHEN 'H' THEN 0.5 ELSE 0 END) > 0
-       ORDER BY e.name`);
+       ORDER BY e.name`, [from, to]);
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -261,24 +267,36 @@ router.get('/external-courses', async (req, res, next) => {
 router.get('/evidence', async (req, res, next) => {
   try {
     if (req.user.role === 'manager') return res.status(403).json({ error: 'Insufficient permissions' });
+    // Optional from/to: trainings with a day in the range (and their
+    // participants, attendance in range, feedback and expenses), plus audit
+    // entries made in the range. Without dates: everything, as before.
+    const { from, to } = dateRange(req.query);
+    const inRange = `EXISTS (SELECT 1 FROM training_days d WHERE d.training_id=t.id AND d.day BETWEEN $1::date AND $2::date)`;
     const [trainings, participants, attendance, feedback, expensesR, auditR] = await Promise.all([
       query(`SELECT t.code, t.title, t.batch, t.category, t.mode, t.trainer_type, t.trainer_name, t.agency,
                     t.hours_per_day, t.seats, t.mandatory, t.status, t.validity_months,
                     (SELECT string_agg(d.day::text, ', ' ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
-             FROM trainings t ORDER BY t.id`),
+             FROM trainings t WHERE ${inRange} ORDER BY t.id`, [from, to]),
       query(`SELECT t.code, t.title, e.name, e.zoho_emp_id, e.entity, e.division, e.department
              FROM training_participants p JOIN trainings t ON t.id=p.training_id JOIN employees e ON e.id=p.employee_id
-             ORDER BY t.id, e.name`),
+             WHERE ${inRange} ORDER BY t.id, e.name`, [from, to]),
       query(`SELECT t.code, e.name, a.day, a.mark, a.updated_at,
                     coalesce(u.name, 'QR self check-in') AS marked_by
              FROM attendance a JOIN trainings t ON t.id=a.training_id JOIN employees e ON e.id=a.employee_id
-             LEFT JOIN users u ON u.id=a.marked_by ORDER BY t.id, a.day, e.name`),
+             LEFT JOIN users u ON u.id=a.marked_by
+             WHERE a.day BETWEEN $1::date AND $2::date ORDER BY t.id, a.day, e.name`, [from, to]),
       query(`SELECT t.code, r.respondent, r.scores, r.comment, r.created_at
-             FROM feedback_responses r JOIN trainings t ON t.id=r.training_id ORDER BY t.id, r.created_at`),
-      query(`SELECT training_label, dates, category, training_type, vendor, budget, actual, approval, remark
-             FROM expenses WHERE active ORDER BY id`),
+             FROM feedback_responses r JOIN trainings t ON t.id=r.training_id
+             WHERE ${inRange} ORDER BY t.id, r.created_at`, [from, to]),
+      query(`SELECT x.training_label, x.dates, x.category, x.training_type, x.vendor, x.budget, x.actual, x.approval, x.remark
+             FROM expenses x LEFT JOIN trainings t ON t.id = x.training_id
+             WHERE x.active AND (CASE WHEN t.id IS NOT NULL THEN ${inRange}
+                                     ELSE x.created_at::date BETWEEN $1::date AND $2::date END)
+             ORDER BY x.id`, [from, to]),
       query(`SELECT a.created_at, coalesce(u.name,'system/QR') AS who, a.action, a.record_type, a.record_id, a.reason
-             FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 2000`),
+             FROM audit_log a LEFT JOIN users u ON u.id=a.user_id
+             WHERE (a.created_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date
+             ORDER BY a.id DESC LIMIT 5000`, [from, to]),
     ]);
     res.json({
       trainings: trainings.rows, participants: participants.rows, attendance: attendance.rows,
