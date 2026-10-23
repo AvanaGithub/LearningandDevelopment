@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, apiUpload, ENTITIES, ENTITY_NAMES, entLabel, EXP_CATEGORIES, fmtDate, fmtRange, inr } from '../api.js';
+import { api, apiUpload, ENTITIES, ENTITY_NAMES, entLabel, EXP_CATEGORIES, fmtDate, inr } from '../api.js';
 import { useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 
@@ -26,6 +26,16 @@ const fyLabel = () => {
   const now = new Date();
   const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   return `${y}–${String(y + 1).slice(2)}`;
+};
+
+// A training's days as the expense record's date text, with the year:
+// "02 Nov 2026" or "02 Nov 2026 – 04 Nov 2026 (3 days)".
+const dayIso = (d) => String(d).slice(0, 10);
+const trainingDates = (days) => {
+  const ds = (days || []).map(dayIso).sort();
+  if (!ds.length) return '';
+  if (ds.length === 1) return fmtDate(ds[0]);
+  return `${fmtDate(ds[0])} – ${fmtDate(ds[ds.length - 1])} (${ds.length} days)`;
 };
 
 const EMPTY_ITEM = { category: EXP_CATEGORIES[0], budget: '', actual: '', payment_status: '', accommodation: '', venue: '', other_detail: '' };
@@ -143,7 +153,13 @@ export default function Expenses() {
     (r.entity_split || []).forEach((s) => { split[s.ent] = s.n; });
     setForm({
       id: r.id, training_id: r.training_id || '', training_label: r.training_label,
-      dates: r.dates || '', dates_from: '', dates_to: '', location: r.location || '', participants: r.participants || '',
+      dates: r.dates || '',
+      dates_from: (() => {
+        const t = trainings.find((x) => x.id === r.training_id);
+        const days = (t?.days || []).map(dayIso).sort();
+        return days[0] || '';
+      })(),
+      dates_to: '', location: r.location || '', participants: r.participants || '',
       entity_split: split, category: r.category || EXP_CATEGORIES[0], accommodation: r.accommodation || '', venue: r.venue || '', other_detail: r.other_detail || '',
       training_type: r.training_type || 'Internal', vendor: r.vendor || '',
       description: r.description || '', budget: r.budget, actual: r.actual,
@@ -180,10 +196,13 @@ export default function Expenses() {
     if (String(id).startsWith('mav-')) {
       const b = batches.find((x) => 'mav-' + x.id === id);
       if (b) {
+        const from = b.start_date ? dayIso(b.start_date) : '';
+        const to = b.end_date ? dayIso(b.end_date) : '';
         setForm({
           ...form, training_id: '',
           training_label: 'Mavericks — ' + b.name,
-          dates: b.start_date ? 'from ' + b.start_date.slice(0, 10) : '',
+          dates_from: from,
+          dates: from ? fmtDate(from) + (to && to !== from ? ' – ' + fmtDate(to) : '') : '',
           participants: b.member_count || form.participants,
           training_type: 'Internal',
         });
@@ -195,10 +214,14 @@ export default function Expenses() {
     }
     const t = trainings.find((x) => x.id === Number(id));
     if (!t) return setForm({ ...form, training_id: id });
+    // Everything the training already knows comes across; all stays editable.
+    const days = (t.days || []).map(dayIso).sort();
     setForm({
       ...form, training_id: id,
       training_label: t.title + (t.batch ? ' — ' + t.batch : ''),
-      dates: fmtRange(t.days),
+      dates_from: days[0] || '',
+      dates: trainingDates(days),
+      location: t.location || form.location,
       participants: t.participant_count || form.participants,
       training_type: t.trainer_type === 'external' ? 'External' : 'Internal',
       vendor: t.trainer_type === 'external' ? (t.agency || form.vendor) : form.vendor,
@@ -252,7 +275,10 @@ export default function Expenses() {
               </select></div>
             <div><label>Training name (label) *</label>
               <input required value={form.training_label} onChange={(e) => setForm({ ...form, training_label: e.target.value })} /></div>
-            <div><label>Training dates{star('dates')}</label>
+            <div><label>Training dates{star('dates')}
+              {form.dates && form.dates !== fmtDate(form.dates_from) && (
+                <span className="muted" style={{ fontWeight: 400 }}> · {form.dates}</span>
+              )}</label>
               <input type="date" value={form.dates_from} title={form.dates || ''}
                 onChange={(e) => {
                   const v = e.target.value;
