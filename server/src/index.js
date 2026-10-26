@@ -52,6 +52,9 @@ app.use('/api/od', require('./routes/od'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
+  // Upload limits (multer) are the user's to fix — say what went wrong.
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'A file is larger than 15 MB — please upload a smaller or compressed copy.' });
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: 'Too many files in one upload — please attach fewer at a time.' });
   console.error('[error]', err.message);
   res.status(500).json({ error: 'Server error' });
 });

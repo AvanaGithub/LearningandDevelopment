@@ -25,12 +25,22 @@ export const api = {
 };
 
 // Upload one or more files; resolves to [{id, name}] for attaching to records.
+export const MAX_UPLOAD_MB = 15;
 export async function apiUpload(fileList, url = '/api/files') {
+  const files = [...fileList];
+  const big = files.find((f) => f.size > MAX_UPLOAD_MB * 1024 * 1024);
+  if (big) throw new Error(`"${big.name}" is ${(big.size / 1048576).toFixed(1)} MB — files can be at most ${MAX_UPLOAD_MB} MB. Please upload a smaller or compressed copy.`);
   const fd = new FormData();
-  [...fileList].forEach((f) => fd.append('files', f));
+  files.forEach((f) => fd.append('files', f));
   const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { const e = new Error(data.error || `Upload failed (${res.status})`); e.need_login = data.need_login; throw e; }
+  if (!res.ok) {
+    // 413 without a JSON body comes from the web server in front of the app.
+    const msg = data.error || (res.status === 413
+      ? 'The upload is larger than the server currently accepts. Try a smaller or compressed file (or ask the administrator to raise the server upload limit).'
+      : `Upload failed (${res.status})`);
+    const e = new Error(msg); e.need_login = data.need_login; throw e;
+  }
   return data;
 }
 
