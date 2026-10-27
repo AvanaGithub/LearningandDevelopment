@@ -40,6 +40,7 @@ router.get('/overview', async (req, res, next) => {
     const { rows: my } = await query(
       `SELECT t.id, t.code, t.title, t.batch, t.status, t.mode, t.trainer_type, t.trainer_name, t.agency,
               t.feedback_questions, t.external_form_url, t.agenda_file, t.feedback_open,
+              t.synopsis, t.virtual_instructions, t.online_link,
               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days,
               n.slot AS nom_slot, n.source AS nom_source,
               (SELECT json_agg(json_build_object('day', a.day, 'mark', a.mark))
@@ -51,7 +52,7 @@ router.get('/overview', async (req, res, next) => {
        WHERE p.employee_id=$1 AND t.status <> 'cancelled'
        ORDER BY (SELECT min(d.day) FROM training_days d WHERE d.training_id=t.id) DESC NULLS LAST`, [me.id]);
     const { rows: openRows } = await query(
-      `SELECT t.id, t.code, t.title, t.batch, t.department, t.division, t.nom_deadline, t.mode,
+      `SELECT t.id, t.code, t.title, t.batch, t.department, t.division, t.nom_deadline, t.mode, t.synopsis,
               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days
        FROM trainings t
        WHERE t.nom_self AND t.status IN ('planned','confirmed','in_progress')

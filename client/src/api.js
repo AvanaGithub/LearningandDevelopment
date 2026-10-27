@@ -83,6 +83,8 @@ export const DEPARTMENTS = ['Accounts', 'Administration', 'Clinical Support', 'C
 export const EMP_TYPES = ['Permanent', 'Trainee', 'Intern', 'Contract', 'Consultant'];
 export const TRN_CATEGORIES = ['Induction', 'Product', 'Soft skill', 'Technical', 'Compliance', 'Safety', 'On-the-job'];
 export const TRN_MODES = ['Classroom', 'Online', 'On-the-job', 'Field', 'External seminar'];
+// Same rule as the server (mailer.isVirtual): which modes get joining instructions.
+export const isVirtual = (mode) => /online|virtual|webinar|teams|zoom/i.test(String(mode || ''));
 export const TRN_STATUSES = {
   planned: 'Planned', confirmed: 'Confirmed', in_progress: 'In progress',
   completed: 'Completed', postponed: 'Postponed', cancelled: 'Cancelled',

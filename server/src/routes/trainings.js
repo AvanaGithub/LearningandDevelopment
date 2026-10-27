@@ -100,6 +100,9 @@ const pickFields = (b) => ({
   start_time: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.start_time || '')) ? b.start_time : null,
   cal_block: Boolean(b.cal_block),
   online_link: /^https:\/\/\S+$/i.test(String(b.online_link || '').trim()) ? String(b.online_link).trim().slice(0, 500) : null,
+  // What the training covers, and how to join when it's virtual.
+  synopsis: String(b.synopsis || '').trim().slice(0, 4000) || null,
+  virtual_instructions: String(b.virtual_instructions || '').trim().slice(0, 8000) || null,
 });
 
 // Nomination settings are controlled completely by the super admin;
@@ -146,13 +149,14 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
       `INSERT INTO trainings (code, title, batch, category, department, division, mode, location, trainer_type, trainer_name, agency,
          hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file,
          nom_self, nom_manager, nom_leader, nom_deadline, completion_deadline,
-         req_assessment, req_feedback, req_certificate, cert_auto, cert_template_id, start_time, cal_block, online_link)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING *`,
+         req_assessment, req_feedback, req_certificate, cert_auto, cert_template_id, start_time, cal_block, online_link,
+         synopsis, virtual_instructions)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING *`,
       [code[0].code, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file,
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline,
        f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id,
-       f.start_time, f.cal_block, f.online_link]);
+       f.start_time, f.cal_block, f.online_link, f.synopsis, f.virtual_instructions]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
     if (nf.nom_self) mailer.announceSelfNomination(rows[0].id);
@@ -177,14 +181,14 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
          status=$15, validity_months=$16, agenda_file=$17,
          nom_self=$18, nom_manager=$19, nom_leader=$20, nom_deadline=$21, completion_deadline=$22,
          req_assessment=$23, req_feedback=$24, req_certificate=$25, cert_auto=$26, cert_template_id=$27,
-         start_time=$28, cal_block=$29, online_link=$30,
+         start_time=$28, cal_block=$29, online_link=$30, synopsis=$31, virtual_instructions=$32,
          updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name,
        f.agency, f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file,
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline,
        f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id,
-       f.start_time, f.cal_block, f.online_link]);
+       f.start_time, f.cal_block, f.online_link, f.synopsis, f.virtual_instructions]);
     if (b.days !== undefined) {
       const days = [...new Set(b.days)].sort();
       if (!validDays(days)) return res.status(400).json({ error: 'Pick between 1 and 60 training dates' });

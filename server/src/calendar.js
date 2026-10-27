@@ -71,6 +71,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<
 function bodyHtml(t, info, start, end, site) {
   const row = (k, v) => (v ? `<tr><td style="padding:3px 16px 3px 0;color:#8a7a5c;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="padding:3px 0;font-weight:600">${v}</td></tr>` : '');
   const link = t.online_link ? `<a href="${esc(t.online_link)}">${esc(t.online_link)}</a>` : '';
+  const section = (title, text) => `<p style="margin:14px 0 4px;font-weight:700;color:#8a6a1c">${esc(title)}</p>
+    <div style="white-space:pre-wrap;line-height:1.5">${esc(text)}</div>`;
   return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
     <p>This invitation blocks your calendar for the training below. Please accept it — attendance is recorded on the training day.</p>
     <table style="border-collapse:collapse;font-size:14px">
@@ -79,6 +81,8 @@ function bodyHtml(t, info, start, end, site) {
       ${row('Duration', esc(info.duration))}${row('Location', esc(info.location))}
       ${row('Training mode', esc(info.mode))}${row('Trainer', esc(info.trainer))}${row('Online meeting link', link)}
     </table>
+    ${t.synopsis ? section('About this training', t.synopsis) : ''}
+    ${t.virtual_instructions && mailer().isVirtual(t.mode) ? section('How to join (virtual session)', t.virtual_instructions) : ''}
     <p style="color:#8a7a5c;font-size:12px">Avana Academy · Learning &amp; Development · <a href="${site}">${site.replace('https://', '')}</a></p>
   </div>`;
 }
@@ -87,7 +91,7 @@ function payloads(t, info, person, site) {
   const start = validTime(t.start_time) ? t.start_time : DEFAULT_START;
   const end = addMinutes(start, (Number(t.hours_per_day) || 1) * 60);
   const location = [t.location, t.online_link ? 'Online meeting (link in the invitation)' : null].filter(Boolean).join(' · ')
-    || (String(t.mode || '').toLowerCase() === 'online' ? 'Online' : 'To be announced');
+    || (mailer().isVirtual(t.mode) ? 'Online' : 'To be announced');
   return runsOf(t.days || []).map((run) => ({
     subject: `Training: ${info.training}`,
     body: { contentType: 'HTML', content: bodyHtml(t, info, start, end, site) },

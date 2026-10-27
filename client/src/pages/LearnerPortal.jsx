@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, apiUpload, fmtDate, fmtRange, statusPill, TRN_STATUSES, qText, qIsText, qIsFile } from '../api.js';
+import { api, apiUpload, fmtDate, fmtRange, statusPill, TRN_STATUSES, qText, qIsText, qIsFile, isVirtual } from '../api.js';
 import FileAnswer from '../components/FileAnswer.jsx';
 import { useAuth, useToast } from '../App.jsx';
 
@@ -100,6 +100,9 @@ export default function LearnerPortal() {
                     <span className={'pill mini ' + statusPill(t.status)}>{TRN_STATUSES[t.status]}</span>
                     {t.nom_slot && <span className="pill warn mini">Slot: {t.nom_slot}</span>}
                     <span style={{ flex: 1 }} />
+                    {t.online_link && !['completed', 'cancelled'].includes(t.status) && (
+                      <a className="btn gold" style={{ textDecoration: 'none' }} href={t.online_link} target="_blank" rel="noreferrer">💻 Join online</a>
+                    )}
                     {t.agenda_file && <a className="btn" style={{ textDecoration: 'none' }} href={'/api/files/' + t.agenda_file} target="_blank" rel="noreferrer">📄 Agenda</a>}
                     {todayIsDay && !markedToday && <button className="btn gold" onClick={() => checkin(t)}>✓ Check in today</button>}
                     {markedToday && <span className="pill good mini">Present today ✓</span>}
@@ -118,6 +121,18 @@ export default function LearnerPortal() {
                       </span>;
                     })}
                   </div>
+                  {t.synopsis && (
+                    <details style={{ marginTop: 8 }}>
+                      <summary className="mini" style={{ cursor: 'pointer', fontWeight: 600 }}>About this training</summary>
+                      <p className="mini" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, margin: '6px 0 0' }}>{t.synopsis}</p>
+                    </details>
+                  )}
+                  {isVirtual(t.mode) && t.virtual_instructions && !['completed', 'cancelled'].includes(t.status) && (
+                    <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--accent-soft)', borderRadius: 8 }}>
+                      <b className="mini">💻 How to join (virtual session)</b>
+                      <p className="mini" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, margin: '4px 0 0' }}>{t.virtual_instructions}</p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -139,6 +154,7 @@ export default function LearnerPortal() {
                   )}
                   <button className="btn gold" onClick={() => nominate(t)}>Nominate myself</button>
                 </div>
+                {t.synopsis && <p className="mini muted" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, margin: '8px 0 0' }}>{t.synopsis}</p>}
               </div>
             ))}
 

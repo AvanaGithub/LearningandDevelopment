@@ -199,6 +199,24 @@ const trainingFields = (tr) => ({
   mode: tr.mode || '', trainer: tr._trainer, duration: tr._duration,
 });
 
+// Online / Teams / webinar style modes count as virtual.
+const isVirtual = (mode) => /online|virtual|webinar|teams|zoom/i.test(String(mode || ''));
+
+// Long-text sections under the template text: the synopsis, and (for
+// virtual trainings, when wanted) the joining instructions.
+function extrasHtml(tr, { instructions = true } = {}) {
+  const block = (title, text) => `<div style="margin:12px 0;padding:10px 14px;background:#faf6ee;border-left:3px solid #C8930A;border-radius:6px">
+      <div style="font-weight:700;color:#8a6a1c;margin-bottom:4px">${title}</div>
+      <div style="white-space:pre-wrap;line-height:1.5">${esc(text)}</div></div>`;
+  let html = '';
+  if (tr.synopsis) html += block('About this training', tr.synopsis);
+  if (instructions && isVirtual(tr.mode) && tr.virtual_instructions) html += block('How to join (virtual session)', tr.virtual_instructions);
+  if (instructions && /^https:\/\//i.test(tr.online_link || '')) {
+    html += `<p><a href="${esc(tr.online_link).replace(/"/g, '&quot;')}" style="display:inline-block;background:#4B53BC;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Join the online meeting</a></p>`;
+  }
+  return html;
+}
+
 // One mail to every newly nominated/assigned employee (who has an e-mail),
 // with a sign-in link to the hub.
 async function notifyNomination({ trainingId, employeeIds, source, byName, slot }) {
@@ -222,7 +240,7 @@ async function notifyNomination({ trainingId, employeeIds, source, byName, slot 
       const map = mapFor(e.name);
       sendMail(c, e.email, fill(tpl.nominee_subject, map, false),
         `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
-           ${LOGO}<div>${fill(tpl.nominee_body, map, true)}</div>${SITE_BTN}${FOOT}
+           ${LOGO}<div>${fill(tpl.nominee_body, map, true)}</div>${extrasHtml(tr)}${SITE_BTN}${FOOT}
          </div>`)
         .catch((err) => console.error('[mail]', e.email, err.message));
     }
@@ -258,7 +276,7 @@ async function announceSelfNomination(trainingId) {
       };
       await sendMail(c, e.email, fill(tpl.announce_subject, map, false),
         `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#2b2317">
-           ${LOGO}<div>${fill(tpl.announce_body, map, true)}</div>
+           ${LOGO}<div>${fill(tpl.announce_body, map, true)}</div>${extrasHtml(tr, { instructions: false })}
            <p><a href="${link}" style="display:inline-block;background:#C8930A;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Nominate myself</a></p>
            ${FOOT}
          </div>`)
@@ -522,5 +540,5 @@ module.exports = {
   // Shared Microsoft Graph credentials — also used by the Forms score sync.
   cfg, graphToken,
   // Training details shared with the calendar invitations.
-  loadTraining, trainingFields,
+  loadTraining, trainingFields, isVirtual, extrasHtml,
 };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, apiUpload, entLabel, toISODay, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill } from '../api.js';
+import { api, apiUpload, entLabel, toISODay, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill, isVirtual } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -39,7 +39,7 @@ const EMPTY = {
   agenda_file: null, agenda_name: '', reason: '',
   nom_self: false, nom_manager: false, nom_leader: false, nom_deadline: '', completion_deadline: '',
   req_assessment: false, req_feedback: false, req_certificate: false, cert_auto: false, cert_template_id: '',
-  start_time: '09:30', cal_block: false, online_link: '',
+  start_time: '09:30', cal_block: false, online_link: '', synopsis: '', virtual_instructions: '',
 };
 
 export default function Trainings() {
@@ -167,6 +167,9 @@ export default function Trainings() {
     const n = Number(form.numDays) || 1;
     const days = Array.from({ length: n }, (_, i) => addDays(form.from, i));
     const body = { ...form, days };
+    // Switching blocking off cancels every participant's Outlook invitation.
+    if (form.id && form.was_cal_block && !form.cal_block &&
+      !window.confirm('Calendar blocking is being switched off. Saving will cancel the Outlook / Teams invitation of every participant on this training.\n\nContinue?')) return;
     try {
       if (form.id) {
         await api.patch('/api/trainings/' + form.id, body);
@@ -202,6 +205,8 @@ export default function Trainings() {
       req_certificate: Boolean(t.req_certificate), cert_auto: Boolean(t.cert_auto),
       cert_template_id: t.cert_template_id || '',
       start_time: t.start_time || '09:30', cal_block: Boolean(t.cal_block), online_link: t.online_link || '',
+      was_cal_block: Boolean(t.cal_block),
+      synopsis: t.synopsis || '', virtual_instructions: t.virtual_instructions || '',
     });
     setErr(null);
   };
@@ -341,6 +346,19 @@ export default function Trainings() {
                   </div>
                 : <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xlsx" onChange={(e) => e.target.files.length && uploadAgenda(e.target.files)} />}
             </div>
+            <div style={{ gridColumn: '1/-1' }}><label>Training synopsis (optional)</label>
+              <textarea rows={4} maxLength={4000} style={{ width: '100%', resize: 'vertical' }} value={form.synopsis}
+                placeholder="What the training covers, who it is for and what participants will be able to do afterwards. Shown on the invitation e-mails, the Outlook invitation and the learner portal."
+                onChange={(e) => setForm({ ...form, synopsis: e.target.value })} />
+            </div>
+            {isVirtual(form.mode) && (
+              <div style={{ gridColumn: '1/-1' }}><label>💻 Instructions for the virtual session (optional)</label>
+                <textarea rows={6} maxLength={8000} style={{ width: '100%', resize: 'vertical' }} value={form.virtual_instructions}
+                  placeholder={'e.g.\n• Join from a laptop with headphones, 10 minutes early\n• Teams meeting ID / passcode\n• Keep your camera on during the session\n• Install … before day 1'}
+                  onChange={(e) => setForm({ ...form, virtual_instructions: e.target.value })} />
+                <div className="muted" style={{ fontSize: 11 }}>Sent to participants in their assignment e-mail and Outlook invitation, and shown in their learner portal. It isn't shown on the public QR nomination page.</div>
+              </div>
+            )}
             {form.id && F('Reason for this correction', 'reason', { placeholder: 'Goes to the audit trail (optional)' })}
             {me.role === 'super_admin' && (
               <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
@@ -379,13 +397,16 @@ export default function Trainings() {
                 removing someone cancels theirs — nobody else is notified. Date, time, place or status changes update the
                 invitations; Postponed or Cancelled withdraws them.
               </p>
-              {form.cal_block && (
-                <div style={{ marginLeft: 24 }}>
-                  <label className="muted mini">Online meeting link (optional — e.g. a Teams link, shown in the invitation)</label>
-                  <input style={{ width: '100%' }} value={form.online_link} placeholder="https://teams.microsoft.com/l/meetup-join/…"
-                    onChange={(e) => setForm({ ...form, online_link: e.target.value })} />
-                </div>
+              {form.was_cal_block && !form.cal_block && (
+                <p className="err mini" style={{ margin: '0 0 6px 24px' }}>
+                  ⚠ Saving with this unticked cancels every participant's invitation.
+                </p>
               )}
+              <div style={{ marginLeft: 24 }}>
+                <label className="muted mini">Online meeting link (optional — e.g. a Teams link; shown in the assignment e-mail, the learner portal and, when blocking is on, the calendar invitation)</label>
+                <input style={{ width: '100%' }} value={form.online_link} placeholder="https://teams.microsoft.com/l/meetup-join/…"
+                  onChange={(e) => setForm({ ...form, online_link: e.target.value })} />
+              </div>
             </div>
             <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
               <b style={{ fontSize: 13 }}>After the training <span className="muted mini">(runs when the status becomes Completed)</span></b>
@@ -491,6 +512,9 @@ export default function Trainings() {
               </>}
               {sel.completion_deadline && <><dt>Complete by</dt><dd>{fmtDate(sel.completion_deadline)}</dd></>}
               {sel.agenda_file && <><dt>Agenda</dt><dd><a href={'/api/files/' + sel.agenda_file} target="_blank" rel="noreferrer">📄 View / download agenda</a></dd></>}
+              {sel.online_link && <><dt>Online meeting</dt><dd><a href={sel.online_link} target="_blank" rel="noreferrer">💻 Open meeting link</a></dd></>}
+              {sel.synopsis && <><dt>Synopsis</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{sel.synopsis}</dd></>}
+              {isVirtual(sel.mode) && sel.virtual_instructions && <><dt>Joining instructions</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{sel.virtual_instructions}</dd></>}
             </dl>
 
             <h3 style={{ fontSize: 14, margin: '16px 0 8px' }}>Participants ({sel.participants.length})</h3>

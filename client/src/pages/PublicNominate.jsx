@@ -59,6 +59,7 @@ export default function PublicNominate() {
               {fmtRange(t.days)}{t.nominate.scope ? ` · for: ${t.nominate.scope}` : ''}
               {t.nominate.deadline ? ` · nominate by ${fmtDate(t.nominate.deadline)}` : ''}
             </p>
+            {t.synopsis && <p className="mini" style={{ whiteSpace: 'pre-wrap', textAlign: 'left', lineHeight: 1.5 }}>{t.synopsis}</p>}
             {denied && (
               <p className="login-err">
                 Zoho verified <b>{denied}</b>, but no employee record matches that e-mail — contact L&amp;D.
