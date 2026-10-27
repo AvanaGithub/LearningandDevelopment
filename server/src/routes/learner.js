@@ -40,7 +40,7 @@ router.get('/overview', async (req, res, next) => {
     const { rows: my } = await query(
       `SELECT t.id, t.code, t.title, t.batch, t.status, t.mode, t.trainer_type, t.trainer_name, t.agency,
               t.feedback_questions, t.external_form_url, t.agenda_file, t.feedback_open,
-              t.synopsis, t.virtual_instructions, t.online_link,
+              t.synopsis, t.virtual_instructions, t.online_link, t.cal_block,
               (SELECT json_agg(d.day ORDER BY d.day) FROM training_days d WHERE d.training_id=t.id) AS days,
               n.slot AS nom_slot, n.source AS nom_source,
               (SELECT json_agg(json_build_object('day', a.day, 'mark', a.mark))

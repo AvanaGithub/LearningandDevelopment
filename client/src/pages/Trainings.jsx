@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, apiUpload, entLabel, toISODay, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill, isVirtual } from '../api.js';
+import { api, apiUpload, entLabel, toISODay, DEPARTMENTS, DIVISIONS, TRN_CATEGORIES, TRN_MODES, TRN_STATUSES, fmtRange, fmtDate, statusPill, isVirtual, instructionsTitle } from '../api.js';
 import { useAuth, useToast, useSettings } from '../App.jsx';
 import { toXlsx } from '../xlsx.js';
 import ImportDialog from '../components/ImportDialog.jsx';
@@ -149,6 +149,20 @@ export default function Trainings() {
   }, []);
 
   const totalHours = form ? (Number(form.numDays) || 1) * (Number(form.hours_per_day) || 0) : 0;
+
+  // Long-text instructions for participants — for virtual trainings and
+  // whenever calendars are blocked (rendered in one of two places).
+  const instructionsField = form && (
+    <>
+      <label>{isVirtual(form.mode) ? '💻 Instructions for the virtual session' : '📝 Instructions for participants'} (optional)</label>
+      <textarea rows={6} maxLength={8000} style={{ width: '100%', resize: 'vertical' }} value={form.virtual_instructions}
+        placeholder={isVirtual(form.mode)
+          ? 'e.g.\n• Join from a laptop with headphones, 10 minutes early\n• Teams meeting ID / passcode\n• Keep your camera on during the session\n• Install … before day 1'
+          : 'e.g.\n• Report to Training Hall 2 by 9:15\n• Bring your laptop and ID card\n• Lunch will be provided\n• Complete the pre-read before day 1'}
+        onChange={(e) => setForm({ ...form, virtual_instructions: e.target.value })} />
+      <div className="muted" style={{ fontSize: 11 }}>Sent to participants in their assignment e-mail and Outlook invitation, and shown in their learner portal. It isn't shown on the public QR nomination page.</div>
+    </>
+  );
 
   const setNumDays = (n) => {
     n = Math.min(60, Math.max(1, Number(n) || 1));
@@ -351,13 +365,10 @@ export default function Trainings() {
                 placeholder="What the training covers, who it is for and what participants will be able to do afterwards. Shown on the invitation e-mails, the Outlook invitation and the learner portal."
                 onChange={(e) => setForm({ ...form, synopsis: e.target.value })} />
             </div>
-            {isVirtual(form.mode) && (
-              <div style={{ gridColumn: '1/-1' }}><label>💻 Instructions for the virtual session (optional)</label>
-                <textarea rows={6} maxLength={8000} style={{ width: '100%', resize: 'vertical' }} value={form.virtual_instructions}
-                  placeholder={'e.g.\n• Join from a laptop with headphones, 10 minutes early\n• Teams meeting ID / passcode\n• Keep your camera on during the session\n• Install … before day 1'}
-                  onChange={(e) => setForm({ ...form, virtual_instructions: e.target.value })} />
-                <div className="muted" style={{ fontSize: 11 }}>Sent to participants in their assignment e-mail and Outlook invitation, and shown in their learner portal. It isn't shown on the public QR nomination page.</div>
-              </div>
+            {/* Virtual training without calendar blocking: instructions sit under the synopsis.
+                With blocking on they open inside the calendar box below instead. */}
+            {isVirtual(form.mode) && !form.cal_block && (
+              <div style={{ gridColumn: '1/-1' }}>{instructionsField}</div>
             )}
             {form.id && F('Reason for this correction', 'reason', { placeholder: 'Goes to the audit trail (optional)' })}
             {me.role === 'super_admin' && (
@@ -407,6 +418,7 @@ export default function Trainings() {
                 <input style={{ width: '100%' }} value={form.online_link} placeholder="https://teams.microsoft.com/l/meetup-join/…"
                   onChange={(e) => setForm({ ...form, online_link: e.target.value })} />
               </div>
+              {form.cal_block && <div style={{ margin: '10px 0 0 24px' }}>{instructionsField}</div>}
             </div>
             <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
               <b style={{ fontSize: 13 }}>After the training <span className="muted mini">(runs when the status becomes Completed)</span></b>
@@ -514,7 +526,7 @@ export default function Trainings() {
               {sel.agenda_file && <><dt>Agenda</dt><dd><a href={'/api/files/' + sel.agenda_file} target="_blank" rel="noreferrer">📄 View / download agenda</a></dd></>}
               {sel.online_link && <><dt>Online meeting</dt><dd><a href={sel.online_link} target="_blank" rel="noreferrer">💻 Open meeting link</a></dd></>}
               {sel.synopsis && <><dt>Synopsis</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{sel.synopsis}</dd></>}
-              {isVirtual(sel.mode) && sel.virtual_instructions && <><dt>Joining instructions</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{sel.virtual_instructions}</dd></>}
+              {instructionsTitle(sel) && sel.virtual_instructions && <><dt>Instructions</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{sel.virtual_instructions}</dd></>}
             </dl>
 
             <h3 style={{ fontSize: 14, margin: '16px 0 8px' }}>Participants ({sel.participants.length})</h3>

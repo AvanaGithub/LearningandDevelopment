@@ -85,6 +85,10 @@ export const TRN_CATEGORIES = ['Induction', 'Product', 'Soft skill', 'Technical'
 export const TRN_MODES = ['Classroom', 'Online', 'On-the-job', 'Field', 'External seminar'];
 // Same rule as the server (mailer.isVirtual): which modes get joining instructions.
 export const isVirtual = (mode) => /online|virtual|webinar|teams|zoom/i.test(String(mode || ''));
+// Participant instructions apply to virtual trainings and to any training
+// that blocks calendars; null = not applicable. Mirrors mailer.instructionsTitle.
+export const instructionsTitle = (t) => (isVirtual(t.mode) ? 'How to join (virtual session)'
+  : t.cal_block ? 'Instructions for participants' : null);
 export const TRN_STATUSES = {
   planned: 'Planned', confirmed: 'Confirmed', in_progress: 'In progress',
   completed: 'Completed', postponed: 'Postponed', cancelled: 'Cancelled',

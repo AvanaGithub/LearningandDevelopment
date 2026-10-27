@@ -201,6 +201,10 @@ const trainingFields = (tr) => ({
 
 // Online / Teams / webinar style modes count as virtual.
 const isVirtual = (mode) => /online|virtual|webinar|teams|zoom/i.test(String(mode || ''));
+// Participant instructions apply to virtual trainings and to any training
+// that blocks calendars; null = not applicable.
+const instructionsTitle = (t) => (isVirtual(t.mode) ? 'How to join (virtual session)'
+  : t.cal_block ? 'Instructions for participants' : null);
 
 // Long-text sections under the template text: the synopsis, and (for
 // virtual trainings, when wanted) the joining instructions.
@@ -210,7 +214,7 @@ function extrasHtml(tr, { instructions = true } = {}) {
       <div style="white-space:pre-wrap;line-height:1.5">${esc(text)}</div></div>`;
   let html = '';
   if (tr.synopsis) html += block('About this training', tr.synopsis);
-  if (instructions && isVirtual(tr.mode) && tr.virtual_instructions) html += block('How to join (virtual session)', tr.virtual_instructions);
+  if (instructions && tr.virtual_instructions && instructionsTitle(tr)) html += block(instructionsTitle(tr), tr.virtual_instructions);
   if (instructions && /^https:\/\//i.test(tr.online_link || '')) {
     html += `<p><a href="${esc(tr.online_link).replace(/"/g, '&quot;')}" style="display:inline-block;background:#4B53BC;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-weight:600">Join the online meeting</a></p>`;
   }
@@ -540,5 +544,5 @@ module.exports = {
   // Shared Microsoft Graph credentials — also used by the Forms score sync.
   cfg, graphToken,
   // Training details shared with the calendar invitations.
-  loadTraining, trainingFields, isVirtual, extrasHtml,
+  loadTraining, trainingFields, isVirtual, instructionsTitle, extrasHtml,
 };

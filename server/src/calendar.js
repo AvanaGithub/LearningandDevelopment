@@ -82,7 +82,7 @@ function bodyHtml(t, info, start, end, site) {
       ${row('Training mode', esc(info.mode))}${row('Trainer', esc(info.trainer))}${row('Online meeting link', link)}
     </table>
     ${t.synopsis ? section('About this training', t.synopsis) : ''}
-    ${t.virtual_instructions && mailer().isVirtual(t.mode) ? section('How to join (virtual session)', t.virtual_instructions) : ''}
+    ${t.virtual_instructions && mailer().instructionsTitle(t) ? section(mailer().instructionsTitle(t), t.virtual_instructions) : ''}
     <p style="color:#8a7a5c;font-size:12px">Avana Academy · Learning &amp; Development · <a href="${site}">${site.replace('https://', '')}</a></p>
   </div>`;
 }
