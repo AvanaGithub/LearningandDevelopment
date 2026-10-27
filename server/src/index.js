@@ -79,6 +79,9 @@ migrate().then(() => {
   const formsync = require('./formsync');
   setTimeout(() => formsync.runFormsSync().catch(() => {}), 90 * 1000);
   setInterval(() => formsync.runFormsSync().catch(() => {}), 60 * 60 * 1000);
+  // Outlook invitations: retry any that failed to send or update.
+  const calendar = require('./calendar');
+  setInterval(() => calendar.retryFailed().catch(() => {}), 60 * 60 * 1000);
   // Post-training workflow: pending-step nudges + auto certificates.
   const workflow = require('./workflow');
   setTimeout(() => workflow.runWorkflow().catch(() => {}), 150 * 1000);

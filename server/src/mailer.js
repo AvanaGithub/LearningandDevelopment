@@ -521,4 +521,6 @@ module.exports = {
   esc, FOOT, SITE_BTN,
   // Shared Microsoft Graph credentials — also used by the Forms score sync.
   cfg, graphToken,
+  // Training details shared with the calendar invitations.
+  loadTraining, trainingFields,
 };

@@ -39,6 +39,7 @@ const EMPTY = {
   agenda_file: null, agenda_name: '', reason: '',
   nom_self: false, nom_manager: false, nom_leader: false, nom_deadline: '', completion_deadline: '',
   req_assessment: false, req_feedback: false, req_certificate: false, cert_auto: false, cert_template_id: '',
+  start_time: '09:30', cal_block: false, online_link: '',
 };
 
 export default function Trainings() {
@@ -200,6 +201,7 @@ export default function Trainings() {
       req_assessment: Boolean(t.req_assessment), req_feedback: Boolean(t.req_feedback),
       req_certificate: Boolean(t.req_certificate), cert_auto: Boolean(t.cert_auto),
       cert_template_id: t.cert_template_id || '',
+      start_time: t.start_time || '09:30', cal_block: Boolean(t.cal_block), online_link: t.online_link || '',
     });
     setErr(null);
   };
@@ -312,6 +314,8 @@ export default function Trainings() {
               <div><label>To date (auto: from + {form.numDays - 1})</label>
                 <input type="date" value={form.to} onChange={(e) => setTo(e.target.value)} /></div>
             )}
+            <div><label>Start time (each day)</label>
+              <input type="time" value={form.start_time || '09:30'} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></div>
             <div><label>Hours per day</label>
               <input type="number" min="1" max="12" step="0.5" value={form.hours_per_day}
                 onChange={(e) => setForm({ ...form, hours_per_day: e.target.value })} /></div>
@@ -364,6 +368,25 @@ export default function Trainings() {
                 </p>
               </div>
             )}
+            <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
+                <input type="checkbox" checked={form.cal_block} onChange={(e) => setForm({ ...form, cal_block: e.target.checked })} />
+                📅 Block participants' Outlook / Teams calendars
+              </label>
+              <p className="muted mini" style={{ margin: '4px 0 6px 24px' }}>
+                Each participant gets their own meeting invitation from academy@avanasurgical.com for every training day
+                ({form.start_time || '09:30'} for {Number(form.hours_per_day) || 0} h, IST). Adding someone invites them,
+                removing someone cancels theirs — nobody else is notified. Date, time, place or status changes update the
+                invitations; Postponed or Cancelled withdraws them.
+              </p>
+              {form.cal_block && (
+                <div style={{ marginLeft: 24 }}>
+                  <label className="muted mini">Online meeting link (optional — e.g. a Teams link, shown in the invitation)</label>
+                  <input style={{ width: '100%' }} value={form.online_link} placeholder="https://teams.microsoft.com/l/meetup-join/…"
+                    onChange={(e) => setForm({ ...form, online_link: e.target.value })} />
+                </div>
+              )}
+            </div>
             <div style={{ gridColumn: '1/-1', border: '1px dashed var(--line)', borderRadius: 10, padding: '10px 12px' }}>
               <b style={{ fontSize: 13 }}>After the training <span className="muted mini">(runs when the status becomes Completed)</span></b>
               <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', margin: '8px 0' }}>
@@ -550,6 +573,9 @@ export default function Trainings() {
                 </div>
               );
             })()}
+            {isAdmin && (sel.cal_block || sel.cal_error) && (
+              <CalendarPanel key={sel.id + '-' + sel.participants.length + '-' + sel.status} t={sel} toast={toast} />
+            )}
             {err && <p className="err">{err}</p>}
             <div className="form-actions" style={{ flexWrap: 'wrap' }}>
               {isAdmin && <button className="btn gold" onClick={() => edit(sel)}>Edit</button>}
@@ -591,6 +617,58 @@ export default function Trainings() {
       {budgetFor && <BudgetApproval t={budgetFor} onClose={() => setBudgetFor(null)} />}
       {progressFor && <WfProgress t={progressFor} isAdmin={isAdmin} toast={toast} onClose={() => setProgressFor(null)} />}
     </>
+  );
+}
+
+// Outlook / Teams invitation status for one training. Changes are sent a few
+// seconds after they're made, so the panel re-checks shortly after opening.
+function CalendarPanel({ t, toast }) {
+  const [s, setS] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const load = () => api.get(`/api/trainings/${t.id}/calendar`).then(setS).catch((e) => setErr(e.message));
+  useEffect(() => {
+    load();
+    const timer = setTimeout(load, 7000);
+    return () => clearTimeout(timer);
+  }, [t.id]);
+  const resync = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post(`/api/trainings/${t.id}/calendar-sync`, {});
+      setS(r);
+      toast(r.cal_error ? 'Some invitations still failed — see the list.' : 'Outlook invitations are up to date.');
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  if (!s) return err ? <p className="err">{err}</p> : null;
+  const failed = s.invites.filter((i) => i.error);
+  const participants = t.participants.length;
+  const state = !s.cal_block ? 'off'
+    : t.status === 'completed' ? 'completed'
+    : ['cancelled', 'postponed'].includes(t.status) ? 'withdrawn' : 'on';
+  return (
+    <div className="card" style={{ padding: 10, margin: '10px 0', borderLeft: `4px solid ${s.cal_error ? 'var(--crit)' : 'var(--good)'}` }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <b style={{ fontSize: 13 }}>📅 Outlook / Teams invitations</b>
+        {state === 'on' && <span className="pill good mini">{s.invites.length - failed.length} of {participants} invited</span>}
+        {state === 'completed' && <span className="pill soft mini">training completed — invitations left as they are</span>}
+        {state === 'withdrawn' && <span className="pill warn mini">{t.status} — invitations withdrawn</span>}
+        {state === 'off' && <span className="pill neutral mini">blocking switched off</span>}
+        {failed.length > 0 && <span className="pill crit mini">{failed.length} failed</span>}
+        {s.no_email > 0 && state === 'on' && <span className="pill warn mini" title="Add their e-mail on the Employees tab">{s.no_email} without an e-mail</span>}
+        <span className="muted mini">{s.cal_synced_at ? `last sent ${new Date(s.cal_synced_at).toLocaleString('en-IN')}` : 'not sent yet'}</span>
+        <span style={{ flex: 1 }} />
+        <button className="btn" disabled={busy} onClick={resync}>{busy ? 'Sending…' : '⟳ Re-sync now'}</button>
+      </div>
+      {s.cal_error && <p className="err" style={{ margin: '6px 0 0' }}>{s.cal_error}</p>}
+      {failed.length > 0 && (
+        <ul className="mini" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+          {failed.map((i) => <li key={i.employee_id}><b>{i.name}</b> ({i.email}): <span className="muted">{i.error}</span></li>)}
+        </ul>
+      )}
+      {err && <p className="err">{err}</p>}
+    </div>
   );
 }
 

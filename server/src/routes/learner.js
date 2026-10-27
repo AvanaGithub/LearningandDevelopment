@@ -174,6 +174,7 @@ router.post('/nominate', express.json(), async (req, res, next) => {
     }
     const slot = String(req.body?.slot || '').trim().slice(0, 80) || null;
     await query('INSERT INTO training_participants (training_id, employee_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [trainingId, me.id]);
+    require('../calendar').schedule(trainingId);
     await query(
       `INSERT INTO nominations (training_id, employee_id, slot, source, nominated_by)
        VALUES ($1,$2,$3,'self',$4)

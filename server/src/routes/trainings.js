@@ -2,6 +2,7 @@ const express = require('express');
 const { query } = require('../db');
 const { requireRole, audit } = require('../auth');
 const mailer = require('../mailer');
+const calendar = require('../calendar');
 
 const router = express.Router();
 const STATUSES = ['planned', 'confirmed', 'in_progress', 'completed', 'postponed', 'cancelled'];
@@ -95,6 +96,10 @@ const pickFields = (b) => ({
   req_certificate: Boolean(b.req_certificate),
   cert_auto: Boolean(b.cert_auto),
   cert_template_id: Number(b.cert_template_id) > 0 ? Number(b.cert_template_id) : null,
+  // Outlook / Teams calendar blocking.
+  start_time: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.start_time || '')) ? b.start_time : null,
+  cal_block: Boolean(b.cal_block),
+  online_link: /^https:\/\/\S+$/i.test(String(b.online_link || '').trim()) ? String(b.online_link).trim().slice(0, 500) : null,
 });
 
 // Nomination settings are controlled completely by the super admin;
@@ -141,12 +146,13 @@ router.post('/', requireRole('admin'), express.json(), async (req, res, next) =>
       `INSERT INTO trainings (code, title, batch, category, department, division, mode, location, trainer_type, trainer_name, agency,
          hours_per_day, seats, mandatory, status, created_by, public_token, validity_months, agenda_file,
          nom_self, nom_manager, nom_leader, nom_deadline, completion_deadline,
-         req_assessment, req_feedback, req_certificate, cert_auto, cert_template_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
+         req_assessment, req_feedback, req_certificate, cert_auto, cert_template_id, start_time, cal_block, online_link)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING *`,
       [code[0].code, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name, f.agency,
        f.hours_per_day, f.seats, f.mandatory, f.status, req.user.id, token, f.validity_months, f.agenda_file,
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline,
-       f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id]);
+       f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id,
+       f.start_time, f.cal_block, f.online_link]);
     for (const d of days) await query('INSERT INTO training_days (training_id, day) VALUES ($1,$2)', [rows[0].id, d]);
     await audit(req.user.id, 'training.create', 'training', rows[0].id, { code: code[0].code, title: f.title, days });
     if (nf.nom_self) mailer.announceSelfNomination(rows[0].id);
@@ -171,12 +177,14 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
          status=$15, validity_months=$16, agenda_file=$17,
          nom_self=$18, nom_manager=$19, nom_leader=$20, nom_deadline=$21, completion_deadline=$22,
          req_assessment=$23, req_feedback=$24, req_certificate=$25, cert_auto=$26, cert_template_id=$27,
+         start_time=$28, cal_block=$29, online_link=$30,
          updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, f.title, f.batch, f.category, f.department, f.division, f.mode, f.location, f.trainer_type, f.trainer_name,
        f.agency, f.hours_per_day, f.seats, f.mandatory, f.status, f.validity_months, f.agenda_file,
        nf.nom_self, nf.nom_manager, nf.nom_leader, nf.nom_deadline, nf.completion_deadline,
-       f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id]);
+       f.req_assessment, f.req_feedback, f.req_certificate, f.cert_auto, f.cert_template_id,
+       f.start_time, f.cal_block, f.online_link]);
     if (b.days !== undefined) {
       const days = [...new Set(b.days)].sort();
       if (!validDays(days)) return res.status(400).json({ error: 'Pick between 1 and 60 training dates' });
@@ -198,6 +206,8 @@ router.patch('/:id', requireRole('admin'), express.json(), async (req, res, next
     if (cur[0].status !== 'completed' && rows[0].status === 'completed') {
       require('../workflow').kick(id).catch((e) => console.error('[workflow]', e.message));
     }
+    // Outlook invitations follow any change of dates, time, place or status.
+    calendar.schedule(id, 1000);
     res.json(rows[0]);
   } catch (e) { next(e); }
 });
@@ -222,6 +232,7 @@ router.post('/:id/participants', requireRole('admin'), express.json(), async (re
     await audit(req.user.id, 'training.participant_add', 'training', id, { employee_id: employeeId });
     if (ins.rowCount) {
       mailer.notifyNomination({ trainingId: id, employeeIds: [employeeId], source: 'admin', byName: req.user.name, slot: null });
+      calendar.schedule(id);
     }
     res.status(201).json({ ok: true });
   } catch (e) { next(e); }
@@ -297,6 +308,7 @@ router.post('/:id/nominate', express.json(), async (req, res, next) => {
       { source, slot, employee_ids: allowed, not_reportees: ids.length - allowed.length });
     if (newIds.length) {
       mailer.notifyNomination({ trainingId: id, employeeIds: newIds, source, byName: req.user.name, slot });
+      calendar.schedule(id);
     }
     res.status(201).json({ added, already: allowed.length - added, not_reportees: ids.length - allowed.length });
   } catch (e) { next(e); }
@@ -312,6 +324,7 @@ router.delete('/:id/participants/:empId', requireRole('admin'), async (req, res,
     await query(`UPDATE nominations SET status='cancelled' WHERE training_id=$1 AND employee_id=$2`, [id, empId]);
     await query('DELETE FROM attendance WHERE training_id=$1 AND employee_id=$2', [id, empId]);
     await audit(req.user.id, 'training.participant_remove', 'training', id, { employee_id: empId }, reason);
+    calendar.schedule(id);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -335,11 +348,48 @@ router.delete('/:id', requireRole('admin'), async (req, res, next) => {
         h.exp && `${h.exp} expense sheet(s)`].filter(Boolean).join(', ');
       return res.status(409).json({ error: `This training has real records (${what}) — set its status to Cancelled instead (ISO 13485).` });
     }
+    // Withdraw any Outlook invitations first — never leave them orphaned.
+    try { await calendar.cancelAll(id); } catch (e) {
+      return res.status(502).json({ error: `Could not withdraw the participants' Outlook invitations (${e.message}). Nothing was deleted — please try again.` });
+    }
     await query('DELETE FROM training_participants WHERE training_id=$1', [id]);
     const { rows } = await query('DELETE FROM trainings WHERE id=$1 RETURNING code, title', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     await audit(req.user.id, 'training.delete', 'training', id, { ...rows[0], participants_removed: h.parts }, reason);
     res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// Outlook invitation status for a training: who has one, and any failures.
+async function calendarStatus(id) {
+  const { rows: t } = await query(
+    `SELECT cal_block, cal_synced_at, cal_error, start_time, status,
+            (SELECT count(*)::int FROM training_participants p JOIN employees e ON e.id=p.employee_id
+              WHERE p.training_id=$1 AND coalesce(btrim(e.email),'') = '') AS no_email
+     FROM trainings WHERE id=$1`, [id]);
+  if (!t.length) return null;
+  const { rows: invites } = await query(
+    `SELECT c.employee_id, e.name, c.email, c.synced_at, c.error, jsonb_array_length(c.event_ids) AS events
+     FROM cal_invites c JOIN employees e ON e.id = c.employee_id
+     WHERE c.training_id=$1 ORDER BY e.name`, [id]);
+  return { ...t[0], invites };
+}
+
+router.get('/:id/calendar', requireRole('admin'), async (req, res, next) => {
+  try {
+    const s = await calendarStatus(Number(req.params.id));
+    if (!s) return res.status(404).json({ error: 'Not found' });
+    res.json(s);
+  } catch (e) { next(e); }
+});
+
+// Send / update / withdraw invitations now (normally automatic).
+router.post('/:id/calendar-sync', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    await calendar.runNow(id);
+    await audit(req.user.id, 'training.calendar_sync', 'training', id, null);
+    res.json(await calendarStatus(id));
   } catch (e) { next(e); }
 });
 
